@@ -1,0 +1,169 @@
+#!/usr/bin/python3
+"""
+This script takes filename as an argument and tries every known
+cryptanalysis method on it.
+"""
+
+import subprocess
+import sys
+import base64
+import threading
+
+def debug(*args):
+    if debug_flag:
+        print('\033[90m[.]', *args, '\033[0m')
+
+def run_command(command):
+    p = subprocess.Popen(command, 
+                         shell=True, 
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    (out, err) = p.communicate()
+    return (p.returncode, out, err)
+
+
+"""
+Load arguments
+"""
+method = ''
+filename = ''
+try:
+    #filename = [a for a in sys.argv[1:] if not a.startswith('--')][0]
+    debug_flag = '--debug' in sys.argv
+    debug_flag = True # TODO delete after testing
+    method = sys.argv[1][2:]
+    if method == 'cbc-padding':
+        filename = sys.argv[2]
+        blocksize = int(sys.argv[3])
+        oracle_path = sys.argv[4]
+        with open(oracle_path, 'rb') as f:
+            pass
+        
+except:
+    #print('[-] Usage: %s <filename>' % sys.argv[0])
+    print('[-] Usage: %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
+    sys.exit(1)
+
+
+# TODO file, entropy, plaintext?
+# TODO caesar, freqanal etc.
+
+# TODO findmyhash
+
+# TODO stream cipher reuse - 2 XORed with same key...
+# ECB block reordering - we can use input to create separated desired data (like admin=1)
+# ECB key reuse - add unencrypted stuff in the middle of stuff we can encrypt
+
+class Oracle(threading.Thread):
+    def __init__(self, oracle_path, payloads):
+        threading.Thread.__init__(self)
+        self.oracle_path = oracle_path
+        self.payloads = payloads
+        self.matching = []
+
+    def run(self):
+        """
+        sends payloads to given oracle, returns True if Oracle is happy
+        """
+        for byte_value, payload in self.payloads.items():
+            #print('Oracle testing', byte_value)
+            r, _, _ = run_command('%s %s' % (oracle_path, 
+                                             base64.b64encode(payload).decode()))
+            if r == 0:
+                self.matching.append(byte_value)
+                break
+
+
+if method == 'cbc-padding':
+    """
+    CBC Padding Oracle Attack
+    """
+    """load data"""
+    with open(filename, 'rb') as f:
+        input_data = f.read()
+    """create blocks of blocksize"""
+    blocks = [input_data[i:i+blocksize] 
+              for i in range(0, len(input_data), blocksize)]
+    # TODO test if blocks have same len
+
+    final_plaintexts = []
+    """run through blocks in reverse order"""
+    for block_index, block in enumerate(blocks[::-1]):
+        block_plaintext = b''
+        try:
+            previous_block = blocks[::-1][block_index + 1]
+            debug('Previous block:', 
+                  ' '.join('%02x' % c for c in previous_block))
+        except:
+            previous_block = None
+            debug('Previous block: None')
+        
+        debug('Actual block:  ', ' '.join('%02x' % c for c in block))
+        
+        """for each byte in block in reverse order"""
+        for byte_index in range(blocksize-1, -1, -1):
+            debug('Dealing with byte #%d (%02x)' 
+                  % (byte_index, block[byte_index]))
+
+            """prepare payloads for bruteforce"""
+            valid_padding_byte = -1
+            payloads = {}
+            for bf_byte in range(256):
+                """prepare fake previous block - start with zeros"""
+                fake_prev = b'\x00' * (blocksize - len(block_plaintext) - 1)
+                """add bruteforced byte"""
+                fake_prev += b'%c' % bf_byte
+                """
+                then add values so xor with block gives expected padding values
+                skipped on the first run
+                """
+                for byte_pos, plaintext_byte in enumerate(block_plaintext):
+                    fake_prev += b'%c' % (plaintext_byte
+                                          ^ (len(block_plaintext) + 1) # expected padding
+                                          ^ (previous_block[blocksize-len(block_plaintext)+byte_pos]
+                                             if previous_block
+                                             else 0))
+                """add the block and test it"""
+                payloads[bf_byte] = fake_prev + block
+            """bruteforce the padding"""
+            #oracle_count = 1 # use this for debug
+            oracle_count = 16 # use this for speed
+            oracles = [Oracle(oracle_path, {k:v for k,v in payloads.items() 
+                                            if (k // (len(payloads)/oracle_count) 
+                                                == i)})
+                       for i in range(oracle_count)]
+            for oracle in oracles:
+                oracle.start()
+            for oracle in oracles:
+                oracle.join()
+                if oracle.matching:
+                    valid_padding_byte = oracle.matching[0]
+            
+            '''
+            #print('Will test payload:', payload)
+            #print('Sending payload (%02x) to oracle...' % bf_byte)
+            if cbc_padding_oracle(payload):
+                valid_padding_byte = bf_byte
+                break
+            '''
+            
+            if valid_padding_byte == -1:
+                debug('Failed to find valid padding byte!')
+
+            debug('Found valid padding byte:', valid_padding_byte)
+            """compute plaintext byte from padding byte"""
+            block_plaintext = (b'%c' % ((len(block_plaintext) + 1) # expected padding
+                                        ^ (previous_block[byte_index] 
+                                           if previous_block 
+                                           else 0) # byte of previous block
+                                        ^ valid_padding_byte) # 
+                               + block_plaintext)
+            debug('New block plaintext:', block_plaintext)
+        final_plaintexts.append(block_plaintext)
+    try:
+        print('Final plaintext:', (b''.join(final_plaintexts[::-1])).decode())
+    except:
+        print('Final plaintext:', b''.join(final_plaintexts[::-1]))
+
+    #print(cbc_padding_oracle(base64.b64decode(b'4ET5cY0cfSnomIvhYPc0+Q==')))
+
