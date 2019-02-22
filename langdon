@@ -8,6 +8,7 @@ import subprocess
 import sys
 import base64
 import threading
+import re
 
 def debug(*args):
     if debug_flag:
@@ -21,6 +22,37 @@ def run_command(command):
     (out, err) = p.communicate()
     return (p.returncode, out, err)
 
+def prynt(data, end='\n'):
+    try:
+        print(data.decode(), end=end)
+    except:
+        print(data, end=end)
+"""
+
+"""
+class Oracle(threading.Thread):
+    """
+
+    """
+    def __init__(self, oracle_path, payloads):
+        threading.Thread.__init__(self)
+        self.oracle_path = oracle_path
+        self.payloads = payloads
+        self.matching = []
+
+    def run(self):
+        """
+        sends payloads to given oracle, returns True if Oracle is happy
+        The payload is base64-encoded
+        """
+        for byte_value, payload in self.payloads.items():
+            #print('Oracle testing', byte_value)
+            r, _, _ = run_command('%s %s' % (oracle_path, 
+                                             base64.b64encode(payload).decode()))
+            if r == 0:
+                self.matching.append(byte_value)
+                break
+
 
 """
 Load arguments
@@ -32,19 +64,36 @@ try:
     debug_flag = '--debug' in sys.argv
     debug_flag = True # TODO delete after testing
     method = sys.argv[1][2:]
+    if method == 'hex':
+        filename = sys.argv[2]
+    if method == 'unhex':
+        payload = sys.argv[2]
+    if method == 'xorfiles':
+        filename1 = sys.argv[2]
+        filename2 = sys.argv[3]
+    if method == 'brute-single-xor':
+        filename = sys.argv[2]
+        try:
+            wordlist = sys.argv[3]
+        except:
+            wordlist = None
     if method == 'cbc-padding':
         filename = sys.argv[2]
         blocksize = int(sys.argv[3])
         oracle_path = sys.argv[4]
         with open(oracle_path, 'rb') as f:
-            pass
-        
+            pass        
 except:
     #print('[-] Usage: %s <filename>' % sys.argv[0])
-    print('[-] Usage: %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
+    print('[-] Usage:')
+    print('    %s --hex <file>' % sys.argv[0])
+    print('    %s --unhex faceb00cdeadbeef' % sys.argv[0])
+    print('    %s --xorfiles <file1> <file2>' % sys.argv[0])
+    print('    %s --brute-single-xor <file> [wordlist]' % sys.argv[0])
+    print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
     sys.exit(1)
 
-
+# TODO --analyze
 # TODO file, entropy, plaintext?
 # TODO caesar, freqanal etc.
 
@@ -54,24 +103,74 @@ except:
 # ECB block reordering - we can use input to create separated desired data (like admin=1)
 # ECB key reuse - add unencrypted stuff in the middle of stuff we can encrypt
 
-class Oracle(threading.Thread):
-    def __init__(self, oracle_path, payloads):
-        threading.Thread.__init__(self)
-        self.oracle_path = oracle_path
-        self.payloads = payloads
-        self.matching = []
+# TODO hash extension
+# https://blog.skullsecurity.org/2012/everything-you-need-to-know-about-hash-length-extension-attacks
 
-    def run(self):
-        """
-        sends payloads to given oracle, returns True if Oracle is happy
-        """
-        for byte_value, payload in self.payloads.items():
-            #print('Oracle testing', byte_value)
-            r, _, _ = run_command('%s %s' % (oracle_path, 
-                                             base64.b64encode(payload).decode()))
+"""
+Cryptopals challenges
+"""
+def hex(data):
+    return b''.join(b'%02x' % c for c in data)
+
+def unhex(stream):
+    return b''.join(b'%c' % int(stream[i:i+2], 16) 
+                    for i in range(0, len(stream), 2))
+
+def xor(data1, data2):
+    return b''.join(b'%c' % (data1[i % len(data1)] ^ data2[i % len(data2)]) 
+                    for i in range(max(len(data1), len(data2))))
+
+def bruteforce_xor(data1, keys):
+    for key in keys:
+        yield xor(data1, key)
+
+def dict_check(line, wordlist, threshold=0.7): # TODO or different constant?
+    match_count = 0
+    words = [w for w in re.sub(b'[^a-z]+', b' ', line.lower()).split()
+             if len(w) > 1]
+    if not words:
+        return False
+    for word in words: # TODO maybe just a sample? e.g. 20?
+        try:
+            r, _, _ = run_command("grep -qi '^%s$' %s" 
+                                  % (word.decode(), wordlist))
             if r == 0:
-                self.matching.append(byte_value)
-                break
+                match_count += 1
+        except:
+            pass
+    #print()
+    #print(words)
+    #print(match_count, len(words)*threshold)
+    return match_count > (len(words) * threshold)
+    
+
+if method == 'hex':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    prynt(hex(data))
+
+if method == 'unhex':
+    prynt(unhex(payload), end='')
+
+if method == 'xorfiles':
+    with open(filename1, 'rb') as f:
+        data1 = f.read()
+    with open(filename2, 'rb') as f:
+        data2 = f.read()
+    prynt(xor(data1, data2), end='')
+
+if method == 'brute-single-xor':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    results = bruteforce_xor(data, [b'%c' % i for i in range(256)])
+    for result in results:
+        if wordlist:
+            if dict_check(result, wordlist, threshold=0.7):
+                prynt(result)
+        else:
+            print(result)
+    # TODO grep some dict?
+
 
 
 if method == 'cbc-padding':
