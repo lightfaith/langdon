@@ -22,14 +22,60 @@ def run_command(command):
     (out, err) = p.communicate()
     return (p.returncode, out, err)
 
-def prynt(data, end='\n'):
+def prynt(*args, end='\n'):
     try:
-        print(data.decode(), end=end)
+        print(*[(arg.decode() 
+                 if (type(arg) == bytes)
+                 else arg)
+                for arg in args], end=end)
     except:
-        print(data, end=end)
+        print(*args, end=end)
 """
 
 """
+class Parallelizer():
+    # TODO terminate stuff
+    def __init__(self, thread_count, data, function):
+        self.thread_count = thread_count
+        self.data = data
+        self.function = function
+        self.threads = []
+        self.results = []
+
+    def start(self):
+        chunk_size = len(self.data) // self.thread_count
+        if not chunk_size:
+            chunk_size = 1
+        indexed_data = list(enumerate(self.data, 1))
+        data_chunks = [indexed_data[i:i+chunk_size] 
+                       for i in range(0, len(indexed_data), chunk_size)]
+        self.threads = [ParallelizerThread(data_chunks[i], self.function)
+                        for i in range(len(data_chunks))]
+        for t in self.threads:
+            t.start()
+
+    def waitfor(self):
+        for t in self.threads:
+            t.join()
+            self.results += t.results
+
+
+
+class ParallelizerThread(threading.Thread):
+    # TODO terminate stuff...
+    def __init__(self, data, function):
+        threading.Thread.__init__(self)
+        self.data = data
+        self.function = function
+        self.results = []
+
+    def run(self):
+        indices, samples = zip(*self.data)
+        print('Running thread (samples %d through %d).' 
+              % (indices[0], indices[-1]))
+        self.results = self.function(indices, samples)
+
+
 class Oracle(threading.Thread):
     """
 
@@ -74,9 +120,14 @@ try:
     if method == 'brute-single-xor':
         filename = sys.argv[2]
         try:
-            wordlist = sys.argv[3]
+            with open(sys.argv[3], 'rb') as f:
+                wordlist = f.read().splitlines()
         except:
             wordlist = None
+    if method == 'cp-1-4':
+        filename = sys.argv[2]
+        with open(sys.argv[3], 'rb') as f:
+            wordlist = f.read().splitlines()
     if method == 'cbc-padding':
         filename = sys.argv[2]
         blocksize = int(sys.argv[3])
@@ -89,7 +140,8 @@ except:
     print('    %s --hex <file>' % sys.argv[0])
     print('    %s --unhex faceb00cdeadbeef' % sys.argv[0])
     print('    %s --xorfiles <file1> <file2>' % sys.argv[0])
-    print('    %s --brute-single-xor <file> [wordlist]' % sys.argv[0])
+    print('    %s --brute-single-xor <file> [<wordlist>]' % sys.argv[0])
+    print('    %s --cp-1-4 <file> <wordlist>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
     sys.exit(1)
 
@@ -124,12 +176,21 @@ def bruteforce_xor(data1, keys):
     for key in keys:
         yield xor(data1, key)
 
-def dict_check(line, wordlist, threshold=0.7): # TODO or different constant?
+def dict_success(sample, min_word_match=1, min_word_len=1): # TODO or different constants?
     match_count = 0
-    words = [w for w in re.sub(b'[^a-z]+', b' ', line.lower()).split()
-             if len(w) > 1]
+    words = [w for w in re.sub(b'[^a-z]+', b' ', sample.lower()).split()
+             if len(w) >= min_word_len]
     if not words:
-        return False
+        return 0
+    found = [w for w in words if w in wordlist]
+    #print(found)
+    if len(found) < min_word_match:
+        return 0
+    #success = sum(len(w) for w in found) / len(found)
+    #success = sum(len(w) for w in found) / len(found) / len(words)
+    #success = sum(len(w) for w in found) / len(words)
+    success = len(found) / len(words)
+    '''
     for word in words: # TODO maybe just a sample? e.g. 20?
         try:
             r, _, _ = run_command("grep -qi '^%s$' %s" 
@@ -138,11 +199,18 @@ def dict_check(line, wordlist, threshold=0.7): # TODO or different constant?
                 match_count += 1
         except:
             pass
-    #print()
-    #print(words)
-    #print(match_count, len(words)*threshold)
-    return match_count > (len(words) * threshold)
-    
+    '''
+    #success = (match_count / len(words)) if match_count >= min_word_match else -1
+    return success
+    '''
+    match = ((match_count > (len(words) * threshold)) 
+             and (match_count >= min_word_match))
+    #if match:
+    #    print(match)
+    #    print(words)
+    #    print(match_count, len(words)*threshold)
+    return match
+    '''
 
 if method == 'hex':
     with open(filename, 'rb') as f:
@@ -159,19 +227,43 @@ if method == 'xorfiles':
         data2 = f.read()
     prynt(xor(data1, data2), end='')
 
-if method == 'brute-single-xor':
-    with open(filename, 'rb') as f:
-        data = f.read()
+
+def single_xor_print(data):
     results = bruteforce_xor(data, [b'%c' % i for i in range(256)])
-    for result in results:
+    for byte, result in enumerate(results):
         if wordlist:
-            if dict_check(result, wordlist, threshold=0.7):
+            if dict_success(result, 
+                            min_word_match=3, 
+                            min_word_len=3) > 0.2:
+                print('0x%02x: ' % byte, end='')
                 prynt(result)
         else:
             print(result)
-    # TODO grep some dict?
+
+if method == 'brute-single-xor':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    single_xor_print(data)
 
 
+def cp_1_4_function(indices, lines):
+    for index, line in zip(indices, lines):
+        unhexed = unhex(line)
+        results = bruteforce_xor(unhexed, [b'%c' % i for i in range(256)])
+        for byte, result in enumerate(results):
+            if dict_success(result, min_word_match=3, min_word_len=3)>0.8:
+                prynt('%d: 0x%02x:' % (index, byte), result)
+    return []
+
+if method == 'cp-1-4':
+    with open(filename, 'rb') as f:
+        lines = f.read().splitlines()
+    """run XOR and dict analysis in parallel"""
+    p = Parallelizer(8, lines, cp_1_4_function)
+    p.start()
+    p.waitfor()
+    
+#############################################################
 
 if method == 'cbc-padding':
     """
