@@ -10,6 +10,9 @@ import base64
 import threading
 import re
 
+"""
+Standard functions
+"""
 def debug(*args):
     if debug_flag:
         print('\033[90m[.]', *args, '\033[0m')
@@ -30,8 +33,9 @@ def prynt(*args, end='\n'):
                 for arg in args], end=end)
     except:
         print(*args, end=end)
-"""
 
+"""
+Vital classes
 """
 class Parallelizer():
     # TODO terminate stuff
@@ -99,6 +103,76 @@ class Oracle(threading.Thread):
                 self.matching.append(byte_value)
                 break
 
+"""
+Crypto functions
+"""
+def hex(data):
+    return b''.join(b'%02x' % c for c in data)
+
+def unhex(stream):
+    return b''.join(b'%c' % int(stream[i:i+2], 16) 
+                    for i in range(0, len(stream), 2))
+
+def xor(data1, data2):
+    return b''.join(b'%c' % (data1[i % len(data1)] ^ data2[i % len(data2)]) 
+                    for i in range(max(len(data1), len(data2))))
+
+def bruteforce_xor(data1, keys):
+    for key in keys:
+        yield xor(data1, key)
+
+def dict_success(sample, min_word_match=1, min_word_len=1): # TODO or different constants?
+    match_count = 0
+    words = [w for w in re.sub(b'[^a-z]+', b' ', sample.lower()).split()
+             if len(w) >= min_word_len]
+    if not words:
+        return 0
+    found = [w for w in words if w in wordlist]
+    if len(found) < min_word_match:
+        return 0
+    success = len(found) / len(words)
+    return success
+
+def hamming(data1, data2):
+    result = 0
+    for i in range(max(len(data1), len(data2))):
+        c1 = data1[i] if i < len(data1) else 0
+        c2 = data2[i] if i < len(data2) else 0
+        xored = c1 ^ c2
+        for bit in range(8):
+            result += (xored >> bit) & 0x1
+    return result
+        
+"""
+Specific functions (e.g. print all ROTs or the valid one)
+"""
+def single_xor_print(data):
+    results = bruteforce_xor(data, [b'%c' % i for i in range(256)])
+    for byte, result in enumerate(results):
+        if wordlist:
+            if dict_success(result, 
+                            min_word_match=3, 
+                            min_word_len=3) > 0.2:
+                print('0x%02x: ' % byte, end='')
+                prynt(result)
+        else:
+            print(result)
+
+
+"""
+Cryptopals challenges
+"""
+def cp_1_4_function(indices, lines):
+    for index, line in zip(indices, lines):
+        unhexed = unhex(line)
+        results = bruteforce_xor(unhexed, [b'%c' % i for i in range(256)])
+        for byte, result in enumerate(results):
+            if dict_success(result, min_word_match=3, min_word_len=3)>0.8:
+                prynt('%d: 0x%02x:' % (index, byte), result)
+    return []
+
+
+
 
 """
 Load arguments
@@ -128,6 +202,9 @@ try:
         filename = sys.argv[2]
         with open(sys.argv[3], 'rb') as f:
             wordlist = f.read().splitlines()
+    if method == 'hamming':
+        filename1 = sys.argv[2]
+        filename2 = sys.argv[3]
     if method == 'cbc-padding':
         filename = sys.argv[2]
         blocksize = int(sys.argv[3])
@@ -142,6 +219,7 @@ except:
     print('    %s --xorfiles <file1> <file2>' % sys.argv[0])
     print('    %s --brute-single-xor <file> [<wordlist>]' % sys.argv[0])
     print('    %s --cp-1-4 <file> <wordlist>' % sys.argv[0])
+    print('    %s --hamming <file1> <file2>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
     sys.exit(1)
 
@@ -158,59 +236,6 @@ except:
 # TODO hash extension
 # https://blog.skullsecurity.org/2012/everything-you-need-to-know-about-hash-length-extension-attacks
 
-"""
-Cryptopals challenges
-"""
-def hex(data):
-    return b''.join(b'%02x' % c for c in data)
-
-def unhex(stream):
-    return b''.join(b'%c' % int(stream[i:i+2], 16) 
-                    for i in range(0, len(stream), 2))
-
-def xor(data1, data2):
-    return b''.join(b'%c' % (data1[i % len(data1)] ^ data2[i % len(data2)]) 
-                    for i in range(max(len(data1), len(data2))))
-
-def bruteforce_xor(data1, keys):
-    for key in keys:
-        yield xor(data1, key)
-
-def dict_success(sample, min_word_match=1, min_word_len=1): # TODO or different constants?
-    match_count = 0
-    words = [w for w in re.sub(b'[^a-z]+', b' ', sample.lower()).split()
-             if len(w) >= min_word_len]
-    if not words:
-        return 0
-    found = [w for w in words if w in wordlist]
-    #print(found)
-    if len(found) < min_word_match:
-        return 0
-    #success = sum(len(w) for w in found) / len(found)
-    #success = sum(len(w) for w in found) / len(found) / len(words)
-    #success = sum(len(w) for w in found) / len(words)
-    success = len(found) / len(words)
-    '''
-    for word in words: # TODO maybe just a sample? e.g. 20?
-        try:
-            r, _, _ = run_command("grep -qi '^%s$' %s" 
-                                  % (word.decode(), wordlist))
-            if r == 0:
-                match_count += 1
-        except:
-            pass
-    '''
-    #success = (match_count / len(words)) if match_count >= min_word_match else -1
-    return success
-    '''
-    match = ((match_count > (len(words) * threshold)) 
-             and (match_count >= min_word_match))
-    #if match:
-    #    print(match)
-    #    print(words)
-    #    print(match_count, len(words)*threshold)
-    return match
-    '''
 
 if method == 'hex':
     with open(filename, 'rb') as f:
@@ -227,33 +252,10 @@ if method == 'xorfiles':
         data2 = f.read()
     prynt(xor(data1, data2), end='')
 
-
-def single_xor_print(data):
-    results = bruteforce_xor(data, [b'%c' % i for i in range(256)])
-    for byte, result in enumerate(results):
-        if wordlist:
-            if dict_success(result, 
-                            min_word_match=3, 
-                            min_word_len=3) > 0.2:
-                print('0x%02x: ' % byte, end='')
-                prynt(result)
-        else:
-            print(result)
-
 if method == 'brute-single-xor':
     with open(filename, 'rb') as f:
         data = f.read()
     single_xor_print(data)
-
-
-def cp_1_4_function(indices, lines):
-    for index, line in zip(indices, lines):
-        unhexed = unhex(line)
-        results = bruteforce_xor(unhexed, [b'%c' % i for i in range(256)])
-        for byte, result in enumerate(results):
-            if dict_success(result, min_word_match=3, min_word_len=3)>0.8:
-                prynt('%d: 0x%02x:' % (index, byte), result)
-    return []
 
 if method == 'cp-1-4':
     with open(filename, 'rb') as f:
@@ -263,6 +265,14 @@ if method == 'cp-1-4':
     p.start()
     p.waitfor()
     
+if method == 'hamming':
+    with open(filename1, 'rb') as f:
+        data1 = f.read()
+    with open(filename2, 'rb') as f:
+        data2 = f.read()
+    print(hamming(data1, data2))
+#############################################################
+#############################################################
 #############################################################
 
 if method == 'cbc-padding':
