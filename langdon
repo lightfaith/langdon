@@ -223,6 +223,14 @@ def pkcs7_pad(data, blocksize=16):
 
 def pkcs7_unpad(data):
     return data[:-data[-1]]
+
+def ecb_suspect(data, blocksize=16):
+    blocks = []
+    for block in [data[i:i+blocksize] for i in range(0, len(data), blocksize)]:
+        if block in blocks:
+            return True
+        blocks.append(block)
+    return False
 """
 Specific functions (e.g. print all ROTs or the valid one)
 """
@@ -298,12 +306,6 @@ try:
                 wordlist = f.read().splitlines()
         except:
             wordlist = None
-    if method == 'cp-1-4':
-        filename = sys.argv[2]
-        with open(sys.argv[3], 'rb') as f:
-            wordlist = f.read().splitlines()
-    if method == 'cp-1-8':
-        filename = sys.argv[2]
     if method == 'break-xor':
         filename = sys.argv[2]
         language = sys.argv[3]
@@ -323,6 +325,14 @@ try:
         oracle_path = sys.argv[4]
         with open(oracle_path, 'rb') as f:
             pass        
+    
+    if method == 'cp-1-4':
+        filename = sys.argv[2]
+        with open(sys.argv[3], 'rb') as f:
+            wordlist = f.read().splitlines()
+    if method == 'cp-1-8':
+        filename = sys.argv[2]
+
 except:
     #print('[-] Usage: %s <filename>' % sys.argv[0])
     print('[-] Usage:')
@@ -643,5 +653,16 @@ if method == 'cp-1-4':
 
 if method == 'cp-1-8':
     with open(filename, 'rb') as f:
-        lines = f.read().splitlines()
+        lines = [unhex(line) for line in f.read().splitlines()]
+    """check entropy"""
+    entropies = [entropy(line) for line in lines]
+    #for i, entropy in enumerate(entropies, 1):
+    #    print(i, entropy)
+    worst = min(entropies)
+    print('Worst entropy: %d:' % (entropies.index(worst) + 1), worst)
+    """find duplicate cipherblocks"""
+    for i, line in enumerate(lines, 1):
+        if ecb_suspect(line):
+            print('ECB at %d:' % i, line)
+
 
