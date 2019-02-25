@@ -314,10 +314,18 @@ try:
         algorithm = sys.argv[2]
         filename = sys.argv[3]
         keyfilename = sys.argv[4]
+        try:
+            iv = sys.argv[5]
+        except:
+            iv = None
     if method == 'decrypt':
         algorithm = sys.argv[2]
         filename = sys.argv[3]
         keyfilename = sys.argv[4]
+        try:
+            iv = sys.argv[5]
+        except:
+            iv = None
 
     if method == 'cbc-padding':
         filename = sys.argv[2]
@@ -353,7 +361,9 @@ except:
     # proper algorithms
     print('  # standard algorithms:')
     print('    %s --encrypt aes-ecb <file> <keyfile>' % sys.argv[0])
+    print('    %s --encrypt aes-cbc <file> <keyfile> <iv>' % sys.argv[0])
     print('    %s --decrypt aes-ecb <file> <keyfile>' % sys.argv[0])
+    print('    %s --decrypt aes-cbc <file> <keyfile> <iv>' % sys.argv[0])
     # sophisticated stuff
     print('  # sophisticated attacks:')
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
@@ -520,24 +530,61 @@ if method == 'encrypt':
         data = f.read()
     with open(keyfilename, 'rb') as f:
         key = f.read()
+    if iv:
+        iv = unhex(iv)
+
     if algorithm == 'aes-ecb':
         from Crypto.Cipher import AES
         cipher = AES.new(key, AES.MODE_ECB)
         prynt(cipher.encrypt(pkcs7_pad(data)), end='')
-
+    elif algorithm == 'aes-cbc':
+        if not iv:
+            print('[-] IV is needed for CBC mode.')
+        else:
+            padded = pkcs7_pad(data)
+            blocksize = 16
+            result = b''
+            previous_block = iv
+            blocks = [padded[i:i+blocksize] for i in range(0, len(padded), blocksize)]
+            from Crypto.Cipher import AES
+            cipher = AES.new(key, AES.MODE_ECB)
+            for block in blocks:
+                tmp = xor(block, previous_block)
+                previous_block = cipher.encrypt(tmp)
+                result += previous_block
+            prynt(result)
     else:
         print('Unknown algorithm.')
+
 
 if method == 'decrypt':
     with open(filename, 'rb') as f:
         data = f.read()
     with open(keyfilename, 'rb') as f:
         key = f.read()
+    if iv:
+        iv = unhex(iv)
+
     if algorithm == 'aes-ecb':
         from Crypto.Cipher import AES
         cipher = AES.new(key, AES.MODE_ECB)
         prynt(pkcs7_unpad(cipher.decrypt(data)), end='')
-        
+    elif algorithm == 'aes-cbc':
+        if not iv:
+            print('[-] IV is needed for CBC mode.')
+        else:
+            blocksize = 16
+            result = b''            
+            previous_block = iv
+            blocks = [data[i:i+blocksize] for i in range(0, len(data), blocksize)]
+            from Crypto.Cipher import AES
+            cipher = AES.new(key, AES.MODE_ECB)
+            for block in blocks:
+                tmp = cipher.decrypt(block)
+                result += xor(tmp, previous_block)
+                previous_block = block
+            result = pkcs7_unpad(result)
+            prynt(result)
     else:
         print('Unknown algorithm.')
 ################################################################################
