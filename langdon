@@ -236,6 +236,8 @@ try:
 
     if method == 'histogram':
         filename = sys.argv[2]
+    if method == 'histogram-sorted':
+        filename = sys.argv[2]
     if method == 'xorfiles':
         filename1 = sys.argv[2]
         filename2 = sys.argv[3]
@@ -268,6 +270,7 @@ except:
     print('    %s --unhex faceb00cdeadbeef' % sys.argv[0])
     print('    %s --entropy <file> [<chunksize>]' % sys.argv[0])
     print('    %s --histogram <file>' % sys.argv[0])
+    print('    %s --histogram-sorted <file>' % sys.argv[0])
     print('    %s --xorfiles <file1> <file2>' % sys.argv[0])
     print('    %s --brute-single-xor <file> [<wordlist>]' % sys.argv[0])
     print('    %s --cp-1-4 <file> <wordlist>' % sys.argv[0])
@@ -324,17 +327,29 @@ if method == 'histogram':
     plt.title('Byte histogram')
     plt.margins(x=0)
     # plot hist
-    _, __, patches = plt.hist(bytearray(data), 
-			      [x for x in range(256)])
+    _, __, patches = plt.hist(bytearray(data), [x for x in range(256)])
     axes = plt.gca()
     # set hexadecimal ticks
     axes.get_xaxis().set_major_locator(ticker.MultipleLocator(16))
     axes.get_xaxis().set_major_formatter(plt.FuncFormatter(
-	lambda value,tick_number: '0x%x' % int(value)))
+        lambda value,tick_number: '0x%x' % int(value)))
     # color bars
     for i, p in enumerate(patches):
-        plt.setp(p, 'facecolor', histogram_colors[
-	    i % len(histogram_colors)])
+        plt.setp(p, 'facecolor', histogram_colors[i % len(histogram_colors)])
+    plt.show()
+    
+if method == 'histogram-sorted':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    histogram_colors = ['#005073', '#107dac', '#189ad3', '#71c7ec']
+    plt.figure(figsize=(10, 5))
+    plt.title('Sorted histogram')
+    plt.margins(x=0)
+    # plot hist
+    X, Y = zip(*sorted(enumerate(histogram(data)), key=lambda x: x[1], reverse=True))
+    plt.bar(range(256), Y, width=1, color=histogram_colors)
+    axes = plt.gca()
+    axes.get_xaxis().set_major_locator(ticker.MultipleLocator(16))
     plt.show()
     
 if method == 'xorfiles':
