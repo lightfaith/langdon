@@ -170,7 +170,7 @@ def entropy_chunks(data, chunksize):
             (i+1)*chunksize, len(data))]))
     return (X, Y)
 
-def get_frequency_score(data, language):
+def get_frequency_error(data, language):
     try:
         fs = character_frequencies[language]
         #return sum([fs.get(chr(c), 0) 
@@ -224,6 +224,7 @@ def single_xor_print(data):
                 print('0x%02x: ' % byte, end='')
                 prynt(result)
         else:
+            #print(result, ', english error: %f' % get_frequency_error(result, 'english'))
             print(result)
 
 
@@ -268,7 +269,7 @@ try:
         filename = sys.argv[2]
     if method == 'histogram-sorted':
         filename = sys.argv[2]
-    if method == 'language-score':
+    if method == 'language-error':
         filename = sys.argv[2]
         language = sys.argv[3]
     if method == 'xorfiles':
@@ -290,6 +291,7 @@ try:
         filename2 = sys.argv[3]
     if method == 'break-xor':
         filename = sys.argv[2]
+        language = sys.argv[3]
     if method == 'cbc-padding':
         filename = sys.argv[2]
         blocksize = int(sys.argv[3])
@@ -304,12 +306,12 @@ except:
     print('    %s --entropy <file> [<chunksize>]' % sys.argv[0])
     print('    %s --histogram <file>' % sys.argv[0])
     print('    %s --histogram-sorted <file>' % sys.argv[0])
-    print('    %s --language-score <file> <language>' % sys.argv[0])
+    print('    %s --language-error <file> <language>' % sys.argv[0])
     print('    %s --xorfiles <file1> <file2>' % sys.argv[0])
     print('    %s --brute-single-xor <file> [<wordlist>]' % sys.argv[0])
     print('    %s --cp-1-4 <file> <wordlist>' % sys.argv[0])
     print('    %s --hamming <file1> <file2>' % sys.argv[0])
-    print('    %s --break-xor <file>' % sys.argv[0])
+    print('    %s --break-xor <file> <language>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
     sys.exit(1)
 
@@ -329,7 +331,7 @@ except:
 if method == 'test':
     with open(filename, 'rb') as f:
         data = f.read()
-    print(get_frequency_score(data, 'english'))
+    print(get_frequency_error(data, 'english'))
 
 if method == 'hex':
     with open(filename, 'rb') as f:
@@ -390,10 +392,10 @@ if method == 'histogram-sorted':
     axes.get_xaxis().set_major_locator(ticker.MultipleLocator(16))
     plt.show()
 
-if method == 'language-score':
+if method == 'language-error':
     with open(filename, 'rb') as f:
         data = f.read()
-    print(get_frequency_score(data, language))
+    print(get_frequency_error(data, language))
     
 if method == 'xorfiles':
     with open(filename1, 'rb') as f:
@@ -410,6 +412,9 @@ if method == 'brute-single-xor':
 if method == 'cp-1-4':
     with open(filename, 'rb') as f:
         lines = f.read().splitlines()
+    entropies = {i:entropy(unhex(line)) for i,line in enumerate(lines, 1)}
+    best = sorted(entropies.items(), key=lambda x: x[1])
+    print('Suspect by entropy: %d:' % best[0][0], best[0][1])
     """run XOR and dict analysis in parallel"""
     p = Parallelizer(8, lines, cp_1_4_function)
     p.start()
@@ -427,7 +432,7 @@ if method == 'break-xor':
         data = f.read()
     # get normalized hamming for some keysizes, smallest should be the correct
     distances = {}
-    for keysize in range(2, 40):
+    for keysize in range(2, min(40, len(data))):
         tmp_distance = 0
         sample_count = 0
         for i in range(0, len(data)-keysize, keysize):
@@ -437,7 +442,29 @@ if method == 'break-xor':
             tmp_distance += hamming(sample1, sample2)
         distances[keysize] = tmp_distance / sample_count / keysize
     best = sorted(distances.items(), key=lambda x: x[1])
-    print(best)
+
+    #for keysize, distance in best[:3]:
+    for keysize, distance in best[:2]:
+        key = b''
+        debug('Trying keysize %d (distance %.3f)' % (keysize, distance))
+        for offset in range(keysize):
+            #print('Offset', offset)
+            transposed = data[offset::keysize]
+            xors = list(bruteforce_xor(transposed, 
+                                       [b'%c' % c for c in range(256)]))
+            #print('XORs:')
+            #for x in xors:
+            #    print(x)
+            best = sorted(xors, key=lambda x: get_frequency_error(x, language))
+            #for i in range(3):
+            #    print(get_frequency_error(best[i], language))
+            key += b'%c' % (xors.index(best[0]))
+            #print(key)
+            #input()
+        print('Key for keysize %d:' % keysize, key)
+        print('Deciphered message:')
+        prynt(xor(data, key))
+
     # break into transposed(chunks of keysize)
     # run single-byte xor for them
     # print key
