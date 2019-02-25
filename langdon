@@ -9,6 +9,9 @@ import sys
 import base64
 import threading
 import re
+import math
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 """
 Standard functions
@@ -34,6 +37,17 @@ def prynt(*args, end='\n'):
     except:
         print(*args, end=end)
 
+def size_human(value, integer=False):
+    format_string = '{0:.0f}' if integer else '{0:.3f}'
+    if value > 1024**4:
+        return ('%s TB' % format_string).format(value / (1024**4))
+    if value > 1024**3:
+        return ('%s GB' % format_string).format(value / (1024**3))
+    if value > 1024**2:
+        return ('%s MB' % format_string).format(value / (1024**2))
+    if value > 1024:
+        return ('%s kB' % format_string).format(value / (1024))
+    return '{0} B'.format(value)
 """
 Vital classes
 """
@@ -113,6 +127,31 @@ def unhex(stream):
     return b''.join(b'%c' % int(stream[i:i+2], 16) 
                     for i in range(0, len(stream), 2))
 
+def histogram(data):
+    byte_counts = [0 for _ in range(256)]
+    for byte in data:
+        byte_counts[byte] += 1
+    return byte_counts
+    
+def entropy(data):
+    e = 0.0
+    byte_counts = histogram(data)
+    for count in byte_counts:
+        if not count:
+            continue
+        p = count / len(data)
+        e -= p* math.log(p, 256)
+    return e
+
+def entropy_chunks(data, chunksize):
+    X = []
+    Y = []
+    for i in range(len(data)//chunksize + 1):
+        X.append(i*chunksize)
+        Y.append(entropy(data[i*chunksize:min(
+            (i+1)*chunksize, len(data))]))
+    return (X, Y)
+
 def xor(data1, data2):
     return b''.join(b'%c' % (data1[i % len(data1)] ^ data2[i % len(data2)]) 
                     for i in range(max(len(data1), len(data2))))
@@ -188,6 +227,15 @@ try:
         filename = sys.argv[2]
     if method == 'unhex':
         payload = sys.argv[2]
+    if method == 'entropy':
+        filename = sys.argv[2]
+        try:
+            chunksize = int(sys.argv[3])
+        except:
+            chunksize = None
+
+    if method == 'histogram':
+        filename = sys.argv[2]
     if method == 'xorfiles':
         filename1 = sys.argv[2]
         filename2 = sys.argv[3]
@@ -205,6 +253,8 @@ try:
     if method == 'hamming':
         filename1 = sys.argv[2]
         filename2 = sys.argv[3]
+    if method == 'break-xor':
+        filename = sys.argv[2]
     if method == 'cbc-padding':
         filename = sys.argv[2]
         blocksize = int(sys.argv[3])
@@ -216,10 +266,13 @@ except:
     print('[-] Usage:')
     print('    %s --hex <file>' % sys.argv[0])
     print('    %s --unhex faceb00cdeadbeef' % sys.argv[0])
+    print('    %s --entropy <file> [<chunksize>]' % sys.argv[0])
+    print('    %s --histogram <file>' % sys.argv[0])
     print('    %s --xorfiles <file1> <file2>' % sys.argv[0])
     print('    %s --brute-single-xor <file> [<wordlist>]' % sys.argv[0])
     print('    %s --cp-1-4 <file> <wordlist>' % sys.argv[0])
     print('    %s --hamming <file1> <file2>' % sys.argv[0])
+    print('    %s --break-xor <file>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
     sys.exit(1)
 
@@ -245,6 +298,45 @@ if method == 'hex':
 if method == 'unhex':
     prynt(unhex(payload), end='')
 
+if method == 'entropy':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    ent = entropy(data)
+    print(ent)
+    if chunksize:
+        chunk_ent_X, chunk_ent_Y = entropy_chunks(data, chunksize) 
+        plt.figure(figsize=(10, 5))
+        plt.title('Entropy')
+        plt.plot(chunk_ent_X, chunk_ent_Y, 
+                 label='%s chunk entropy' % size_human(chunksize, 
+                                                       integer=True))
+        plt.plot(chunk_ent_X, [ent for _ in chunk_ent_X], alpha=0.4,
+                 label='total entropy')
+        plt.legend()
+        plt.ylim(bottom=0.0, top=1.0)
+        plt.show()
+    
+if method == 'histogram':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    histogram_colors = ['#005073', '#107dac', '#189ad3', '#71c7ec']
+    plt.figure(figsize=(10, 5))
+    plt.title('Byte histogram')
+    plt.margins(x=0)
+    # plot hist
+    _, __, patches = plt.hist(bytearray(data), 
+			      [x for x in range(256)])
+    axes = plt.gca()
+    # set hexadecimal ticks
+    axes.get_xaxis().set_major_locator(ticker.MultipleLocator(16))
+    axes.get_xaxis().set_major_formatter(plt.FuncFormatter(
+	lambda value,tick_number: '0x%x' % int(value)))
+    # color bars
+    for i, p in enumerate(patches):
+        plt.setp(p, 'facecolor', histogram_colors[
+	    i % len(histogram_colors)])
+    plt.show()
+    
 if method == 'xorfiles':
     with open(filename1, 'rb') as f:
         data1 = f.read()
@@ -271,6 +363,26 @@ if method == 'hamming':
     with open(filename2, 'rb') as f:
         data2 = f.read()
     print(hamming(data1, data2))
+
+if method == 'break-xor':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    # get normalized hamming for some keysizes, smallest should be the correct
+    distances = {}
+    for keysize in range(2, 40):
+        tmp_distance = 0
+        sample_count = 0
+        for i in range(0, len(data)-keysize, keysize):
+            sample1 = data[i:i+keysize]
+            sample2 = data[i+keysize:i+2*keysize]
+            sample_count += 1
+            tmp_distance += hamming(sample1, sample2)
+        distances[keysize] = tmp_distance / sample_count / keysize
+    best = sorted(distances.items(), key=lambda x: x[1])
+    print(best)
+    # break into transposed(chunks of keysize)
+    # run single-byte xor for them
+    # print key
 #############################################################
 #############################################################
 #############################################################
