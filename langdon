@@ -13,6 +13,7 @@ import math
 import traceback
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import random
 
 """
 Standard functions
@@ -231,9 +232,106 @@ def ecb_suspect(data, blocksize=16):
             return True
         blocks.append(block)
     return False
+
+def aes_ecb_encrypt(data, key):
+    from Crypto.Cipher import AES
+    cipher = AES.new(key, AES.MODE_ECB)
+    return cipher.encrypt(pkcs7_pad(data))
+
+def aes_ecb_decrypt(data, key):
+        from Crypto.Cipher import AES
+        cipher = AES.new(key, AES.MODE_ECB)
+        return pkcs7_unpad(cipher.decrypt(data))
+
+def aes_cbc_encrypt(data, key, iv, blocksize=16):
+    padded = pkcs7_pad(data)
+    blocksize = 16
+    result = b''
+    previous_block = iv
+    blocks = [padded[i:i+blocksize] for i in range(0, len(padded), blocksize)]
+    from Crypto.Cipher import AES
+    cipher = AES.new(key, AES.MODE_ECB)
+    for block in blocks:
+        tmp = xor(block, previous_block)
+        previous_block = cipher.encrypt(tmp)
+        result += previous_block
+    return result
+
+def aes_cbc_decrypt(data, key, iv, blocksize=16):
+    blocksize = 16
+    result = b''            
+    previous_block = iv
+    blocks = [data[i:i+blocksize] for i in range(0, len(data), blocksize)]
+    from Crypto.Cipher import AES
+    cipher = AES.new(key, AES.MODE_ECB)
+    for block in blocks:
+        tmp = cipher.decrypt(block)
+        result += xor(tmp, previous_block)
+        previous_block = block
+    return pkcs7_unpad(result)
+
 """
 Specific functions (e.g. print all ROTs or the valid one)
 """
+def analyze(data, interactive=False):
+    """
+
+    analyze levels:
+        0: entropy, histogram
+    """
+    analysis_level = 0
+    ent = entropy(data)
+    his = histogram(data)
+    performed_tests = []
+    ubc = len([x for x in his if x]) # unique byte count
+    print('Entropy:', ent)
+
+    ubc_hint = ''
+    if ubc == 2:
+        ubc_hint = '(binary?)'
+    elif ubc == 3:
+        ubc_hint = '(morse/binary with separators?)'
+    elif ubc == 16:
+        ubc_hint = '(hex?)'
+    elif ubc == 17:
+        ubc_hint = '(hex with separators?)'
+    elif ubc == 32:
+        ubc_hint = '(base32?)'
+    elif ubc == 33:
+        ubc_hint = '(base32 with separators?)'
+    elif ubc == 58:
+        ubc_hint = '(base58?)'
+    elif ubc == 59:
+        ubc_hint = '(base58 with separators?)'
+    elif ubc == 64:
+        ubc_hint = '(base64?)'
+    elif ubc == 65:
+        ubc_hint = '(base64 with separators?)'
+    print('Unique byte count', ubc, ubc_hint)
+            
+    if ent > 0.99:
+        print('Huge entropy; stronger crypto is expected.')
+
+    while True:
+        found_something = False
+        debug('Level %d analysis.' % analysis_level)
+        if ('REPEATING_PATTERNS' not in performed_tests
+                and (ent > 0.99 or analysis_level >= 5)):
+            performed_tests.append('REPEATING_PATTERNS')
+            debug('  Testing REPEATING_PATTERNS.')
+            if ecb_suspect(data):
+                print('Repeating patterns detected -> possible ECB')
+                found_something = True
+        analysis_level += 1
+        if interactive and found_something:
+            answer = input('Continue with level %d analysis? ' % analysis_level)
+            if answer.lower() not in ['y', 'yes', 't', 'true', '1', 'a']:
+                break
+        if analysis_level > 10:
+            break
+            
+    
+
 def single_xor_print(data):
     results = bruteforce_xor(data, [b'%c' % i for i in range(256)])
     for byte, result in enumerate(results):
@@ -251,7 +349,7 @@ def single_xor_print(data):
 """
 Cryptopals challenges
 """
-def cp_1_4_function(indices, lines):
+def cp_4_function(indices, lines):
     for index, line in zip(indices, lines):
         unhexed = unhex(line)
         results = bruteforce_xor(unhexed, [b'%c' % i for i in range(256)])
@@ -327,6 +425,8 @@ try:
         except:
             iv = None
 
+    if method == 'analyze':
+        filename = sys.argv[2]
     if method == 'cbc-padding':
         filename = sys.argv[2]
         blocksize = int(sys.argv[3])
@@ -334,12 +434,14 @@ try:
         with open(oracle_path, 'rb') as f:
             pass        
     
-    if method == 'cp-1-4':
+    if method == 'cp-4':
         filename = sys.argv[2]
         with open(sys.argv[3], 'rb') as f:
             wordlist = f.read().splitlines()
-    if method == 'cp-1-8':
+    if method == 'cp-8':
         filename = sys.argv[2]
+    if method == 'cp-11':
+        pass
 
 except:
     #print('[-] Usage: %s <filename>' % sys.argv[0])
@@ -366,11 +468,13 @@ except:
     print('    %s --decrypt aes-cbc <file> <keyfile> <iv>' % sys.argv[0])
     # sophisticated stuff
     print('  # sophisticated attacks:')
+    print('    %s --analyze <file>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
     # cryptopals
     print('  # cryptopals:')
-    print('    %s --cp-1-4 <file> <wordlist>' % sys.argv[0])
-    print('    %s --cp-1-8 <file> <wordlist>' % sys.argv[0])
+    print('    %s --cp-4 <file> <wordlist>' % sys.argv[0])
+    print('    %s --cp-8 <file> <wordlist>' % sys.argv[0])
+    print('    %s --cp-11' % sys.argv[0])
     sys.exit(1)
 
 # TODO --analyze
@@ -534,25 +638,12 @@ if method == 'encrypt':
         iv = unhex(iv)
 
     if algorithm == 'aes-ecb':
-        from Crypto.Cipher import AES
-        cipher = AES.new(key, AES.MODE_ECB)
-        prynt(cipher.encrypt(pkcs7_pad(data)), end='')
+        prynt(aes_ecb_encrypt(data, key), end='')
     elif algorithm == 'aes-cbc':
         if not iv:
             print('[-] IV is needed for CBC mode.')
         else:
-            padded = pkcs7_pad(data)
-            blocksize = 16
-            result = b''
-            previous_block = iv
-            blocks = [padded[i:i+blocksize] for i in range(0, len(padded), blocksize)]
-            from Crypto.Cipher import AES
-            cipher = AES.new(key, AES.MODE_ECB)
-            for block in blocks:
-                tmp = xor(block, previous_block)
-                previous_block = cipher.encrypt(tmp)
-                result += previous_block
-            prynt(result)
+            prynt(aes_cbc_encrypt(data, key, iv, blocksize=16))
     else:
         print('Unknown algorithm.')
 
@@ -566,30 +657,21 @@ if method == 'decrypt':
         iv = unhex(iv)
 
     if algorithm == 'aes-ecb':
-        from Crypto.Cipher import AES
-        cipher = AES.new(key, AES.MODE_ECB)
-        prynt(pkcs7_unpad(cipher.decrypt(data)), end='')
+        prynt(aes_ecb_decrypt(data, key), end='')
     elif algorithm == 'aes-cbc':
         if not iv:
             print('[-] IV is needed for CBC mode.')
         else:
-            blocksize = 16
-            result = b''            
-            previous_block = iv
-            blocks = [data[i:i+blocksize] for i in range(0, len(data), blocksize)]
-            from Crypto.Cipher import AES
-            cipher = AES.new(key, AES.MODE_ECB)
-            for block in blocks:
-                tmp = cipher.decrypt(block)
-                result += xor(tmp, previous_block)
-                previous_block = block
-            result = pkcs7_unpad(result)
-            prynt(result)
+            prynt(aes_cbc_decrypt(data, key, iv, blocksize=16))
     else:
         print('Unknown algorithm.')
 ################################################################################
 ################################################################################
 ################################################################################
+if method == 'analyze':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    analyze(data, interactive=True)
 
 if method == 'cbc-padding':
     """
@@ -687,18 +769,18 @@ if method == 'cbc-padding':
 ################################################################################
 ################################################################################
 ################################################################################
-if method == 'cp-1-4':
+if method == 'cp-4':
     with open(filename, 'rb') as f:
         lines = f.read().splitlines()
     entropies = {i:entropy(unhex(line)) for i,line in enumerate(lines, 1)}
     best = sorted(entropies.items(), key=lambda x: x[1])
     print('Suspect by entropy: %d:' % best[0][0], best[0][1])
     """run XOR and dict analysis in parallel"""
-    p = Parallelizer(8, lines, cp_1_4_function)
+    p = Parallelizer(8, lines, cp_4_function)
     p.start()
     p.waitfor()
 
-if method == 'cp-1-8':
+if method == 'cp-8':
     with open(filename, 'rb') as f:
         lines = [unhex(line) for line in f.read().splitlines()]
     """check entropy"""
@@ -712,4 +794,32 @@ if method == 'cp-1-8':
         if ecb_suspect(line):
             print('ECB at %d:' % i, line)
 
+if method == 'cp-11':
+    data = b'''Give me the right to be heard, to be seen, to be loved, to be free, to be
+    Everything I need, to be me, to be safe, to believe in something
+    I have a right to be heard, to be seen, to be loved, to be free, to be
+    Everything I need, to be me, to be safe, to believe in something
+
+    Father there's a little flower, beautiful and different,
+    all alone, all alone
+    Is it so dad, I'm not supposed to make the world a
+    new and be like you. Am I you?'''
+    for i in range(10):
+        key = b''.join([b'%c' % random.randint(0, 255) for _ in range(16)])
+        left = b''.join([b'%c' % random.randint(0, 255) 
+                         for _ in range(random.randint(5, 10))])
+        right = b''.join([b'%c' % random.randint(0, 255) 
+                         for _ in range(random.randint(5, 10))])
+        data = left + data + right
+        if random.randint(0, 1) == 0:
+            print('Using ECB mode.')
+            encrypted = aes_ecb_encrypt(data, key)
+            analyze(encrypted)
+        else:
+            print('Using CBC mode.')
+            iv = b''.join([b'%c' % random.randint(0, 255) for _ in range(16)])
+            encrypted = aes_cbc_encrypt(data, key, iv)
+            analyze(encrypted)
+        input()
+        
 
