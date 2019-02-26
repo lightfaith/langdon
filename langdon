@@ -4,362 +4,14 @@ This script takes filename as an argument and tries every known
 cryptanalysis method on it.
 """
 
-import subprocess
-import sys
-import base64
-import threading
-import re
-import math
-import traceback
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import random
 
-"""
-Standard functions
-"""
-def debug(*args):
-    if debug_flag:
-        print('\033[90m[.]', *args, '\033[0m')
-
-def run_command(command):
-    p = subprocess.Popen(command, 
-                         shell=True, 
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
-    return (p.returncode, out, err)
-
-def prynt(*args, end='\n'):
-    if sys.stdout.isatty():
-        try:
-            print(*[(arg.decode() 
-                     if (type(arg) == bytes)
-                     else arg)
-                    for arg in args], end=end)
-        except:
-            print(*args, end=end)
-    else:
-        sys.stdout.buffer.write(b' '.join(args))
-
-def size_human(value, integer=False):
-    format_string = '{0:.0f}' if integer else '{0:.3f}'
-    if value > 1024**4:
-        return ('%s TB' % format_string).format(value / (1024**4))
-    if value > 1024**3:
-        return ('%s GB' % format_string).format(value / (1024**3))
-    if value > 1024**2:
-        return ('%s MB' % format_string).format(value / (1024**2))
-    if value > 1024:
-        return ('%s kB' % format_string).format(value / (1024))
-    return '{0} B'.format(value)
-
-"""
-Constants
-"""
-
-character_frequencies = {
-    'english': {
-        'a': .08167, 'b': .01492, 'c': .02782, 'd': .04253,
-        'e': .12702, 'f': .02228, 'g': .02015, 'h': .06094,
-        'i': .06094, 'j': .00153, 'k': .00772, 'l': .04025,
-        'm': .02406, 'n': .06749, 'o': .07507, 'p': .01929,
-        'q': .00095, 'r': .05987, 's': .06327, 't': .09056,
-        'u': .02758, 'v': .00978, 'w': .02360, 'x': .00150,
-        'y': .01974, 'z': .00074, ' ': .13000
-    }
-}
-
-"""
-Vital classes
-"""
-class Parallelizer():
-    # TODO terminate stuff
-    def __init__(self, thread_count, data, function):
-        self.thread_count = thread_count
-        self.data = data
-        self.function = function
-        self.threads = []
-        self.results = []
-
-    def start(self):
-        chunk_size = len(self.data) // self.thread_count
-        if not chunk_size:
-            chunk_size = 1
-        indexed_data = list(enumerate(self.data, 1))
-        data_chunks = [indexed_data[i:i+chunk_size] 
-                       for i in range(0, len(indexed_data), chunk_size)]
-        self.threads = [ParallelizerThread(data_chunks[i], self.function)
-                        for i in range(len(data_chunks))]
-        for t in self.threads:
-            t.start()
-
-    def waitfor(self):
-        for t in self.threads:
-            t.join()
-            self.results += t.results
-
-
-
-class ParallelizerThread(threading.Thread):
-    # TODO terminate stuff...
-    def __init__(self, data, function):
-        threading.Thread.__init__(self)
-        self.data = data
-        self.function = function
-        self.results = []
-
-    def run(self):
-        indices, samples = zip(*self.data)
-        print('Running thread (samples %d through %d).' 
-              % (indices[0], indices[-1]))
-        self.results = self.function(indices, samples)
-
-
-class Oracle(threading.Thread):
-    """
-
-    """
-    def __init__(self, oracle_path, payloads):
-        threading.Thread.__init__(self)
-        self.oracle_path = oracle_path
-        self.payloads = payloads
-        self.matching = []
-
-    def run(self):
-        """
-        sends payloads to given oracle, returns True if Oracle is happy
-        The payload is base64-encoded
-        """
-        for byte_value, payload in self.payloads.items():
-            #print('Oracle testing', byte_value)
-            r, _, _ = run_command('%s %s' % (oracle_path, 
-                                             base64.b64encode(payload).decode()))
-            if r == 0:
-                self.matching.append(byte_value)
-                break
-
-"""
-Crypto functions
-"""
-def hex(data):
-    return b''.join(b'%02x' % c for c in data)
-
-def unhex(stream):
-    return b''.join(b'%c' % int(stream[i:i+2], 16) 
-                    for i in range(0, len(stream), 2))
-
-def histogram(data):
-    byte_counts = [0 for _ in range(256)]
-    for byte in data:
-        byte_counts[byte] += 1
-    return byte_counts
-    
-def entropy(data):
-    e = 0.0
-    byte_counts = histogram(data)
-    for count in byte_counts:
-        if not count:
-            continue
-        p = count / len(data)
-        e -= p* math.log(p, 256)
-    return e
-
-def entropy_chunks(data, chunksize):
-    X = []
-    Y = []
-    for i in range(len(data)//chunksize + 1):
-        X.append(i*chunksize)
-        Y.append(entropy(data[i*chunksize:min(
-            (i+1)*chunksize, len(data))]))
-    return (X, Y)
-
-def get_frequency_error(data, language):
-    try:
-        fs = character_frequencies[language]
-        #return sum([fs.get(chr(c), 0) 
-        #            for c in data.lower()]) / len(data)
-    except:
-        traceback.print_exc()
-        return 0
-    actual = {c:(data.lower().count(c.encode()) / len(data)) for c in fs.keys()}
-    return sum(abs((fs[c]-actual[c]) / len(actual)) for c in actual.keys())
-
-def xor(data1, data2):
-    return b''.join(b'%c' % (data1[i % len(data1)] ^ data2[i % len(data2)]) 
-                    for i in range(max(len(data1), len(data2))))
-
-def bruteforce_xor(data1, keys):
-    for key in keys:
-        yield xor(data1, key)
-
-def dict_success(sample, min_word_match=1, min_word_len=1): # TODO or different constants?
-    match_count = 0
-    words = [w for w in re.sub(b'[^a-z]+', b' ', sample.lower()).split()
-             if len(w) >= min_word_len]
-    if not words:
-        return 0
-    found = [w for w in words if w in wordlist]
-    if len(found) < min_word_match:
-        return 0
-    success = len(found) / len(words)
-    return success
-
-def hamming(data1, data2):
-    result = 0
-    for i in range(max(len(data1), len(data2))):
-        c1 = data1[i] if i < len(data1) else 0
-        c2 = data2[i] if i < len(data2) else 0
-        xored = c1 ^ c2
-        for bit in range(8):
-            result += (xored >> bit) & 0x1
-    return result
-
-def pkcs7_pad(data, blocksize=16):
-    needed = blocksize - (len(data)%blocksize)
-    if not needed:
-        needed = blocksize
-    result = data + (b'%c' % needed) * needed
-    return result
-
-def pkcs7_unpad(data):
-    return data[:-data[-1]]
-
-def ecb_suspect(data, blocksize=16):
-    blocks = []
-    for block in [data[i:i+blocksize] for i in range(0, len(data), blocksize)]:
-        if block in blocks:
-            return True
-        blocks.append(block)
-    return False
-
-def aes_ecb_encrypt(data, key):
-    from Crypto.Cipher import AES
-    cipher = AES.new(key, AES.MODE_ECB)
-    return cipher.encrypt(pkcs7_pad(data))
-
-def aes_ecb_decrypt(data, key):
-        from Crypto.Cipher import AES
-        cipher = AES.new(key, AES.MODE_ECB)
-        return pkcs7_unpad(cipher.decrypt(data))
-
-def aes_cbc_encrypt(data, key, iv, blocksize=16):
-    padded = pkcs7_pad(data)
-    blocksize = 16
-    result = b''
-    previous_block = iv
-    blocks = [padded[i:i+blocksize] for i in range(0, len(padded), blocksize)]
-    from Crypto.Cipher import AES
-    cipher = AES.new(key, AES.MODE_ECB)
-    for block in blocks:
-        tmp = xor(block, previous_block)
-        previous_block = cipher.encrypt(tmp)
-        result += previous_block
-    return result
-
-def aes_cbc_decrypt(data, key, iv, blocksize=16):
-    blocksize = 16
-    result = b''            
-    previous_block = iv
-    blocks = [data[i:i+blocksize] for i in range(0, len(data), blocksize)]
-    from Crypto.Cipher import AES
-    cipher = AES.new(key, AES.MODE_ECB)
-    for block in blocks:
-        tmp = cipher.decrypt(block)
-        result += xor(tmp, previous_block)
-        previous_block = block
-    return pkcs7_unpad(result)
-
-"""
-Specific functions (e.g. print all ROTs or the valid one)
-"""
-def analyze(data, interactive=False):
-    """
-
-    analyze levels:
-        0: entropy, histogram
-    """
-    analysis_level = 0
-    ent = entropy(data)
-    his = histogram(data)
-    performed_tests = []
-    ubc = len([x for x in his if x]) # unique byte count
-    print('Entropy:', ent)
-
-    ubc_hint = ''
-    if ubc == 2:
-        ubc_hint = '(binary?)'
-    elif ubc == 3:
-        ubc_hint = '(morse/binary with separators?)'
-    elif ubc == 16:
-        ubc_hint = '(hex?)'
-    elif ubc == 17:
-        ubc_hint = '(hex with separators?)'
-    elif ubc == 32:
-        ubc_hint = '(base32?)'
-    elif ubc == 33:
-        ubc_hint = '(base32 with separators?)'
-    elif ubc == 58:
-        ubc_hint = '(base58?)'
-    elif ubc == 59:
-        ubc_hint = '(base58 with separators?)'
-    elif ubc == 64:
-        ubc_hint = '(base64?)'
-    elif ubc == 65:
-        ubc_hint = '(base64 with separators?)'
-    print('Unique byte count', ubc, ubc_hint)
-            
-    if ent > 0.99:
-        print('Huge entropy; stronger crypto is expected.')
-
-    while True:
-        found_something = False
-        debug('Level %d analysis.' % analysis_level)
-        if ('REPEATING_PATTERNS' not in performed_tests
-                and (ent > 0.99 or analysis_level >= 5)):
-            performed_tests.append('REPEATING_PATTERNS')
-            debug('  Testing REPEATING_PATTERNS.')
-            if ecb_suspect(data):
-                print('Repeating patterns detected -> possible ECB')
-                found_something = True
-        analysis_level += 1
-        if interactive and found_something:
-            answer = input('Continue with level %d analysis? ' % analysis_level)
-            if answer.lower() not in ['y', 'yes', 't', 'true', '1', 'a']:
-                break
-        if analysis_level > 10:
-            break
-            
-    
-
-def single_xor_print(data):
-    results = bruteforce_xor(data, [b'%c' % i for i in range(256)])
-    for byte, result in enumerate(results):
-        if wordlist:
-            if dict_success(result, 
-                            min_word_match=3, 
-                            min_word_len=3) > 0.2:
-                print('0x%02x: ' % byte, end='')
-                prynt(result)
-        else:
-            #print(result, ', english error: %f' % get_frequency_error(result, 'english'))
-            print(result)
-
-
-"""
-Cryptopals challenges
-"""
-def cp_4_function(indices, lines):
-    for index, line in zip(indices, lines):
-        unhexed = unhex(line)
-        results = bruteforce_xor(unhexed, [b'%c' % i for i in range(256)])
-        for byte, result in enumerate(results):
-            if dict_success(result, min_word_match=3, min_word_len=3)>0.8:
-                prynt('%d: 0x%02x:' % (index, byte), result)
-    return []
-
-
-
+from source import lib
+from source.lib import *
+from source.classes import *
+from source.functions import *
 
 """
 Load arguments
@@ -368,8 +20,8 @@ method = ''
 filename = ''
 try:
     #filename = [a for a in sys.argv[1:] if not a.startswith('--')][0]
-    debug_flag = '--debug' in sys.argv
-    debug_flag = True # TODO delete after testing
+    lib.debug_flag = '--debug' in sys.argv
+    lib.debug_flag = True # TODO delete after testing
     method = sys.argv[1][2:]
     if method == 'test':
         filename = sys.argv[2]
@@ -401,9 +53,9 @@ try:
         filename = sys.argv[2]
         try:
             with open(sys.argv[3], 'rb') as f:
-                wordlist = f.read().splitlines()
+                lib.wordlist = f.read().splitlines()
         except:
-            wordlist = None
+            lib.wordlist = None
     if method == 'break-xor':
         filename = sys.argv[2]
         language = sys.argv[3]
@@ -427,6 +79,11 @@ try:
 
     if method == 'analyze':
         filename = sys.argv[2]
+    if method == 'ecb-chosen-plaintext':
+        filename = sys.argv[2]
+        oracle_path = sys.argv[3]
+        with open(oracle_path, 'rb') as f:
+            pass
     if method == 'cbc-padding':
         filename = sys.argv[2]
         blocksize = int(sys.argv[3])
@@ -469,6 +126,7 @@ except:
     # sophisticated stuff
     print('  # sophisticated attacks:')
     print('    %s --analyze <file>' % sys.argv[0])
+    print('    %s --ecb-chosen-plaintext <file> <oracle_path>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
     # cryptopals
     print('  # cryptopals:')
@@ -673,6 +331,87 @@ if method == 'analyze':
         data = f.read()
     analyze(data, interactive=True)
 
+if method == 'ecb-chosen-plaintext':
+    """
+    ECB Chosen Plaintext Attack
+    (Cryptopals 2.12)
+
+    We can decrypt message if start of the plaintext is under our control.
+    """
+    with open(filename, 'rb') as f:
+        data = f.read()
+    # discover block size
+    debug('Determining block size...')
+    blocksize = None
+    prepend = b'A'
+    while True:
+        oracle = Oracle(oracle_path, {0: (prepend + data)}, lambda i,r,o,e,kw: True)
+        oracle.start()
+        oracle.join()
+        new_size = len(oracle.matching[0][2])
+        if blocksize and new_size > blocksize:
+            blocksize = new_size - blocksize
+            break
+        blocksize = new_size
+        prepend += b'A'
+    debug('Determined block size:', blocksize)
+    # validate that it is ecb
+    oracle = Oracle(oracle_path, 
+                    {0: (b'A' * (blocksize*2) + data)}, 
+                    lambda i,r,o,e,kw: True)
+    oracle.start()
+    oracle.join()
+    if ecb_suspect(oracle.matching[0][2]):
+        debug('It really is ECB.')
+    # do the magic
+    plaintext = b''
+    while True:
+        for offset in range(blocksize-1, -1, -1):
+            debug('Using offset', offset)
+            """get reference cipher string"""
+            oracle = Oracle(oracle_path, 
+                            {0: (b'A' * offset + data)}, 
+                            lambda i,r,o,e,kw: True)
+            oracle.start()
+            oracle.join()
+            reference = oracle.matching[0][2][:blocksize]
+            debug('Reference:', reference)
+            """try all bytes instead of first text byte"""
+            payloads = {byte_index: (b'A' * offset 
+                                     + (plaintext[-(blocksize-offset-1):]
+                                        if blocksize-offset > 1 else b'')
+                                     + b'%c' % byte_index)
+                        for byte_index in range(256)}
+                        #for byte_index in range(0x20, 0x80)}
+
+            if len(payloads[0])<blocksize:
+                """end of ciphertext"""
+                break
+            oracle_count = 8
+            chunk_size = (len(payloads) // oracle_count 
+                         + (1 if len(payloads) % oracle_count != 0 else 0))
+            oracles = [Oracle(oracle_path, 
+                              {k:v for k,v in 
+                               list(payloads.items())[i*chunk_size:(i+1)*chunk_size]},
+                              (lambda i,r,o,e,kw: 
+                               (o[:kw['blocksize']] == kw['reference'])),
+                              reference=reference,
+                              blocksize=blocksize)
+                       for i in range(oracle_count)]
+            
+            for oracle in oracles:
+                oracle.start()
+            for oracle in oracles:
+                oracle.join()
+                if oracle.matching:
+                    plaintext += b'%c' % oracle.matching[0][0]
+            debug('Plaintext:', plaintext)
+        data = data[blocksize:]
+        if not data:
+            break
+    prynt(plaintext)
+
+
 if method == 'cbc-padding':
     """
     CBC Padding Oracle Attack
@@ -684,6 +423,7 @@ if method == 'cbc-padding':
     blocks = [input_data[i:i+blocksize] 
               for i in range(0, len(input_data), blocksize)]
     # TODO test if blocks have same len
+
 
     final_plaintexts = []
     """run through blocks in reverse order"""
@@ -727,16 +467,17 @@ if method == 'cbc-padding':
             """bruteforce the padding"""
             #oracle_count = 1 # use this for debug
             oracle_count = 16 # use this for speed
-            oracles = [Oracle(oracle_path, {k:v for k,v in payloads.items() 
-                                            if (k // (len(payloads)/oracle_count) 
-                                                == i)})
+            oracles = [Oracle(oracle_path, 
+                              {k:v for k,v in payloads.items() 
+                                   if (k // (len(payloads)/oracle_count) == i)},
+                              lambda i,r,o,e,kw: (r == 0))
                        for i in range(oracle_count)]
             for oracle in oracles:
                 oracle.start()
             for oracle in oracles:
                 oracle.join()
                 if oracle.matching:
-                    valid_padding_byte = oracle.matching[0]
+                    valid_padding_byte = oracle.matching[0][0]
             
             '''
             #print('Will test payload:', payload)
