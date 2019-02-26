@@ -7,6 +7,7 @@ cryptanalysis method on it.
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import random
+import math
 
 from source import lib
 from source.lib import *
@@ -80,8 +81,7 @@ try:
     if method == 'analyze':
         filename = sys.argv[2]
     if method == 'ecb-chosen-plaintext':
-        filename = sys.argv[2]
-        oracle_path = sys.argv[3]
+        oracle_path = sys.argv[2]
         with open(oracle_path, 'rb') as f:
             pass
     if method == 'cbc-padding':
@@ -126,7 +126,7 @@ except:
     # sophisticated stuff
     print('  # sophisticated attacks:')
     print('    %s --analyze <file>' % sys.argv[0])
-    print('    %s --ecb-chosen-plaintext <file> <oracle_path>' % sys.argv[0])
+    print('    %s --ecb-chosen-plaintext <oracle_path>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
     # cryptopals
     print('  # cryptopals:')
@@ -337,79 +337,184 @@ if method == 'ecb-chosen-plaintext':
     (Cryptopals 2.12)
 
     We can decrypt message if start of the plaintext is under our control.
+
+    UPDATE: We can decrypt message even if unknown data is prepended
+            (expecting it does not cause repeated sequence trigger).
     """
-    with open(filename, 'rb') as f:
-        data = f.read()
-    # discover block size
-    debug('Determining block size...')
-    blocksize = None
-    prepend = b'A'
-    while True:
-        oracle = Oracle(oracle_path, {0: (prepend + data)}, lambda i,r,o,e,kw: True)
+    blocksize = 0
+    start_offset = 0
+    """find starting offset and block size"""
+    debug('Looking for starting offset and block size.')
+    for prepend_len in range(16, 129):
+        prepend = b'A' * prepend_len
+        oracle = Oracle(oracle_path, {0: prepend}, lambda i,r,o,e,kw: True)
         oracle.start()
         oracle.join()
-        new_size = len(oracle.matching[0][2])
-        if blocksize and new_size > blocksize:
-            blocksize = new_size - blocksize
+        ciphertext = oracle.matching[0][2]
+        patterns = find_repeating_patterns(ciphertext)
+        if patterns:
+            print(prepend_len, patterns)
+            blocksize = patterns[0][1] - patterns[0][0]
+            relative_start_offset = (blocksize - (prepend_len - 2 * patterns[0][0])) % blocksize # offset from left block align
+            debug('Found repeating patterns.')
+            debug('Block size:', blocksize)
+            debug('Starting offset:', relative_start_offset)
+            start_padding = b'B' * ((blocksize - relative_start_offset) % blocksize)
             break
-        blocksize = new_size
-        prepend += b'A'
-    debug('Determined block size:', blocksize)
-    # validate that it is ecb
-    oracle = Oracle(oracle_path, 
-                    {0: (b'A' * (blocksize*2) + data)}, 
-                    lambda i,r,o,e,kw: True)
-    oracle.start()
-    oracle.join()
-    if ecb_suspect(oracle.matching[0][2]):
-        debug('It really is ECB.')
-    # do the magic
-    plaintext = b''
-    while True:
-        for offset in range(blocksize-1, -1, -1):
-            debug('Using offset', offset)
-            """get reference cipher string"""
-            oracle = Oracle(oracle_path, 
-                            {0: (b'A' * offset + data)}, 
-                            lambda i,r,o,e,kw: True)
-            oracle.start()
-            oracle.join()
-            reference = oracle.matching[0][2][:blocksize]
-            debug('Reference:', reference)
-            """try all bytes instead of first text byte"""
-            payloads = {byte_index: (b'A' * offset 
-                                     + (plaintext[-(blocksize-offset-1):]
-                                        if blocksize-offset > 1 else b'')
-                                     + b'%c' % byte_index)
-                        for byte_index in range(256)}
-                        #for byte_index in range(0x20, 0x80)}
-
-            if len(payloads[0])<blocksize:
-                """end of ciphertext"""
-                break
-            oracle_count = 8
-            chunk_size = (len(payloads) // oracle_count 
-                         + (1 if len(payloads) % oracle_count != 0 else 0))
-            oracles = [Oracle(oracle_path, 
-                              {k:v for k,v in 
-                               list(payloads.items())[i*chunk_size:(i+1)*chunk_size]},
-                              (lambda i,r,o,e,kw: 
-                               (o[:kw['blocksize']] == kw['reference'])),
-                              reference=reference,
-                              blocksize=blocksize)
-                       for i in range(oracle_count)]
-            
-            for oracle in oracles:
+    if not blocksize:
+        print('Could not find repeating blocks -> probably not ECB.')
+    else:
+        """create start padding"""
+        block_counter = math.ceil((start_offset + len(start_padding)) / blocksize)
+        debug('Decryption will start at block %d.' % block_counter)
+        plaintext = b''
+        done = False
+        while True:
+            """align so 1 unknown character is included"""
+            for offset in range(blocksize-1, -1, -1):
+                debug('Using block offset', offset)
+                """get reference cipher string"""
+                reference_payload = start_padding + b'A' * offset
+                #print('reference payload:', reference_payload)
+                oracle = Oracle(oracle_path, 
+                                {0: reference_payload}, 
+                                lambda i,r,o,e,kw: True)
                 oracle.start()
-            for oracle in oracles:
                 oracle.join()
-                if oracle.matching:
-                    plaintext += b'%c' % oracle.matching[0][0]
-            debug('Plaintext:', plaintext)
-        data = data[blocksize:]
-        if not data:
-            break
-    prynt(plaintext)
+                reference_index = block_counter * blocksize
+                #print('reference index:', reference_index)
+                reference = oracle.matching[0][2][reference_index:reference_index + blocksize]
+                if not reference:
+                    """end of ciphertext"""
+                    debug('No reference, this is the end.')
+                    done = True
+                    break
+                debug('Reference:', reference)
+                """try all bytes instead of first text byte"""
+                payloads = {byte_index: (start_padding
+                                         + b'A' * offset 
+                                         #+ plaintext[:(blocksize - offset - 1)]
+                                         + plaintext
+                                         + b'%c' % byte_index)
+                            for byte_index in range(256)}
+                            #for byte_index in range(128)}
+                            #for byte_index in range(0x41, 0x5b)}
+
+                oracle_count = 8
+                workload = (len(payloads) // oracle_count 
+                             + (1 if len(payloads) % oracle_count != 0 else 0))
+                oracles = [Oracle(oracle_path, 
+                                   {k:v for k,v in 
+                                   list(payloads.items())[i*workload:(i+1)*workload]},
+                                  (lambda i,r,o,e,kw: 
+                                   (o[kw['reference_index']:kw['reference_index'] + kw['blocksize']] == kw['reference'])),
+                                  reference=reference,
+                                  reference_index=reference_index,
+                                  blocksize=blocksize)
+                           for i in range(oracle_count)]
+                
+                new_byte_found = False
+                for oracle in oracles:
+                    oracle.start()
+                for oracle in oracles:
+                    oracle.join()
+                    if oracle.matching:
+                        if new_byte_found:
+                            """
+                            another matching byte? we are decrypting
+                            static block!
+
+                            repair the damage and move on
+                            """
+                            plaintext = plaintext[:-1]
+                            new_byte_found = False
+                            break
+                        plaintext += b'%c' % oracle.matching[0][0]
+                        new_byte_found = True
+                if not new_byte_found:
+                    debug('Oracles failed to find single answer, trying next block.')
+                    break
+
+                debug('Plaintext:', plaintext)
+            if done:
+                break
+            block_counter += 1
+            debug('Dealing with new block.')
+        prynt(plaintext, end='')
+        ''' 
+        #### CP 12 solution
+        ## discover block size
+        #debug('Determining block size...')
+        #blocksize = None
+        #prepend = b'A'
+        #while True:
+        #    oracle = Oracle(oracle_path, {0: prepend}, lambda i,r,o,e,kw: True)
+        #    oracle.start()
+        #    oracle.join()
+        #    new_size = len(oracle.matching[0][2])
+        #    if blocksize and new_size > blocksize:
+        #        blocksize = new_size - blocksize
+        #        break
+        #    blocksize = new_size
+        #    prepend += b'A'
+        #debug('Determined block size:', blocksize)
+        # validate that it is ecb
+        #oracle = Oracle(oracle_path, 
+        #                {0: (b'A' * (blocksize*2))}, 
+        #                lambda i,r,o,e,kw: True)
+        #oracle.start()
+        #oracle.join()
+        #if ecb_suspect(oracle.matching[0][2]):
+        #    debug('It really is ECB.')
+        # do the magic
+        plaintext = b''
+        while True:
+            for offset in range(blocksize-1, -1, -1):
+                debug('Using offset', offset)
+                """get reference cipher string"""
+                oracle = Oracle(oracle_path, 
+                                {0: (b'A' * offset)}, 
+                                lambda i,r,o,e,kw: True)
+                oracle.start()
+                oracle.join()
+                # TODO do this without the knowledge of data
+                reference = oracle.matching[0][2][:blocksize]
+                debug('Reference:', reference)
+                """try all bytes instead of first text byte"""
+                payloads = {byte_index: (b'A' * offset 
+                                         + (plaintext[-(blocksize-offset-1):]
+                                            if blocksize-offset > 1 else b'')
+                                         + b'%c' % byte_index)
+                            for byte_index in range(256)}
+                            #for byte_index in range(0x20, 0x80)}
+
+                if len(payloads[0])<blocksize:
+                    """end of ciphertext"""
+                    break
+                oracle_count = 8
+                chunk_size = (len(payloads) // oracle_count 
+                             + (1 if len(payloads) % oracle_count != 0 else 0))
+                oracles = [Oracle(oracle_path, 
+                                  {k:v for k,v in 
+                                   list(payloads.items())[i*chunk_size:(i+1)*chunk_size]},
+                                  (lambda i,r,o,e,kw: 
+                                   (o[:kw['blocksize']] == kw['reference'])),
+                                  reference=reference,
+                                  blocksize=blocksize)
+                           for i in range(oracle_count)]
+                
+                for oracle in oracles:
+                    oracle.start()
+                for oracle in oracles:
+                    oracle.join()
+                    if oracle.matching:
+                        plaintext += b'%c' % oracle.matching[0][0]
+                debug('Plaintext:', plaintext)
+            data = data[blocksize:]
+            if not data:
+                break
+        prynt(plaintext)
+        '''
 
 
 if method == 'cbc-padding':

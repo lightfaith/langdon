@@ -95,12 +95,28 @@ def pkcs7_unpad(data):
     return data[:-data[-1]]
 
 def ecb_suspect(data, blocksize=16):
+    '''
     blocks = []
     for block in [data[i:i+blocksize] for i in range(0, len(data), blocksize)]:
         if block in blocks:
             return True
         blocks.append(block)
     return False
+    '''
+    return bool(find_repeating_patterns(data, min_size=blocksize))
+
+def find_repeating_patterns(data, min_size=8):
+    result = [] # tuples of indices with identical blocks
+    for i in range(0, len(data)-min_size):
+        reference = data[i:i+min_size]
+        tmp_result = [i]
+        for j in range(i+1, len(data)-min_size):
+            block = data[j:j+min_size]
+            if block == reference:
+                tmp_result.append(j)
+        if len(tmp_result) > 1:
+            result.append(tuple(tmp_result))
+    return result
 
 def aes_ecb_encrypt(data, key):
     from Crypto.Cipher import AES
