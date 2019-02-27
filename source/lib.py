@@ -72,3 +72,5 @@ def size_human(value, integer=False):
         return ('%s kB' % format_string).format(value / (1024))
     return '{0} B'.format(value)
 
+def chunks(data, chunksize):
+    return [data[i:i+chunksize] for i in range(0, len(data), chunksize)]

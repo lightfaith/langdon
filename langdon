@@ -106,6 +106,13 @@ try:
             pass        
         with open(d_oracle_path, 'rb') as f:
             pass        
+    if method == 'cp-16':
+        e_oracle_path = sys.argv[2]
+        d_oracle_path = sys.argv[3]
+        with open(e_oracle_path, 'rb') as f:
+            pass        
+        with open(d_oracle_path, 'rb') as f:
+            pass        
 
 except:
     #print('[-] Usage: %s <filename>' % sys.argv[0])
@@ -141,6 +148,7 @@ except:
     print('    %s --cp-8 <file> <wordlist>' % sys.argv[0])
     print('    %s --cp-11' % sys.argv[0])
     print('    %s --cp-13 <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
+    print('    %s --cp-16 <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
     sys.exit(1)
 
 # TODO --analyze
@@ -613,7 +621,7 @@ if method == 'cp-13':
     """
     """find blocksize"""
     payload = b'A' * 129
-    encrypted = cp_13_send(payload, e_oracle_path)
+    encrypted = oracle_send(payload, e_oracle_path)
     patterns = find_repeating_patterns(encrypted)
     if not patterns:
         print('No patterns present -> probably not ECB.')
@@ -624,8 +632,8 @@ if method == 'cp-13':
         """find role=user offset"""
         payload = b'ninja@cia.gov'
         debug('Using', payload, 'as payload, len:', len(payload))
-        encrypted = cp_13_send(payload, e_oracle_path)
-        decrypted = cp_13_send(encrypted, d_oracle_path)
+        encrypted = oracle_send(payload, e_oracle_path)
+        decrypted = oracle_send(encrypted, d_oracle_path)
         debug('Decrypted message:', decrypted)
         debug('Decrypted chunks:', [decrypted[i:i+blocksize] 
                                     for i in range(0, len(decrypted), blocksize)])
@@ -648,13 +656,85 @@ if method == 'cp-13':
                    + payload[start_payload_padding:])
         debug('Using', payload, 'as payload, len:', len(payload))
         
-        encrypted = cp_13_send(payload, e_oracle_path)
+        encrypted = oracle_send(payload, e_oracle_path)
         encrypted_chunks = [encrypted[i:i+blocksize] 
                             for i in range(0, len(encrypted), blocksize)]
         reordered = b''.join(encrypted_chunks[x] for x in (0, 2, 1))
-        decrypted = cp_13_send(reordered, d_oracle_path)
+        decrypted = oracle_send(reordered, d_oracle_path)
         debug('Decrypted message:', decrypted)
         debug('Decrypted chunks:', [decrypted[i:i+blocksize] 
                                     for i in range(0, len(decrypted), blocksize)])
         prynt(decrypted)
+
+
+if method == 'cp-16':
+    """
+    CBC bitflipping
+    
+    We can use unneeded chunk to hold specific value than, after XORed
+    with next decoded chunk, will create desired payload. In total, 
+    2 blocks are destroyed. In this case, authorization is bypassed.
+    """
+    """determine blocksize"""
+    blocksize = None
+    common_match = 0
+    previous_encrypted = b''
+    for payload_length in range(8, 129):
+        encrypted = oracle_send(b'A' * payload_length, e_oracle_path)
+        if previous_encrypted:
+            match = len([0 for i in range(len(encrypted)) if encrypted[i] == previous_encrypted[i]])
+            if not common_match:
+                common_match = match
+            if match > common_match:
+                blocksize = match - common_match
+                """isn't it just an anomaly?"""
+                if blocksize % 8 == 0:
+                    break
+        previous_encrypted = encrypted
+    if not blocksize:
+        print('Cannot determine blocksize -> probably not CBC.')
+    debug('Determined blocksize:', blocksize)
+
+    """Run one E-D cycle"""
+    debug('Trying sample payload.')
+    payload = b'thisishalloween'
+    debug('Payload:', payload)
+    encrypted = oracle_send(payload, e_oracle_path)
+    original_e_blocks = chunks(encrypted, blocksize)
+    debug('Encrypted blocks:', original_e_blocks)
+    
+    decrypted = oracle_send(encrypted, d_oracle_path)
+    original_d_blocks = chunks(decrypted, blocksize)
+    debug('Decrypted:', decrypted)
+    debug('Decrypted blocks:', original_d_blocks)
+
+    desired = b';admin=true;aa='
+    target_block = 3 # holding some comment...
+    """
+        C2      C3
+         |    ___|__
+        1|    | AES |
+         |    ```|```
+         |       |2
+         `-------X
+                 |3
+                 P 
+        3 = 1 ^ 2   
+        3' = 1' ^ 2 
+        -----------
+        1' = 3' ^ 2
+        1' = 3' ^ (1 ^ 3)
+        1' = 3' (desired) ^ 1 (previous encrypted block) ^ 3 (string to replace)
+    """
+    fake_block = xor(xor(desired, 
+                         original_e_blocks[target_block - 1]), 
+                     original_d_blocks[target_block])
+    
+    new_blocks = (original_e_blocks[0:target_block - 1] 
+                  + [fake_block] 
+                  + original_e_blocks[target_block:])
+    debug('New blocks:', new_blocks)
+    decrypted = oracle_send(b''.join(new_blocks), d_oracle_path)
+    prynt(decrypted)
+
 

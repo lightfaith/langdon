@@ -86,6 +86,15 @@ def hamming(data1, data2):
             result += (xored >> bit) & 0x1
     return result
 
+def oracle_send(payload, oracle_path):
+    oracle = Oracle(oracle_path,
+                    {0: payload},
+                    lambda i,r,o,e,kw: True)
+    oracle.start()
+    oracle.join()
+    result = oracle.matching[0].output
+    return result
+
 def pkcs7_pad(data, blocksize=16):
     needed = blocksize - (len(data)%blocksize)
     if not needed:
@@ -250,13 +259,4 @@ def cp_4_function(indices, lines):
             if dict_success(result, min_word_match=3, min_word_len=3)>0.8:
                 prynt('%d: 0x%02x:' % (index, byte), result)
     return []
-
-def cp_13_send(payload, oracle_path):
-    oracle = Oracle(oracle_path,
-                    {0: payload},
-                    lambda i,r,o,e,kw: True)
-    oracle.start()
-    oracle.join()
-    result = oracle.matching[0].output
-    return result
 
