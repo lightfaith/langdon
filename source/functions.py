@@ -8,6 +8,8 @@ import traceback
 
 from source import lib
 from source.lib import *
+from source.classes import *
+
 """
 Crypto functions
 """
@@ -243,4 +245,12 @@ def cp_4_function(indices, lines):
                 prynt('%d: 0x%02x:' % (index, byte), result)
     return []
 
+def cp_13_send(payload, oracle_path):
+    oracle = Oracle(oracle_path,
+                    {0: payload},
+                    lambda i,r,o,e,kw: True)
+    oracle.start()
+    oracle.join()
+    result = oracle.matching[0].output
+    return result
 

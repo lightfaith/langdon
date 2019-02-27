@@ -54,6 +54,13 @@ class ParallelizerThread(threading.Thread):
         self.results = self.function(indices, samples)
 
 
+class OracleResult:
+    def __init__(self, payload_id, ret, output, error):
+        self.payload_id = payload_id
+        self.ret = ret
+        self.output = output
+        self.error = error
+
 class Oracle(threading.Thread):
     """
 
@@ -81,16 +88,16 @@ class Oracle(threading.Thread):
         (validated by self.validate() function) are stored in 
         self.matching.
 
-        The payload is base64-encoded.
+        The payload is internally base64-encoded.
         """
         for payload_id, payload in self.payloads.items():
             #print('Oracle testing 0x%02x' % payload_id)
-            r, o, e = run_command('%s %s' % (self.oracle_path, 
+            r, o, e = run_command('%s "%s"' % (self.oracle_path, 
                                              base64.b64encode(payload).decode()))
             #print(r, o, e)
             if self.validate(payload_id, r, o, e, self.kwargs):
                 #print('Payload 0x%02x matches condition!' % payload_id)
-                self.matching.append((payload_id, r, o, e))
+                self.matching.append(OracleResult(payload_id, r, o, e))
                 if self.break_on_success:
                     break
 

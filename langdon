@@ -99,6 +99,13 @@ try:
         filename = sys.argv[2]
     if method == 'cp-11':
         pass
+    if method == 'cp-13':
+        e_oracle_path = sys.argv[2]
+        d_oracle_path = sys.argv[3]
+        with open(e_oracle_path, 'rb') as f:
+            pass        
+        with open(d_oracle_path, 'rb') as f:
+            pass        
 
 except:
     #print('[-] Usage: %s <filename>' % sys.argv[0])
@@ -133,6 +140,7 @@ except:
     print('    %s --cp-4 <file> <wordlist>' % sys.argv[0])
     print('    %s --cp-8 <file> <wordlist>' % sys.argv[0])
     print('    %s --cp-11' % sys.argv[0])
+    print('    %s --cp-13 <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
     sys.exit(1)
 
 # TODO --analyze
@@ -350,7 +358,7 @@ if method == 'ecb-chosen-plaintext':
         oracle = Oracle(oracle_path, {0: prepend}, lambda i,r,o,e,kw: True)
         oracle.start()
         oracle.join()
-        ciphertext = oracle.matching[0][2]
+        ciphertext = oracle.matching[0].output
         patterns = find_repeating_patterns(ciphertext)
         if patterns:
             print(prepend_len, patterns)
@@ -383,7 +391,7 @@ if method == 'ecb-chosen-plaintext':
                 oracle.join()
                 reference_index = block_counter * blocksize
                 #print('reference index:', reference_index)
-                reference = oracle.matching[0][2][reference_index:reference_index + blocksize]
+                reference = oracle.matching[0].output[reference_index:reference_index + blocksize]
                 if not reference:
                     """end of ciphertext"""
                     debug('No reference, this is the end.')
@@ -429,7 +437,7 @@ if method == 'ecb-chosen-plaintext':
                             plaintext = plaintext[:-1]
                             new_byte_found = False
                             break
-                        plaintext += b'%c' % oracle.matching[0][0]
+                        plaintext += b'%c' % oracle.matching[0].payload_id
                         new_byte_found = True
                 if not new_byte_found:
                     debug('Oracles failed to find single answer, trying next block.')
@@ -441,80 +449,6 @@ if method == 'ecb-chosen-plaintext':
             block_counter += 1
             debug('Dealing with new block.')
         prynt(plaintext, end='')
-        ''' 
-        #### CP 12 solution
-        ## discover block size
-        #debug('Determining block size...')
-        #blocksize = None
-        #prepend = b'A'
-        #while True:
-        #    oracle = Oracle(oracle_path, {0: prepend}, lambda i,r,o,e,kw: True)
-        #    oracle.start()
-        #    oracle.join()
-        #    new_size = len(oracle.matching[0][2])
-        #    if blocksize and new_size > blocksize:
-        #        blocksize = new_size - blocksize
-        #        break
-        #    blocksize = new_size
-        #    prepend += b'A'
-        #debug('Determined block size:', blocksize)
-        # validate that it is ecb
-        #oracle = Oracle(oracle_path, 
-        #                {0: (b'A' * (blocksize*2))}, 
-        #                lambda i,r,o,e,kw: True)
-        #oracle.start()
-        #oracle.join()
-        #if ecb_suspect(oracle.matching[0][2]):
-        #    debug('It really is ECB.')
-        # do the magic
-        plaintext = b''
-        while True:
-            for offset in range(blocksize-1, -1, -1):
-                debug('Using offset', offset)
-                """get reference cipher string"""
-                oracle = Oracle(oracle_path, 
-                                {0: (b'A' * offset)}, 
-                                lambda i,r,o,e,kw: True)
-                oracle.start()
-                oracle.join()
-                # TODO do this without the knowledge of data
-                reference = oracle.matching[0][2][:blocksize]
-                debug('Reference:', reference)
-                """try all bytes instead of first text byte"""
-                payloads = {byte_index: (b'A' * offset 
-                                         + (plaintext[-(blocksize-offset-1):]
-                                            if blocksize-offset > 1 else b'')
-                                         + b'%c' % byte_index)
-                            for byte_index in range(256)}
-                            #for byte_index in range(0x20, 0x80)}
-
-                if len(payloads[0])<blocksize:
-                    """end of ciphertext"""
-                    break
-                oracle_count = 8
-                chunk_size = (len(payloads) // oracle_count 
-                             + (1 if len(payloads) % oracle_count != 0 else 0))
-                oracles = [Oracle(oracle_path, 
-                                  {k:v for k,v in 
-                                   list(payloads.items())[i*chunk_size:(i+1)*chunk_size]},
-                                  (lambda i,r,o,e,kw: 
-                                   (o[:kw['blocksize']] == kw['reference'])),
-                                  reference=reference,
-                                  blocksize=blocksize)
-                           for i in range(oracle_count)]
-                
-                for oracle in oracles:
-                    oracle.start()
-                for oracle in oracles:
-                    oracle.join()
-                    if oracle.matching:
-                        plaintext += b'%c' % oracle.matching[0][0]
-                debug('Plaintext:', plaintext)
-            data = data[blocksize:]
-            if not data:
-                break
-        prynt(plaintext)
-        '''
 
 
 if method == 'cbc-padding':
@@ -582,7 +516,7 @@ if method == 'cbc-padding':
             for oracle in oracles:
                 oracle.join()
                 if oracle.matching:
-                    valid_padding_byte = oracle.matching[0][0]
+                    valid_padding_byte = oracle.matching[0].payload_id
             
             '''
             #print('Will test payload:', payload)
@@ -668,4 +602,58 @@ if method == 'cp-11':
             analyze(encrypted)
         input()
         
+if method == 'cp-13':
+    """
+    ECB injection
+
+    With control of portion of the plaintext, we can create fake blocks
+    that we can feed into decryption routine, in this case resulting in
+    authorization bypass.
+    """
+    """find blocksize"""
+    payload = b'A' * 129
+    encrypted = cp_13_send(payload, e_oracle_path)
+    patterns = find_repeating_patterns(encrypted)
+    if not patterns:
+        print('No patterns present -> probably not ECB.')
+    else:
+        blocksize = patterns[0][1] - patterns[0][0]
+        debug('Determined blocksize:', blocksize)
+        
+        """find role=user offset"""
+        payload = b'ninja@cia.gov'
+        debug('Using', payload, 'as payload, len:', len(payload))
+        encrypted = cp_13_send(payload, e_oracle_path)
+        decrypted = cp_13_send(encrypted, d_oracle_path)
+        debug('Decrypted message:', decrypted)
+        debug('Decrypted chunks:', [decrypted[i:i+blocksize] 
+                                    for i in range(0, len(decrypted), blocksize)])
+
+        payload_offset = decrypted.index(payload)
+        debug('Payload offset:', payload_offset)
+        role_to_payload_offset = (decrypted.index(b'user')
+                                  - payload_offset 
+                                  - len(payload))
+        debug('Role offset from the end of the payload:', role_to_payload_offset)
+        
+        start_payload_padding = blocksize - payload_offset
+        end_payload_padding = len(payload) - start_payload_padding
+        debug('Payload must have', start_payload_padding + end_payload_padding, 'bytes.')
+        """in this case, the payload is OK"""
+        payload = b'ninja@cia.gov'
+        fake_block = pkcs7_pad(b'admin', blocksize)
+        payload = (payload[:start_payload_padding]
+                   + fake_block 
+                   + payload[start_payload_padding:])
+        debug('Using', payload, 'as payload, len:', len(payload))
+        
+        encrypted = cp_13_send(payload, e_oracle_path)
+        encrypted_chunks = [encrypted[i:i+blocksize] 
+                            for i in range(0, len(encrypted), blocksize)]
+        reordered = b''.join(encrypted_chunks[x] for x in (0, 2, 1))
+        decrypted = cp_13_send(reordered, d_oracle_path)
+        debug('Decrypted message:', decrypted)
+        debug('Decrypted chunks:', [decrypted[i:i+blocksize] 
+                                    for i in range(0, len(decrypted), blocksize)])
+        prynt(decrypted)
 
