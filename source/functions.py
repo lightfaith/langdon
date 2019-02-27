@@ -94,7 +94,13 @@ def pkcs7_pad(data, blocksize=16):
     return result
 
 def pkcs7_unpad(data):
-    return data[:-data[-1]]
+    padding_value = data[-1]
+    if padding_value > len(data):
+        raise ValueError('Padding value is bigger than the message length.')
+    for padding in data[-padding_value:]:
+        if padding != padding_value:
+            raise ValueError('Invalid bytes in the padding.')
+    return data[:-padding_value]
 
 def ecb_suspect(data, blocksize=16):
     '''

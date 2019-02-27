@@ -159,6 +159,7 @@ except:
 if method == 'test':
     with open(filename, 'rb') as f:
         data = f.read()
+    print('Unpad:', pkcs7_unpad(data))
     print(get_frequency_error(data, 'english'))
 ################################################################################
 ################################################################################
