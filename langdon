@@ -115,6 +115,7 @@ try:
             pass        
 
 except:
+    #traceback.print_exc()
     #print('[-] Usage: %s <filename>' % sys.argv[0])
     print('[-] Usage:')
     # vital methods
@@ -135,8 +136,10 @@ except:
     print('  # standard algorithms:')
     print('    %s --encrypt aes-ecb <file> <keyfile>' % sys.argv[0])
     print('    %s --encrypt aes-cbc <file> <keyfile> <iv>' % sys.argv[0])
+    print('    %s --encrypt aes-ctr <file> <keyfile> <nonce>' % sys.argv[0])
     print('    %s --decrypt aes-ecb <file> <keyfile>' % sys.argv[0])
     print('    %s --decrypt aes-cbc <file> <keyfile> <iv>' % sys.argv[0])
+    print('    %s --decrypt aes-ctr <file> <keyfile> <nonce>' % sys.argv[0])
     # sophisticated stuff
     print('  # sophisticated attacks:')
     print('    %s --analyze <file>' % sys.argv[0])
@@ -319,6 +322,11 @@ if method == 'encrypt':
             print('[-] IV is needed for CBC mode.')
         else:
             prynt(aes_cbc_encrypt(data, key, iv, blocksize=16))
+    elif algorithm == 'aes-ctr':
+        if not iv:
+            print('[-] Nonce is needed for CTR mode.')
+        else:
+            prynt(aes_ctr_crypt(data, key, iv))
     else:
         print('Unknown algorithm.')
 
@@ -338,6 +346,11 @@ if method == 'decrypt':
             print('[-] IV is needed for CBC mode.')
         else:
             prynt(aes_cbc_decrypt(data, key, iv, blocksize=16))
+    elif algorithm == 'aes-ctr':
+        if not iv:
+            print('[-] Nonce is needed for CTR mode.')
+        else:
+            prynt(aes_ctr_crypt(data, key, iv))
     else:
         print('Unknown algorithm.')
 ################################################################################
@@ -537,6 +550,7 @@ if method == 'cbc-padding':
             
             if valid_padding_byte == -1:
                 debug('Failed to find valid padding byte!')
+                break
 
             debug('Found valid padding byte:', valid_padding_byte)
             """compute plaintext byte from padding byte"""

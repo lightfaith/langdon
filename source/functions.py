@@ -5,6 +5,7 @@
 import re
 import math
 import traceback
+from struct import pack
 
 from source import lib
 from source.lib import *
@@ -147,7 +148,6 @@ def aes_ecb_decrypt(data, key):
 
 def aes_cbc_encrypt(data, key, iv, blocksize=16):
     padded = pkcs7_pad(data)
-    blocksize = 16
     result = b''
     previous_block = iv
     blocks = [padded[i:i+blocksize] for i in range(0, len(padded), blocksize)]
@@ -160,7 +160,6 @@ def aes_cbc_encrypt(data, key, iv, blocksize=16):
     return result
 
 def aes_cbc_decrypt(data, key, iv, blocksize=16):
-    blocksize = 16
     result = b''            
     previous_block = iv
     blocks = [data[i:i+blocksize] for i in range(0, len(data), blocksize)]
@@ -172,6 +171,19 @@ def aes_cbc_decrypt(data, key, iv, blocksize=16):
         previous_block = block
     return pkcs7_unpad(result)
 
+
+def ctr_keystream(key, nonce, count):
+    from Crypto.Cipher import AES
+    cipher = AES.new(key, AES.MODE_ECB)
+    blocks = [cipher.encrypt(bytearray(pack('<Q', nonce)) 
+                             + bytearray(pack('<Q', block_count)))
+              for block_count in range((count // 16) + 1)]
+    # TODO fix
+    return b''.join(blocks)[:count]
+
+def aes_ctr_crypt(data, key, nonce):
+    result = xor(data, ctr_keystream(key, nonce, len(data)))
+    return result
 """
 Specific functions (e.g. print all ROTs or the valid one)
 """
