@@ -113,6 +113,8 @@ try:
             pass        
         with open(d_oracle_path, 'rb') as f:
             pass        
+    if method == 'cp-20':
+        filename = sys.argv[2]
 
 except:
     #traceback.print_exc()
@@ -152,6 +154,7 @@ except:
     print('    %s --cp-11' % sys.argv[0])
     print('    %s --cp-13 <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
     print('    %s --cp-16 <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
+    print('    %s --cp-20 <file>' % sys.argv[0])
     sys.exit(1)
 
 # TODO --analyze
@@ -312,21 +315,19 @@ if method == 'encrypt':
         data = f.read()
     with open(keyfilename, 'rb') as f:
         key = f.read()
-    if iv:
-        iv = unhex(iv)
-
+    
     if algorithm == 'aes-ecb':
         prynt(aes_ecb_encrypt(data, key), end='')
     elif algorithm == 'aes-cbc':
-        if not iv:
+        try:
+            prynt(aes_cbc_encrypt(data, key, unhex(iv), blocksize=16))
+        except:
             print('[-] IV is needed for CBC mode.')
-        else:
-            prynt(aes_cbc_encrypt(data, key, iv, blocksize=16))
     elif algorithm == 'aes-ctr':
-        if not iv:
-            print('[-] Nonce is needed for CTR mode.')
-        else:
-            prynt(aes_ctr_crypt(data, key, iv))
+        try:
+            prynt(aes_ctr_crypt(data, key, int(iv)))
+        except:
+            print('[-] Integer nonce is needed for CTR mode.')
     else:
         print('Unknown algorithm.')
 
@@ -336,21 +337,20 @@ if method == 'decrypt':
         data = f.read()
     with open(keyfilename, 'rb') as f:
         key = f.read()
-    if iv:
-        iv = unhex(iv)
 
     if algorithm == 'aes-ecb':
         prynt(aes_ecb_decrypt(data, key), end='')
     elif algorithm == 'aes-cbc':
-        if not iv:
+        try:
+            prynt(aes_cbc_decrypt(data, key, unhex(iv), blocksize=16))
+        except:
             print('[-] IV is needed for CBC mode.')
-        else:
-            prynt(aes_cbc_decrypt(data, key, iv, blocksize=16))
     elif algorithm == 'aes-ctr':
-        if not iv:
-            print('[-] Nonce is needed for CTR mode.')
-        else:
-            prynt(aes_ctr_crypt(data, key, iv))
+        try:
+            prynt(aes_ctr_crypt(data, key, int(iv)))
+        except:
+            traceback.print_exc()
+            print('[-] Integer nonce is needed for CTR mode.')
     else:
         print('Unknown algorithm.')
 ################################################################################
@@ -752,3 +752,31 @@ if method == 'cp-16':
     prynt(decrypted)
 
 
+if method == 'cp-20':
+    """
+    Fixed-nonce CTR
+
+    
+    """
+    with open(filename, 'r') as f:
+        lines = [base64.b64decode(line) for line in f.read().splitlines()]
+    #print(lines)
+    nonce = 0
+    key = b''.join(b'%c' % random.randint(0, 255) for _ in range(16))
+
+    encrypted_lines = [aes_ctr_crypt(line, key, nonce) for line in lines]
+    aligned_e_lines = [l[:min(len(l) for l in encrypted_lines)] 
+                       for l in encrypted_lines]
+    transposed_lines = [b''.join(b'%c' % l[i] 
+                                 for l in aligned_e_lines) 
+                        for i in range(len(aligned_e_lines[0]))]
+    xor_key = b''
+    for line in transposed_lines:
+        xors = sorted([(i, get_frequency_error(xor(line, b'%c' % i), 'english')) 
+                       for i in range(256)],
+                      key = lambda x: x[1])
+        xor_key += b'%c' % xors[0][0]
+
+    print('XOR key:', xor_key)
+    for line in encrypted_lines:
+        print(xor(line, xor_key))

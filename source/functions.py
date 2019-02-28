@@ -175,8 +175,8 @@ def aes_cbc_decrypt(data, key, iv, blocksize=16):
 def ctr_keystream(key, nonce, count):
     from Crypto.Cipher import AES
     cipher = AES.new(key, AES.MODE_ECB)
-    blocks = [cipher.encrypt(bytearray(pack('<Q', nonce)) 
-                             + bytearray(pack('<Q', block_count)))
+    blocks = [cipher.encrypt(bytes(bytearray(pack('<Q', nonce)) 
+                                   + bytearray(pack('<Q', block_count))))
               for block_count in range((count // 16) + 1)]
     # TODO fix
     return b''.join(blocks)[:count]
