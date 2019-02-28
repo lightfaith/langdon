@@ -259,6 +259,14 @@ def single_xor_print(data):
             #print(result, ', english error: %f' % get_frequency_error(result, 'english'))
             print(result)
 
+"""
+RNG functions
+"""
+def diehard(rng_path):
+    """
+    https://en.wikipedia.org/wiki/Diehard_tests
+    """
+    
 
 """
 Cryptopals challenges

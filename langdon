@@ -91,6 +91,11 @@ try:
         with open(oracle_path, 'rb') as f:
             pass        
     
+    if method == 'diehard':
+        rng_path = sys.argv[2]
+        with open(rng_path, 'rb') as f:
+            pass        
+
     if method == 'cp-4':
         filename = sys.argv[2]
         with open(sys.argv[3], 'rb') as f:
@@ -147,6 +152,9 @@ except:
     print('    %s --analyze <file>' % sys.argv[0])
     print('    %s --ecb-chosen-plaintext <oracle_path>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
+    # RNG
+    print('  # RNG:')
+    print('    %s --diehard <rng_path>' % sys.argv[0])
     # cryptopals
     print('  # cryptopals:')
     print('    %s --cp-4 <file> <wordlist>' % sys.argv[0])
@@ -568,6 +576,12 @@ if method == 'cbc-padding':
         print('Final plaintext:', b''.join(final_plaintexts[::-1]))
 
     #print(cbc_padding_oracle(base64.b64decode(b'4ET5cY0cfSnomIvhYPc0+Q==')))
+
+################################################################################
+################################################################################
+################################################################################
+if method == 'diehard':
+    diehard(rng_path)
 
 ################################################################################
 ################################################################################
