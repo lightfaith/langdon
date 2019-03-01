@@ -6,6 +6,7 @@ https://en.wikipedia.org/wiki/Diehard_tests
 http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/mt19937-64.out.txt
 """
 import sys
+from struct import pack
 
 class MersenneTwister64:
     def __init__(self, seed):
@@ -75,15 +76,20 @@ if __name__ == '__main__':
         except:
             seed = 0
     except:
-        print('[-] Usage: %s int|float <count> <seed>' % sys.argv[0])
+        print('[-] Usage: %s int|float|bytes <count> <seed>' % sys.argv[0])
         sys.exit(1)
 
     mt = MersenneTwister64(seed)
-    for i in range(count):
-        if mode == 'int':
+    if mode == 'int':
+        for i in range(count):
             print(mt.randint())
-        elif mode == 'float':
+    elif mode == 'float':
+        for i in range(count):
             print(mt.randfloat())
-        else:
-            print('[-] Invalid mode.')
+    elif mode == 'bytes':
+        ints = [mt.randint() for _ in range(count // 8 + 1)]
+        stream = pack('<' + 'Q'*len(ints), *ints)
+        sys.stdout.buffer.write(stream[:count])
+    else:
+        print('[-] Invalid mode.')
 
