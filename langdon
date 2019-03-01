@@ -923,11 +923,10 @@ if method == 'cp-26':
     """
     CTR bitflipping
     
-    We can use unneeded chunk to hold specific value than, after XORed
-    with next decoded chunk, will create desired payload. In total, 
-    2 blocks are destroyed. In this case, authorization is bypassed.
+    Similarly to CBC bitflipping, we can use XOR properties to replace
+    arbitrary data in CTR ciphertext if we know both ciphertext and
+    plaintext. Unlike CBC, offset is not block-aligned and can be arbitrary.
     """
-
     blocksize = 16 # just for printing
     """Run one E-D cycle"""
     debug('Trying sample payload.')
