@@ -21,22 +21,22 @@ except:
 
 class MersenneTwister:
     def __init__(self, seed):
-        self.w = 32                  # bits for one state
-        self.n = 624                 # number of states
-        self.m = 397                 # middle word 
+        self.w = 64                  # bits for one state
+        self.n = 312                 # number of states
+        self.m = 156                 # middle word 
         self.r = 31                  # separation point of one word
-        self.a = 0x9908b0df          # coefficients of the radional normal form twist matrix
-        self.u = 11                  # additional 
-        self.d = 0xffffffff          # additional
-        self.s = 7                   # TGFSR(R) tempering bit shift
-        self.b = 0x9D2C5680          # TGFSR(R) tempering bit mask
-        self.t = 15                  # TGFSR(R) tempering bit shift
-        self.c = 0xEFC60000          # TGFSR(R) tempering bit mask
-        self.l = 18                  # additional
-        self.f = 1812433253          # generator parameter
+        self.a = 0xb5026f5aa96619e9  # coefficients of the radional normal form twist matrix
+        self.u = 29                  # additional 
+        self.d = 0x5555555555555555  # additional
+        self.s = 17                  # TGFSR(R) tempering bit shift
+        self.b = 0x71D67FFFEDA60000  # TGFSR(R) tempering bit mask
+        self.t = 37                  # TGFSR(R) tempering bit shift
+        self.c = 0xFFF7EEE000000000  # TGFSR(R) tempering bit mask
+        self.l = 43                  # additional
+        self.f = 6364136223846793005 # generator parameter
         
         self.lower_mask = (1 << self.r) - 1
-        self.upper_mask = 1 << self.r
+        self.upper_mask = (1 << self.w) - 1 - self.lower_mask #1 << self.r
         self.index = self.n
         self.state = [0] * self.n    # states
         
