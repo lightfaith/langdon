@@ -8,12 +8,12 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import random
 import math
+import time
 
 from source import lib
 from source.lib import *
 from source.classes import *
 from source.functions import *
-
 """
 Load arguments
 """
@@ -120,6 +120,10 @@ try:
             pass        
     if method == 'cp-20':
         filename = sys.argv[2]
+    if method == 'cp-22':
+        pass
+    if method == 'cp-23':
+        pass
 
 except:
     #traceback.print_exc()
@@ -163,6 +167,8 @@ except:
     print('    %s --cp-13 <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
     print('    %s --cp-16 <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
     print('    %s --cp-20 <file>' % sys.argv[0])
+    print('    %s --cp-22' % sys.argv[0])
+    print('    %s --cp-23' % sys.argv[0])
     sys.exit(1)
 
 # TODO --analyze
@@ -794,3 +800,61 @@ if method == 'cp-20':
     print('XOR key:', xor_key)
     for line in encrypted_lines:
         print(xor(line, xor_key))
+
+if method == 'cp-22':
+    debug('Waiting random time.')
+    from rng.mersenne32 import *
+    time.sleep(random.randint(1, 10))
+    debug('Creating Mersenne Twister.')
+    original_seed = int(time.time())
+    m = MersenneTwister32(original_seed)
+    debug('Waiting random time.')
+    time.sleep(random.randint(1, 10))
+    result = m.randint()
+    print('Result:', result)
+    """try previous 30 seeds"""
+    for i in range(30):
+        seed = int(time.time()-i)
+        if MersenneTwister32(seed).randint() == result:
+            print('Seed found:', seed)
+            break
+    debug('Original seed was', original_seed)
+
+if method == 'cp-23':
+    def unshift_left_mask_xor(mt, value, shift, mask):
+        result = 0
+        for i in range(0, mt.w // shift + 1):
+            part_mask = (mt.d >> (mt.w - shift)) << (shift * i)
+            part = value & part_mask
+            value ^= (part << shift) & mask
+            result |= part
+        return result
+    def unshift_right_xor(mt, value, shift):
+        result = 0
+        for i in range(mt.w // shift + 1):
+            result ^= value >> (shift * i)
+        return result
+
+    def untemper(mt, y):
+        value = y
+        value = unshift_right_xor(mt, value, mt.l)
+        value = unshift_left_mask_xor(mt, value, mt.t, mt.c)
+        value = unshift_left_mask_xor(mt, value, mt.s, mt.b)
+        value = unshift_right_xor(mt, value, mt.u)
+        return value
+    # https://jazzy.id.au/2010/09/22/cracking_random_number_generators_part_3.html
+    from rng.mersenne32 import *
+    mt1 = MersenneTwister32(time.time() / random.random())
+    #mt1 = MersenneTwister32()
+    original_values = [mt1.randint() for _ in range(mt1.n)]
+    
+    mt2 = MersenneTwister32(0) # seed is unknown...
+    reversed_states = [untemper(mt2, x) for x in original_values]
+    mt2.state = reversed_states
+    """
+    Run mt2 to the same extend
+    """
+    #[mt2.randint() for _ in range(len(original_values))]
+    for i in range(100):
+        print('Original/Duplicate: %10d  %10d' % (mt1.randint(), mt2.randint()))
+
