@@ -124,6 +124,14 @@ try:
         pass
     if method == 'cp-23':
         pass
+    if method == 'cp-24':
+        filename = sys.argv[2]
+        rng_file = sys.argv[3]
+        with open(rng_file, 'rb') as f:
+            pass
+        substring = sys.argv[4]
+    if method == 'cp-25':
+        filename = sys.argv[2]
 
 except:
     #traceback.print_exc()
@@ -148,9 +156,11 @@ except:
     print('    %s --encrypt aes-ecb <file> <keyfile>' % sys.argv[0])
     print('    %s --encrypt aes-cbc <file> <keyfile> <iv>' % sys.argv[0])
     print('    %s --encrypt aes-ctr <file> <keyfile> <nonce>' % sys.argv[0])
+    print('    %s --encrypt rng <file> <rng_path> <seed>' % sys.argv[0])
     print('    %s --decrypt aes-ecb <file> <keyfile>' % sys.argv[0])
     print('    %s --decrypt aes-cbc <file> <keyfile> <iv>' % sys.argv[0])
     print('    %s --decrypt aes-ctr <file> <keyfile> <nonce>' % sys.argv[0])
+    print('    %s --decrypt rng <file> <rng_path> <seed>' % sys.argv[0])
     # sophisticated stuff
     print('  # sophisticated attacks:')
     print('    %s --analyze <file>' % sys.argv[0])
@@ -169,6 +179,8 @@ except:
     print('    %s --cp-20 <file>' % sys.argv[0])
     print('    %s --cp-22' % sys.argv[0])
     print('    %s --cp-23' % sys.argv[0])
+    print('    %s --cp-24 <file> <rng_path> <substring>' % sys.argv[0])
+    print('    %s --cp-25 <file>' % sys.argv[0])
     sys.exit(1)
 
 # TODO --analyze
@@ -187,8 +199,6 @@ except:
 if method == 'test':
     with open(filename, 'rb') as f:
         data = f.read()
-    print('Unpad:', pkcs7_unpad(data))
-    print(get_frequency_error(data, 'english'))
 ################################################################################
 ################################################################################
 ################################################################################
@@ -342,6 +352,11 @@ if method == 'encrypt':
             prynt(aes_ctr_crypt(data, key, int(iv)))
         except:
             print('[-] Integer nonce is needed for CTR mode.')
+    elif algorithm == 'rng':
+        rng_file = keyfilename
+        seed = int(iv)
+        r, o, e = run_command('%s bytes %d %d' % (rng_file, len(data), seed))
+        prynt(xor(data, o))
     else:
         print('Unknown algorithm.')
 
@@ -365,6 +380,11 @@ if method == 'decrypt':
         except:
             traceback.print_exc()
             print('[-] Integer nonce is needed for CTR mode.')
+    elif algorithm == 'rng':
+        rng_file = keyfilename
+        seed = int(iv)
+        r, o, e = run_command('%s bytes %d %d' % (rng_file, len(data), seed))
+        prynt(xor(data, o))
     else:
         print('Unknown algorithm.')
 ################################################################################
@@ -857,4 +877,41 @@ if method == 'cp-23':
     #[mt2.randint() for _ in range(len(original_values))]
     for i in range(100):
         print('Original/Duplicate: %10d  %10d' % (mt1.randint(), mt2.randint()))
+
+if method == 'cp-24':
+    from rng.mersenne32 import *
+    with open(filename, 'rb') as f:
+        data = f.read()
+    substring = substring.encode()
+    for i in range(0x10000): # 16-bit seed
+        if i % 256 == 0:
+            debug('I:', i)
+        '''
+        r, o, e = run_command('%s bytes %d %d' % (rng_file, len(data), i))
+        if substring in xor(data, o):
+        '''
+        mt = MersenneTwister32(i)
+        ints = [mt.randint() for _ in range(len(data) // 4 + 1)]
+        keystream = pack('<' + 'L'*len(ints), *ints)
+        if substring in xor(data, keystream):
+            print('Seed:', i)
+            break
+
+if method == 'cp-25':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    key = b'YELLOW SUBMARINE'
+    nonce = 1337
+    encrypted = aes_ctr_crypt(data, key, nonce)
+    edited = aes_ctr_edit(encrypted, key, nonce, 4, b'BOSS')
+    decrypted = aes_ctr_crypt(edited, key, nonce)
+    #print('Changed:', decrypted[:50])
+    
+    """
+    Feeding ciphertext as plaintext will XOR it -> return plaintext!!!
+    """
+    hacked = aes_ctr_edit(encrypted, key, nonce, 0, encrypted)
+    prynt(hacked)
+
+
 

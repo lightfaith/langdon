@@ -178,12 +178,16 @@ def ctr_keystream(key, nonce, count):
     blocks = [cipher.encrypt(bytes(bytearray(pack('<Q', nonce)) 
                                    + bytearray(pack('<Q', block_count))))
               for block_count in range((count // 16) + 1)]
-    # TODO fix
     return b''.join(blocks)[:count]
 
 def aes_ctr_crypt(data, key, nonce):
     result = xor(data, ctr_keystream(key, nonce, len(data)))
     return result
+
+def aes_ctr_edit(ciphertext, key, nonce, offset, newtext):
+    decrypted = aes_ctr_crypt(ciphertext, key, nonce)
+    decrypted = decrypted[:offset] + newtext + decrypted[offset + len(newtext):]
+    return aes_ctr_crypt(decrypted, key, nonce)
 """
 Specific functions (e.g. print all ROTs or the valid one)
 """
