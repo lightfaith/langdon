@@ -159,7 +159,7 @@ def aes_cbc_encrypt(data, key, iv, blocksize=16):
         result += previous_block
     return result
 
-def aes_cbc_decrypt(data, key, iv, blocksize=16):
+def aes_cbc_decrypt(data, key, iv, blocksize=16, ignore_padding=False):
     result = b''            
     previous_block = iv
     blocks = [data[i:i+blocksize] for i in range(0, len(data), blocksize)]
@@ -169,7 +169,10 @@ def aes_cbc_decrypt(data, key, iv, blocksize=16):
         tmp = cipher.decrypt(block)
         result += xor(tmp, previous_block)
         previous_block = block
-    return pkcs7_unpad(result)
+    if ignore_padding:
+        return result
+    else:
+        return pkcs7_unpad(result)
 
 
 def ctr_keystream(key, nonce, count):
@@ -188,6 +191,14 @@ def aes_ctr_edit(ciphertext, key, nonce, offset, newtext):
     decrypted = aes_ctr_crypt(ciphertext, key, nonce)
     decrypted = decrypted[:offset] + newtext + decrypted[offset + len(newtext):]
     return aes_ctr_crypt(decrypted, key, nonce)
+
+
+def sha1_mac(payload, key):
+    value = [b'\x67\x45\x23\x01',  # TODO endianess, right?
+             b'\xef\xcd\xab\x89', 
+             b'\x98\xba\xdc\xfe', 
+             b'\x10\x32\x54\x76', 
+             b'\xc3\xd2\xe1\xf0']
 """
 Specific functions (e.g. print all ROTs or the valid one)
 """

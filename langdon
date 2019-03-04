@@ -77,6 +77,12 @@ try:
             iv = sys.argv[5]
         except:
             iv = None
+        ignore_padding = ('--ignore-padding' in sys.argv)
+    if method == 'mac':
+        algorithm = sys.argv[2]
+        filename = sys.argv[3]
+        keyfilename = sys.argv[4]
+        # TODO maybe salt?
 
     if method == 'analyze':
         filename = sys.argv[2]
@@ -139,6 +145,14 @@ try:
             pass        
         with open(d_oracle_path, 'rb') as f:
             pass        
+    if method == 'cp-27':
+        filename = sys.argv[2]
+        e_oracle_path = sys.argv[3]
+        d_oracle_path = sys.argv[4]
+        with open(e_oracle_path, 'rb') as f:
+            pass        
+        with open(d_oracle_path, 'rb') as f:
+            pass        
 
 except:
     #traceback.print_exc()
@@ -168,6 +182,7 @@ except:
     print('    %s --decrypt aes-cbc <file> <keyfile> <iv>' % sys.argv[0])
     print('    %s --decrypt aes-ctr <file> <keyfile> <nonce>' % sys.argv[0])
     print('    %s --decrypt rng <file> <rng_path> <seed>' % sys.argv[0])
+    print('    %s --mac sha1 <file> <keyfile>' % sys.argv[0])
     # sophisticated stuff
     print('  # sophisticated attacks:')
     print('    %s --analyze <file>' % sys.argv[0])
@@ -189,6 +204,7 @@ except:
     print('    %s --cp-24 <file> <rng_path> <substring>' % sys.argv[0])
     print('    %s --cp-25 <file>' % sys.argv[0])
     print('    %s --cp-26 <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
+    print('    %s --cp-27 <file> <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
     sys.exit(1)
 
 # TODO --analyze
@@ -377,8 +393,13 @@ if method == 'decrypt':
         prynt(aes_ecb_decrypt(data, key), end='')
     elif algorithm == 'aes-cbc':
         try:
-            prynt(aes_cbc_decrypt(data, key, unhex(iv), blocksize=16))
+            prynt(aes_cbc_decrypt(data, 
+                                  key, 
+                                  unhex(iv), 
+                                  blocksize=16, 
+                                  ignore_padding=ignore_padding))
         except:
+            traceback.print_exc()
             print('[-] IV is needed for CBC mode.')
     elif algorithm == 'aes-ctr':
         try:
@@ -393,6 +414,13 @@ if method == 'decrypt':
         prynt(xor(data, o))
     else:
         print('Unknown algorithm.')
+
+if method == 'mac':
+    if algorithm == 'sha1':
+        print(':O')
+    else:
+        print('Unknown algorithm.')
+
 ################################################################################
 ################################################################################
 ################################################################################
@@ -966,4 +994,29 @@ if method == 'cp-26':
     fake = encrypted[:offset] + fake_block + encrypted[offset + len(fake_block):]
     decrypted = oracle_send(fake, d_oracle_path)
     prynt(decrypted)
+
+if method == 'cp-27':
+    """
+    CBC with key == IV
+    """
+    with open(filename, 'rb') as f:
+        data = f.read()
+    debug('Data:', data)
+    encrypted = oracle_send(data, e_oracle_path)
+    debug('Encrypted:', encrypted)
+    encrypted_chunks = chunks(encrypted, 16)
+    if len(encrypted_chunks) < 3:
+        print('[-] Message is too short.')
+    #decrypted = oracle_send(encrypted, d_oracle_path)
+    #debug('Decrypted:', decrypted)
+    fake = b''.join([encrypted_chunks[0], 
+                     b'\x00' * 16, 
+                     encrypted_chunks[0]]) 
+    debug('Fake:', fake)
+    decrypted = oracle_send(fake, d_oracle_path)
+    decrypted_chunks = chunks(decrypted, 16)
+    debug('Decrypted:', decrypted_chunks)
+    debug('Key:')
+    prynt(xor(decrypted_chunks[0], decrypted_chunks[2]))
+
 
