@@ -26,6 +26,10 @@ try:
     method = sys.argv[1][2:]
     if method == 'test':
         filename = sys.argv[2]
+    if method == 'bin':
+        filename = sys.argv[2]
+    if method == 'unbin':
+        filename = sys.argv[2]
     if method == 'hex':
         filename = sys.argv[2]
     if method == 'unhex':
@@ -160,6 +164,8 @@ except:
     print('[-] Usage:')
     # vital methods
     print('  # vital methods:')
+    print('    %s --bin <file>' % sys.argv[0])
+    print('    %s --unbin <file>' % sys.argv[0])
     print('    %s --hex <file>' % sys.argv[0])
     print('    %s --unhex <file>' % sys.argv[0])
     print('    %s --entropy <file> [<chunksize>]' % sys.argv[0])
@@ -224,16 +230,25 @@ if method == 'test':
 ################################################################################
 ################################################################################
 ################################################################################
+if method == 'bin':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    prynt(binary(data))
+
+if method == 'unbin':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    prynt(unbinary(data))
 
 if method == 'hex':
     with open(filename, 'rb') as f:
         data = f.read()
-    prynt(hex(data))
+    prynt(hexadecimal(data))
 
 if method == 'unhex':
     with open(filename, 'rb') as f:
         data = f.read()
-    prynt(unhex(data), end='')
+    prynt(unhexadecimal(data), end='')
 
 if method == 'entropy':
     with open(filename, 'rb') as f:
@@ -395,7 +410,7 @@ if method == 'decrypt':
         try:
             prynt(aes_cbc_decrypt(data, 
                                   key, 
-                                  unhex(iv), 
+                                  unhexadecimal(iv), 
                                   blocksize=16, 
                                   ignore_padding=ignore_padding))
         except:
@@ -416,8 +431,13 @@ if method == 'decrypt':
         print('Unknown algorithm.')
 
 if method == 'mac':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    with open(keyfilename, 'rb') as f:
+        key = f.read()
+
     if algorithm == 'sha1':
-        print(':O')
+        prynt(sha1(key + data))
     else:
         print('Unknown algorithm.')
 
@@ -649,7 +669,8 @@ if method == 'diehard':
 if method == 'cp-4':
     with open(filename, 'rb') as f:
         lines = f.read().splitlines()
-    entropies = {i:entropy(unhex(line)) for i,line in enumerate(lines, 1)}
+    entropies = {i:entropy(unhexadecimal(line)) 
+                 for i,line in enumerate(lines, 1)}
     best = sorted(entropies.items(), key=lambda x: x[1])
     print('Suspect by entropy: %d:' % best[0][0], best[0][1])
     """run XOR and dict analysis in parallel"""
@@ -659,7 +680,7 @@ if method == 'cp-4':
 
 if method == 'cp-8':
     with open(filename, 'rb') as f:
-        lines = [unhex(line) for line in f.read().splitlines()]
+        lines = [unhexadecimal(line) for line in f.read().splitlines()]
     """check entropy"""
     entropies = [entropy(line) for line in lines]
     #for i, entropy in enumerate(entropies, 1):

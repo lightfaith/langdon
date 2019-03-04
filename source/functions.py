@@ -5,7 +5,7 @@
 import re
 import math
 import traceback
-from struct import pack
+from struct import pack, unpack
 
 from source import lib
 from source.lib import *
@@ -14,10 +14,16 @@ from source.classes import *
 """
 Crypto functions
 """
-def hex(data):
+def binary(data):
+    return b''.join([bin(b)[2:].rjust(8, '0').encode() for b in data])
+        
+def unbinary(data):
+    return int(data, 2).to_bytes(len(data) // 8, 'big')
+    
+def hexadecimal(data):
     return b''.join(b'%02x' % c for c in data)
 
-def unhex(stream):
+def unhexadecimal(stream):
     return b''.join(b'%c' % int(stream[i:i+2], 16) 
                     for i in range(0, len(stream), 2))
 
@@ -193,12 +199,49 @@ def aes_ctr_edit(ciphertext, key, nonce, offset, newtext):
     return aes_ctr_crypt(decrypted, key, nonce)
 
 
-def sha1_mac(payload, key):
-    value = [b'\x67\x45\x23\x01',  # TODO endianess, right?
-             b'\xef\xcd\xab\x89', 
-             b'\x98\xba\xdc\xfe', 
-             b'\x10\x32\x54\x76', 
-             b'\xc3\xd2\xe1\xf0']
+def sha1(payload, h=(0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0)):
+    # https://github.com/ricpacca/cryptopals/blob/master/S4C28.py
+    h = list(h)
+    payload_bits_len = len(payload) * 8
+    payload += b'\x80'
+    while (len(payload) * 8) % 512 != 448:
+        payload += b'\x00'
+    payload += pack('>Q', payload_bits_len)
+    #data_chunks = chunks(binary(payload), 32)
+    #for chunk in data_chunks:
+    #    print(chunk)
+    
+    for chunk in chunks(payload, 64):
+        w = [0] * 80
+        for i in range(16):
+            w[i] = unpack('>I', chunk[i*4:i*4 + 4])[0]
+        for i in range(16, 80):
+            w[i] = rotate_left(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16], 1)
+        
+        a, b, c, d, e = tuple(h)
+        for i in range(80):
+            if i < 20:
+                k = 0x5a827999
+                f = d ^ (b & (c ^ d))
+            elif i < 40:
+                k = 0x6ed9eba1
+                f = b ^ c ^ d
+            elif i < 60:
+                k = 0x8f1bbcdc
+                f = (b & c) | (d & (b | c))
+            else:
+                k = 0xca62c1d6
+                f = b ^ c ^ d
+            temp = rotate_left(a, 5) + f + e + k + w[i] & 0xffffffff
+            e = d
+            d = c
+            c = rotate_left(b, 30)
+            b = a
+            a = temp
+        h = [(hx + val) & 0xffffffff for hx,val in zip(h, (a, b, c, d, e))]
+    return b''.join(b'%c' % b for hx in h for b in pack('>I', hx))
+    #return b'%08x%08x%08x%08x%08x' % tuple(h)
+
 """
 Specific functions (e.g. print all ROTs or the valid one)
 """
@@ -288,7 +331,7 @@ Cryptopals challenges
 """
 def cp_4_function(indices, lines):
     for index, line in zip(indices, lines):
-        unhexed = unhex(line)
+        unhexed = unhexadecimal(line)
         results = bruteforce_xor(unhexed, [b'%c' % i for i in range(256)])
         for byte, result in enumerate(results):
             if dict_success(result, min_word_match=3, min_word_len=3)>0.8:

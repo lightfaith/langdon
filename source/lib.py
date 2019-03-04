@@ -74,3 +74,6 @@ def size_human(value, integer=False):
 
 def chunks(data, chunksize):
     return [data[i:i+chunksize] for i in range(0, len(data), chunksize)]
+
+def rotate_left(value, shift):
+    return ((value << shift) & 0xffffffff) | (value >> (32 - shift))
