@@ -200,6 +200,22 @@ def aes_ctr_edit(ciphertext, key, nonce, offset, newtext):
     return aes_ctr_crypt(decrypted, key, nonce)
 
 
+def hmac(algorithm, data, key):
+    methods = {
+        'sha1': (sha1, 64, 20),
+        'md4': (md4, 64, 16),
+    }
+    f, block_size, output_size = methods.get(algorithm) or (None, None, None)
+    if not f:
+        return b''
+    if len(key) > block_size:
+        key = f(key)
+    if len(key) < block_size:
+        key += b'\x00' * (block_size - len(key))
+    return f(xor(key, b'\x5c' * block_size)
+             + f(xor(key, b'\x36' * block_size)
+                 + data))
+    
 
 def hash_pad(algorithm, payload, bits_len=None):
     if not bits_len:
@@ -329,7 +345,7 @@ def md4(payload,
 def hash_extension(algorithm, data, digest, append, oracle_path):
     """
     We try to create MAC of new data replacing key with arbitrary characters.
-    The SHA1 state will be restored from provided digest -> key is not needed.
+    The hash state will be restored from provided digest -> key is not needed.
     """
     #print(digest)
     #print(hexadecimal(digest))

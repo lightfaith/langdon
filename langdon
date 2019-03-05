@@ -89,7 +89,13 @@ try:
             keyfilename = sys.argv[4]
         except:
             keyfilename = None
-        # TODO maybe salt?
+    if method == 'hmac':
+        algorithm = sys.argv[2]
+        filename = sys.argv[3]
+        try:
+            keyfilename = sys.argv[4]
+        except:
+            keyfilename = None
 
     if method == 'analyze':
         filename = sys.argv[2]
@@ -168,6 +174,11 @@ try:
             pass        
         with open(d_oracle_path, 'rb') as f:
             pass        
+    if method == 'cp-31':
+        filename = sys.argv[2]
+        oracle_path = sys.argv[3]
+        with open(oracle_path, 'rb') as f:
+            pass        
 
 except Exception as e:
     #traceback.print_exc()
@@ -202,6 +213,8 @@ except Exception as e:
     print('    %s --decrypt rng <file> <rng_path> <seed>' % sys.argv[0])
     print('    %s --mac sha1 <file> [<keyfile>]' % sys.argv[0])
     print('    %s --mac md4 <file> [<keyfile>]' % sys.argv[0])
+    print('    %s --hmac sha1 <file> [<keyfile>]' % sys.argv[0])
+    #print('    %s --hmac md4 <file> [<keyfile>]' % sys.argv[0])
     # sophisticated stuff
     print('  # sophisticated attacks:')
     print('    %s --analyze <file>' % sys.argv[0])
@@ -228,6 +241,7 @@ except Exception as e:
     print('    %s --cp-25 <file>' % sys.argv[0])
     print('    %s --cp-26 <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
     print('    %s --cp-27 <file> <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
+    print('    %s --cp-31 <file> <oracle>' % sys.argv[0])
     sys.exit(1)
 
 # TODO --analyze
@@ -448,6 +462,7 @@ if method == 'decrypt':
     else:
         print('Unknown algorithm.')
 
+
 if method == 'mac':
     with open(filename, 'rb') as f:
         data = f.read()
@@ -462,7 +477,18 @@ if method == 'mac':
     elif algorithm == 'md4':
         prynt(md4(key + data))
     else:
-        print('Unknown algorithm.')
+        print('[-] Unknown algorithm.')
+
+if method == 'hmac':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    with open(keyfilename, 'rb') as f:
+        key = f.read()
+
+    if algorithm not in ('sha1', 'md4'):
+        print('[-] Unknown algorithm.')
+    # TODO md4 could be bugged...
+    prynt(hmac(algorithm, data, key))
 
 ################################################################################
 ################################################################################
@@ -1067,4 +1093,30 @@ if method == 'cp-27':
     debug('Key:')
     prynt(xor(decrypted_chunks[0], decrypted_chunks[2]))
 
-
+if method == 'cp-31':
+    digest_length = 20 # as we're dealing with SHA1
+    guess = b''
+    for i in range(digest_length * 2):
+        times = {}
+        for character in [hex(x)[-1] for x in range(16)]:
+            print(character, end='')
+            sys.stdout.flush()
+            payload = (guess 
+                       + character.encode() 
+                       + b'0' * (digest_length * 2 - len(guess) - 1)
+                       + filename.encode())
+            #for line in oracle_send(payload, oracle_path).splitlines():
+            #    print(line)
+            oracle = Oracle(oracle_path, 
+                            {character:payload},
+                            lambda i,r,o,e,kw: (r == 0))
+            start = time.time()
+            oracle.start()
+            oracle.join()
+            end = time.time()
+            times[character] = end - start
+            # TODO if oracle.matching print result HMAC
+        print()
+        for k,v in times.items():
+            print(k, v)
+        break # TODO del
