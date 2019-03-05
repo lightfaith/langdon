@@ -5,6 +5,7 @@
 import re
 import math
 import traceback
+import time
 from struct import pack, unpack
 
 from source import lib
@@ -199,14 +200,26 @@ def aes_ctr_edit(ciphertext, key, nonce, offset, newtext):
     return aes_ctr_crypt(decrypted, key, nonce)
 
 
-def sha1(payload, h=(0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0)):
-    # https://github.com/ricpacca/cryptopals/blob/master/S4C28.py
-    h = list(h)
-    payload_bits_len = len(payload) * 8
+
+def sha1_pad(payload, bits_len=None):
+    if not bits_len:
+        bits_len = len(payload) * 8
     payload += b'\x80'
     while (len(payload) * 8) % 512 != 448:
         payload += b'\x00'
-    payload += pack('>Q', payload_bits_len)
+    payload += pack('>Q', bits_len)
+    return payload
+
+def sha1(
+        payload, 
+        bits_len=None, 
+        h=(0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0)):
+    # https://github.com/ricpacca/cryptopals/blob/master/S4C28.py
+    h = list(h)
+    #print('SHA1 values:', ['%08x' % hx for hx in h], end=' ')
+    if not bits_len:
+        bits_len = len(payload) * 8
+    payload = sha1_pad(payload, bits_len)
     #data_chunks = chunks(binary(payload), 32)
     #for chunk in data_chunks:
     #    print(chunk)
@@ -239,8 +252,53 @@ def sha1(payload, h=(0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0)
             b = a
             a = temp
         h = [(hx + val) & 0xffffffff for hx,val in zip(h, (a, b, c, d, e))]
+    #print('SHA1 values:', ['%08x' % hx for hx in h], end=' ')
     return b''.join(b'%c' % b for hx in h for b in pack('>I', hx))
     #return b'%08x%08x%08x%08x%08x' % tuple(h)
+
+def hash_extension(algorithm, data, digest, append, oracle_path):
+    """
+    We try to create MAC of new data replacing key with arbitrary characters.
+    The SHA1 state will be restored from provided digest -> key is not needed.
+    """
+    #print(digest)
+    #print(hexadecimal(digest))
+    h = unpack('>5I', digest)
+    payloads = {}
+    debug('Preparing payloads up to key_length == 256...')
+    for key_length in range(256):
+        #print('Key len:', key_length)
+        if algorithm == 'sha1':
+            forged_data = sha1_pad(b'A' * key_length + data)[key_length:] + append
+            #print('Forged:', forged_data)
+            forged_digest = sha1(append, 
+                                 bits_len=(key_length + len(forged_data)) * 8, 
+                                 h=h)
+            #print(forged_digest)
+        else:
+            break
+        payloads[key_length] = (forged_digest, forged_data)
+        #result = oracle_send(forged_digest + forged_data, oracle)
+        #for line in result.splitlines():
+        #    print(line)
+        #print()
+    debug('Testing payloads...')
+    oracle_count = 1 # TODO more when thread termination is ready
+    oracles = [Oracle(oracle_path, 
+                      {k:b''.join(v) for k,v in payloads.items()
+                           if k % oracle_count == i},
+                      lambda i,r,o,e,kw: (r == 0))
+               for i in range(oracle_count)]
+    for oracle in oracles:
+        oracle.start()
+    for oracle in oracles:
+        oracle.join()
+        if oracle.matching:
+            key_length = oracle.matching[0].payload_id
+            print('Key length:', key_length)
+            print('Digest:    ', hexadecimal(payloads[key_length][0]).decode())
+            print('Message:')
+            prynt(payloads[key_length][1])
 
 """
 Specific functions (e.g. print all ROTs or the valid one)

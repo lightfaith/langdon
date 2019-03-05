@@ -99,7 +99,15 @@ try:
         blocksize = int(sys.argv[3])
         oracle_path = sys.argv[4]
         with open(oracle_path, 'rb') as f:
-            pass        
+            pass
+    if method == 'hash-extension':
+        algorithm = sys.argv[2]
+        plaintext_file = sys.argv[3]
+        mac_file = sys.argv[4]
+        append_file = sys.argv[5]
+        oracle_path = sys.argv[6]
+        with open(oracle_path, 'rb') as f:
+            pass
     
     if method == 'diehard':
         rng_path = sys.argv[2]
@@ -158,8 +166,9 @@ try:
         with open(d_oracle_path, 'rb') as f:
             pass        
 
-except:
+except Exception as e:
     #traceback.print_exc()
+    print('[-]', e)
     #print('[-] Usage: %s <filename>' % sys.argv[0])
     print('[-] Usage:')
     # vital methods
@@ -194,6 +203,8 @@ except:
     print('    %s --analyze <file>' % sys.argv[0])
     print('    %s --ecb-chosen-plaintext <oracle_path>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
+    print('    %s ./langdon --hash-extension sha1 <plaintext_file>' 
+          '<mac_file> <append_file> <oracle_path>' % sys.argv[0])
     # RNG
     print('  # RNG:')
     print('    %s --diehard <rng_path>' % sys.argv[0])
@@ -381,7 +392,7 @@ if method == 'encrypt':
         prynt(aes_ecb_encrypt(data, key), end='')
     elif algorithm == 'aes-cbc':
         try:
-            prynt(aes_cbc_encrypt(data, key, unhex(iv), blocksize=16))
+            prynt(aes_cbc_encrypt(data, key, unhexadecimal(iv), blocksize=16))
         except:
             print('[-] IV is needed for CBC mode.')
     elif algorithm == 'aes-ctr':
@@ -628,14 +639,6 @@ if method == 'cbc-padding':
                 if oracle.matching:
                     valid_padding_byte = oracle.matching[0].payload_id
             
-            '''
-            #print('Will test payload:', payload)
-            #print('Sending payload (%02x) to oracle...' % bf_byte)
-            if cbc_padding_oracle(payload):
-                valid_padding_byte = bf_byte
-                break
-            '''
-            
             if valid_padding_byte == -1:
                 debug('Failed to find valid padding byte!')
                 break
@@ -655,7 +658,19 @@ if method == 'cbc-padding':
     except:
         print('Final plaintext:', b''.join(final_plaintexts[::-1]))
 
-    #print(cbc_padding_oracle(base64.b64decode(b'4ET5cY0cfSnomIvhYPc0+Q==')))
+
+if method == 'hash-extension':
+    with open(plaintext_file, 'rb') as f:
+        data = f.read()
+    with open(mac_file, 'rb') as f:
+        digest = f.read()
+    with open(append_file, 'rb') as f:
+        append = f.read()
+        
+    if algorithm in ('sha1',):
+        hash_extension(algorithm, data, digest, append, oracle_path)
+    else:
+        print('[-] Unknown algorithm.')
 
 ################################################################################
 ################################################################################
