@@ -201,13 +201,20 @@ def aes_ctr_edit(ciphertext, key, nonce, offset, newtext):
 
 
 
-def sha1_pad(payload, bits_len=None):
+def hash_pad(algorithm, payload, bits_len=None):
     if not bits_len:
         bits_len = len(payload) * 8
-    payload += b'\x80'
-    while (len(payload) * 8) % 512 != 448:
-        payload += b'\x00'
-    payload += pack('>Q', bits_len)
+    if algorithm == 'sha1':
+        payload += b'\x80'
+        while (len(payload) * 8) % 512 != 448:
+            payload += b'\x00'
+        payload += pack('>Q', bits_len)
+    elif algorithm == 'md4':
+        payload += b'\x80'
+        #payload += bytes((56 - len(payload) % 64) % 64)
+        while (len(payload) * 8) % 512 != 448:
+            payload += b'\x00'
+        payload += pack('<Q', bits_len)
     return payload
 
 def sha1(
@@ -219,7 +226,7 @@ def sha1(
     #print('SHA1 values:', ['%08x' % hx for hx in h], end=' ')
     if not bits_len:
         bits_len = len(payload) * 8
-    payload = sha1_pad(payload, bits_len)
+    payload = hash_pad('sha1', payload, bits_len)
     #data_chunks = chunks(binary(payload), 32)
     #for chunk in data_chunks:
     #    print(chunk)
@@ -256,6 +263,69 @@ def sha1(
     return b''.join(b'%c' % b for hx in h for b in pack('>I', hx))
     #return b'%08x%08x%08x%08x%08x' % tuple(h)
 
+def md4(payload, 
+        bits_len=None, 
+        h=(0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476)):
+    F = lambda x, y, z: ((x & y) | (~x & z))
+    G = lambda x, y, z: ((x & y) | (x & z) | (y & z))
+    H = lambda x, y, z: x ^ y ^ z
+
+    #print('DEFAULT:', hexadecimal(b''.join(b'%c' % b for x in h for b in pack('<I', x))))
+    h = list(h)
+    if not bits_len:
+        bits_len = len(payload) * 8
+
+    last_chunk_altered = False
+    order = [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15]
+    while len(payload):
+        if len(payload) < 64 and not last_chunk_altered:
+            payload = hash_pad('md4', payload)
+            last_chunk_altered = True
+        #print('after padding (len %d):' % len(payload))
+        #print(payload)
+        #print()
+       
+        chunk = payload[:64]
+        X = list(unpack('<16I', chunk))
+        a, b, c, d = tuple(h)
+        for i in range(16):
+            k = i
+            if i % 4 == 0:
+                a = rotate_left((a + F(b, c, d) + X[k]) & 0xffffffff, 3)
+            elif i % 4 == 1:
+                d = rotate_left((d + F(a, b, c) + X[k]) & 0xffffffff, 7)
+            elif i % 4 == 2:
+                c = rotate_left((c + F(d, a, b) + X[k]) & 0xffffffff, 11)
+            elif i % 4 == 3:
+                b = rotate_left((b + F(c, d, a) + X[k]) & 0xffffffff, 19)
+        for i in range(16):
+            k = i // 4 + (i % 4) * 4
+            if i % 4 == 0:
+                a = rotate_left((a + G(b, c, d) + X[k] + 0x5a827999) & 0xffffffff, 3)
+            elif i % 4 == 1:
+                d = rotate_left((d + G(a, b, c) + X[k] + 0x5a827999) & 0xffffffff, 5)
+            elif i % 4 == 2:
+                c = rotate_left((c + G(d, a, b) + X[k] + 0x5a827999) & 0xffffffff, 9)
+            elif i % 4 == 3:
+                b = rotate_left((b + G(c, d, a) + X[k] + 0x5a827999) & 0xffffffff, 13)
+        for i in range(16):
+            k = order[i]
+            if i % 4 == 0:
+                a = rotate_left((a + H(b, c, d) + X[k] + 0x6ed9eba1) & 0xffffffff, 3)
+            elif i % 4 == 1:
+                d = rotate_left((d + H(a, b, c) + X[k] + 0x6ed9eba1) & 0xffffffff, 9)
+            elif i % 4 == 2:
+                c = rotate_left((c + H(d, a, b) + X[k] + 0x6ed9eba1) & 0xffffffff, 11)
+            elif i % 4 == 3:
+                b = rotate_left((b + H(c, d, a) + X[k] + 0x6ed9eba1) & 0xffffffff, 15)
+        
+        h = [(x + y) & 0xffffffff for x,y in zip(h, (a, b, c, d))]
+        payload = payload[64:]
+
+    #print('MD4 values:', ['%08x' % hx for hx in h], end=' ')
+    return b''.join(b'%c' % b for x in h for b in pack('<I', x))
+
+
 def hash_extension(algorithm, data, digest, append, oracle_path):
     """
     We try to create MAC of new data replacing key with arbitrary characters.
@@ -263,25 +333,38 @@ def hash_extension(algorithm, data, digest, append, oracle_path):
     """
     #print(digest)
     #print(hexadecimal(digest))
-    h = unpack('>5I', digest)
     payloads = {}
     debug('Preparing payloads up to key_length == 256...')
     for key_length in range(256):
-        #print('Key len:', key_length)
+        print('Key len:', key_length)
         if algorithm == 'sha1':
-            forged_data = sha1_pad(b'A' * key_length + data)[key_length:] + append
-            #print('Forged:', forged_data)
+            h = unpack('>5I', digest)
+            forged_data = hash_pad('sha1', 
+                                   b'A' * key_length + data)[key_length:] + append
+            #print('Forged data:', forged_data)
             forged_digest = sha1(append, 
                                  bits_len=(key_length + len(forged_data)) * 8, 
                                  h=h)
-            #print(forged_digest)
+            #print('Forged digest:', forged_digest)
+        elif algorithm == 'md4':
+            # TODO not working properly
+            h = unpack('<4I', digest)
+            #print('H from digest:', ['0x%08x' % x for x in h])
+            forged_data = hash_pad('md4', 
+                                   b'A' * key_length + data)[key_length:] + append
+            print('Forged data:', forged_data)
+            forged_digest = md4(append, 
+                                bits_len=(key_length + len(forged_data)) * 8, 
+                                h=h)
+            print('Forged digest:', forged_digest)
         else:
             break
         payloads[key_length] = (forged_digest, forged_data)
-        #result = oracle_send(forged_digest + forged_data, oracle)
-        #for line in result.splitlines():
-        #    print(line)
-        #print()
+        result = oracle_send(forged_digest + forged_data, oracle_path)
+        for line in result.splitlines():
+            print(line)
+        print()
+    '''
     debug('Testing payloads...')
     oracle_count = 1 # TODO more when thread termination is ready
     oracles = [Oracle(oracle_path, 
@@ -299,6 +382,7 @@ def hash_extension(algorithm, data, digest, append, oracle_path):
             print('Digest:    ', hexadecimal(payloads[key_length][0]).decode())
             print('Message:')
             prynt(payloads[key_length][1])
+    '''
 
 """
 Specific functions (e.g. print all ROTs or the valid one)

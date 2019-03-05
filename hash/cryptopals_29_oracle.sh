@@ -18,8 +18,8 @@ tail -c +21 $unbased > $plaintextfile
 
 ./langdon --mac sha1 $plaintextfile $keyfile > $correctfile
 
-#echo "Correct: `./langdon --hex $correctfile`"
-#echo "Given:   `./langdon --hex $macfile`"
+echo "Correct: `./langdon --hex $correctfile`"
+echo "Given:   `./langdon --hex $macfile`"
 cmp $correctfile $macfile > /dev/null
 return_value=$?
 rm $unbased $plaintextfile $macfile $correctfile

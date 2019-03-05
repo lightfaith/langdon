@@ -85,7 +85,10 @@ try:
     if method == 'mac':
         algorithm = sys.argv[2]
         filename = sys.argv[3]
-        keyfilename = sys.argv[4]
+        try:
+            keyfilename = sys.argv[4]
+        except:
+            keyfilename = None
         # TODO maybe salt?
 
     if method == 'analyze':
@@ -197,13 +200,16 @@ except Exception as e:
     print('    %s --decrypt aes-cbc <file> <keyfile> <iv>' % sys.argv[0])
     print('    %s --decrypt aes-ctr <file> <keyfile> <nonce>' % sys.argv[0])
     print('    %s --decrypt rng <file> <rng_path> <seed>' % sys.argv[0])
-    print('    %s --mac sha1 <file> <keyfile>' % sys.argv[0])
+    print('    %s --mac sha1 <file> [<keyfile>]' % sys.argv[0])
+    print('    %s --mac md4 <file> [<keyfile>]' % sys.argv[0])
     # sophisticated stuff
     print('  # sophisticated attacks:')
     print('    %s --analyze <file>' % sys.argv[0])
     print('    %s --ecb-chosen-plaintext <oracle_path>' % sys.argv[0])
     print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
     print('    %s ./langdon --hash-extension sha1 <plaintext_file>' 
+          '<mac_file> <append_file> <oracle_path>' % sys.argv[0])
+    print('    %s ./langdon --hash-extension md4 <plaintext_file>' 
           '<mac_file> <append_file> <oracle_path>' % sys.argv[0])
     # RNG
     print('  # RNG:')
@@ -238,6 +244,7 @@ except Exception as e:
 if method == 'test':
     with open(filename, 'rb') as f:
         data = f.read()
+    prynt(hexadecimal(md4(data)))
 ################################################################################
 ################################################################################
 ################################################################################
@@ -444,11 +451,16 @@ if method == 'decrypt':
 if method == 'mac':
     with open(filename, 'rb') as f:
         data = f.read()
-    with open(keyfilename, 'rb') as f:
-        key = f.read()
+    if keyfilename:
+        with open(keyfilename, 'rb') as f:
+            key = f.read()
+    else:
+        key = b''
 
     if algorithm == 'sha1':
         prynt(sha1(key + data))
+    elif algorithm == 'md4':
+        prynt(md4(key + data))
     else:
         print('Unknown algorithm.')
 
@@ -667,7 +679,7 @@ if method == 'hash-extension':
     with open(append_file, 'rb') as f:
         append = f.read()
         
-    if algorithm in ('sha1',):
+    if algorithm in ('sha1', 'md4'):
         hash_extension(algorithm, data, digest, append, oracle_path)
     else:
         print('[-] Unknown algorithm.')
