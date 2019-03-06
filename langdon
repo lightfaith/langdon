@@ -1098,8 +1098,9 @@ if method == 'cp-31':
     guess = b''
     for i in range(digest_length * 2):
         times = {}
+        debug('Actual guess:', guess)
         for character in [hex(x)[-1] for x in range(16)]:
-            print(character, end='')
+            debug(character, end='')
             sys.stdout.flush()
             payload = (guess 
                        + character.encode() 
@@ -1116,7 +1117,17 @@ if method == 'cp-31':
             end = time.time()
             times[character] = end - start
             # TODO if oracle.matching print result HMAC
-        print()
-        for k,v in times.items():
-            print(k, v)
-        break # TODO del
+        #print()
+        #for k,v in times.items():
+        #    print(k, v)
+        best_2 = sorted(times.items(), key=lambda x: x[1], reverse=True)[:2]
+        print(best_2)
+        if best_2[0][1] - best_2[1][1] < 0.02:
+            debug('\nDifference too small (%f), testing the same...' 
+                  % (best_2[0][1] - best_2[1][1]))
+            i -= 1
+            continue
+        debug('\nFound nibble: %s' % best_2[0][0])
+        guess += best_2[0][0].encode()
+        #break # TODO del
+

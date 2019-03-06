@@ -36,9 +36,9 @@ wordlist = []
 """
 Standard functions
 """
-def debug(*args):
+def debug(*args, **kwargs):
     if debug_flag:
-        print('\033[90m[.]', *args, '\033[0m')
+        print('\033[90m[.]', *args, '\033[0m', **kwargs)
 
 def run_command(command):
     p = subprocess.Popen(command, 
