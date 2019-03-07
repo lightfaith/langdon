@@ -6,7 +6,7 @@
 #import sys
 import base64
 import threading
-
+import time
 from source.lib import *
 
 """
@@ -81,6 +81,7 @@ class Oracle(threading.Thread):
         self.validate = validate
         self.break_on_success = break_on_success
         self.kwargs = kwargs
+        self.time = None
         
     def run(self):
         """
@@ -90,6 +91,7 @@ class Oracle(threading.Thread):
 
         The payload is internally base64-encoded.
         """
+        start = time.time()
         for payload_id, payload in self.payloads.items():
             #print('Oracle testing 0x%02x' % payload_id)
             r, o, e = run_command('%s "%s"' % (self.oracle_path, 
@@ -100,4 +102,5 @@ class Oracle(threading.Thread):
                 self.matching.append(OracleResult(payload_id, r, o, e))
                 if self.break_on_success:
                     break
+        self.time = time.time() - start
 

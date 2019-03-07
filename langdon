@@ -1096,8 +1096,12 @@ if method == 'cp-27':
 if method == 'cp-31':
     digest_length = 20 # as we're dealing with SHA1
     guess = b''
-    for i in range(digest_length * 2):
+    #guess = b'fcecf3ad7e55f0e2528ece2c8e08d88d4136b8' # TODO del
+    done = False
+    diff_threshold = 0.015
+    while len(guess) < digest_length * 2:
         times = {}
+        #debug('Expected:       fcecf3ad7e55f0e2528ece2c8e08d88d4136b84b',)
         debug('Actual guess:', guess)
         for character in [hex(x)[-1] for x in range(16)]:
             debug(character, end='')
@@ -1111,23 +1115,34 @@ if method == 'cp-31':
             oracle = Oracle(oracle_path, 
                             {character:payload},
                             lambda i,r,o,e,kw: (r == 0))
-            start = time.time()
             oracle.start()
             oracle.join()
-            end = time.time()
-            times[character] = end - start
-            # TODO if oracle.matching print result HMAC
-        #print()
-        #for k,v in times.items():
-        #    print(k, v)
-        best_2 = sorted(times.items(), key=lambda x: x[1], reverse=True)[:2]
-        print(best_2)
-        if best_2[0][1] - best_2[1][1] < 0.02:
-            debug('\nDifference too small (%f), testing the same...' 
-                  % (best_2[0][1] - best_2[1][1]))
-            i -= 1
-            continue
-        debug('\nFound nibble: %s' % best_2[0][0])
-        guess += best_2[0][0].encode()
-        #break # TODO del
+            times[character] = oracle.time
+            if oracle.matching:
+                done = True
+                
+        if not done:
+            #print()
+            #for k,v in times.items():
+            #    print(k, v)
+            best_2 = sorted(times.items(), key=lambda x: x[1], reverse=True)[:2]
+            #print('\n', best_2)
+            diff = best_2[0][1] - best_2[1][1]
+            if diff < diff_threshold:
+                debug('\nDifference too small (%f), testing the same...' 
+                      % (best_2[0][1] - best_2[1][1]))
+                diff_threshold *= 1.1
+                continue
+            if len(guess) == digest_length * 2 - 1:
+                """finished but it's wrong"""
+                print('[-] Digest does not match, trying to change last nibble.')
+                continue
+            debug('\nFound nibble: %s (diff %f)' % (best_2[0][0], diff))
+            guess += best_2[0][0].encode()
+        else:
+            best = sorted(times.items(), key=lambda x: x[1], reverse=True)[0]
+            guess += best[0].encode()
+            print()
+            prynt(guess)
+            break
 
