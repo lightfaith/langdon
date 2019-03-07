@@ -56,8 +56,6 @@ def entropy_chunks(data, chunksize):
 def get_frequency_error(data, language):
     try:
         fs = character_frequencies[language]
-        #return sum([fs.get(chr(c), 0) 
-        #            for c in data.lower()]) / len(data)
     except:
         traceback.print_exc()
         return 0
@@ -73,6 +71,9 @@ def bruteforce_xor(data1, keys):
         yield xor(data1, key)
 
 def dict_success(sample, min_word_match=1, min_word_len=1): # TODO or different constants?
+    """
+    Return how many of given words are actually in wordlist (as fraction).
+    """
     match_count = 0
     words = [w for w in re.sub(b'[^a-z]+', b' ', sample.lower()).split()
              if len(w) >= min_word_len]
@@ -95,6 +96,9 @@ def hamming(data1, data2):
     return result
 
 def oracle_send(payload, oracle_path):
+    """
+    Quick method to run an oracle with given payload and receive output.
+    """
     oracle = Oracle(oracle_path,
                     {0: payload},
                     lambda i,r,o,e,kw: True)
@@ -104,6 +108,14 @@ def oracle_send(payload, oracle_path):
     return result
 
 def pkcs7_pad(data, blocksize=16):
+    """
+    Pad with PKCS#7 method - bytes (how many bytes to blocksize) up to blocksize
+
+    Example (blocksize = 8):
+        Ninja -> Ninja\x03\x03\x03
+        Warrior -> Warrior\x01
+        Evernote -> Evernote\x08\x08\x08\x08\x08\x08\x08\x08
+    """
     needed = blocksize - (len(data)%blocksize)
     if not needed:
         needed = blocksize
@@ -111,6 +123,9 @@ def pkcs7_pad(data, blocksize=16):
     return result
 
 def pkcs7_unpad(data):
+    """
+    Remove PKCS#7, throw error if incorrect.
+    """
     padding_value = data[-1]
     if padding_value > len(data):
         raise ValueError('Padding value is bigger than the message length.')
@@ -120,17 +135,15 @@ def pkcs7_unpad(data):
     return data[:-padding_value]
 
 def ecb_suspect(data, blocksize=16):
-    '''
-    blocks = []
-    for block in [data[i:i+blocksize] for i in range(0, len(data), blocksize)]:
-        if block in blocks:
-            return True
-        blocks.append(block)
-    return False
-    '''
+    """
+    Test ECB (try to find repeating blocks).
+    """
     return bool(find_repeating_patterns(data, min_size=blocksize))
 
 def find_repeating_patterns(data, min_size=8):
+    """
+    Return whether there are repeating blocks of given size in the data.
+    """
     result = [] # tuples of indices with identical blocks
     for i in range(0, len(data)-min_size):
         reference = data[i:i+min_size]
@@ -154,6 +167,19 @@ def aes_ecb_decrypt(data, key):
         return pkcs7_unpad(cipher.decrypt(data))
 
 def aes_cbc_encrypt(data, key, iv, blocksize=16):
+    """
+    Manual AES-CBC encryption implementation.
+
+           P1      P2
+           |       |
+    IV ---(X)  ,--(X)
+           |   |   |
+           |   |   |
+    key --AES  |  AES-- key
+           |__/    |__ ...
+           |       |
+           C1      C2
+    """
     padded = pkcs7_pad(data)
     result = b''
     previous_block = iv
@@ -167,6 +193,18 @@ def aes_cbc_encrypt(data, key, iv, blocksize=16):
     return result
 
 def aes_cbc_decrypt(data, key, iv, blocksize=16, ignore_padding=False):
+    """
+    Manual AES-CBC decryption implementation.
+
+           C1      C2
+           |____   |__ ...
+           |    |  |
+    key --AES   | AES-- key
+           |    |  |
+    IV ---(X)    `(X)
+           |       |
+           P1      P2
+    """
     result = b''            
     previous_block = iv
     blocks = [data[i:i+blocksize] for i in range(0, len(data), blocksize)]
@@ -191,10 +229,24 @@ def ctr_keystream(key, nonce, count):
     return b''.join(blocks)[:count]
 
 def aes_ctr_crypt(data, key, nonce):
+    """
+    Manual AES-CTR encryption/decryption implementation
+
+      Nonce;Counter
+           |
+    Key --AES
+           |
+    P ----(X)
+           |
+           C
+    """
     result = xor(data, ctr_keystream(key, nonce, len(data)))
     return result
 
 def aes_ctr_edit(ciphertext, key, nonce, offset, newtext):
+    """
+    Edit CTR ciphertext if key, nonce and expected offset are known.
+    """
     decrypted = aes_ctr_crypt(ciphertext, key, nonce)
     decrypted = decrypted[:offset] + newtext + decrypted[offset + len(newtext):]
     return aes_ctr_crypt(decrypted, key, nonce)
@@ -218,6 +270,9 @@ def hmac(algorithm, data, key):
     
 
 def hash_pad(algorithm, payload, bits_len=None):
+    """
+    Pad data for hashing.
+    """
     if not bits_len:
         bits_len = len(payload) * 8
     if algorithm == 'sha1':
@@ -237,6 +292,9 @@ def sha1(
         payload, 
         bits_len=None, 
         h=(0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0)):
+    """
+    SHA1 implementation
+    """
     # https://github.com/ricpacca/cryptopals/blob/master/S4C28.py
     h = list(h)
     #print('SHA1 values:', ['%08x' % hx for hx in h], end=' ')
@@ -282,6 +340,9 @@ def sha1(
 def md4(payload, 
         bits_len=None, 
         h=(0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476)):
+    """
+    MD4 implementation
+    """
     F = lambda x, y, z: ((x & y) | (~x & z))
     G = lambda x, y, z: ((x & y) | (x & z) | (y & z))
     H = lambda x, y, z: x ^ y ^ z
@@ -347,6 +408,7 @@ def hash_extension(algorithm, data, digest, append, oracle_path):
     We try to create MAC of new data replacing key with arbitrary characters.
     The hash state will be restored from provided digest -> key is not needed.
     """
+    # TODO MD4 does not work properly
     #print(digest)
     #print(hexadecimal(digest))
     payloads = {}
@@ -380,25 +442,6 @@ def hash_extension(algorithm, data, digest, append, oracle_path):
         for line in result.splitlines():
             print(line)
         print()
-    '''
-    debug('Testing payloads...')
-    oracle_count = 1 # TODO more when thread termination is ready
-    oracles = [Oracle(oracle_path, 
-                      {k:b''.join(v) for k,v in payloads.items()
-                           if k % oracle_count == i},
-                      lambda i,r,o,e,kw: (r == 0))
-               for i in range(oracle_count)]
-    for oracle in oracles:
-        oracle.start()
-    for oracle in oracles:
-        oracle.join()
-        if oracle.matching:
-            key_length = oracle.matching[0].payload_id
-            print('Key length:', key_length)
-            print('Digest:    ', hexadecimal(payloads[key_length][0]).decode())
-            print('Message:')
-            prynt(payloads[key_length][1])
-    '''
 
 """
 Specific functions (e.g. print all ROTs or the valid one)
@@ -463,6 +506,9 @@ def analyze(data, interactive=False):
     
 
 def single_xor_print(data):
+    """
+    Try single-XOR on the data, only show matches if wordlist is defined.
+    """
     results = bruteforce_xor(data, [b'%c' % i for i in range(256)])
     for byte, result in enumerate(results):
         if wordlist:
@@ -488,6 +534,9 @@ def diehard(rng_path):
 Cryptopals challenges
 """
 def cp_4_function(indices, lines):
+    """
+    Try single-XOR bruteforce on given lines, print if kinda matches wordlist. 
+    """
     for index, line in zip(indices, lines):
         unhexed = unhexadecimal(line)
         results = bruteforce_xor(unhexed, [b'%c' % i for i in range(256)])

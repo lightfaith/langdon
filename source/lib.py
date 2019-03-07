@@ -49,6 +49,9 @@ def run_command(command):
     return (p.returncode, out, err)
 
 def prynt(*args, end='\n'):
+    """
+    Universal printing of str and bytes to terminal or file.
+    """
     if sys.stdout.isatty():
         try:
             print(*[(arg.decode() 
@@ -73,7 +76,12 @@ def size_human(value, integer=False):
     return '{0} B'.format(value)
 
 def chunks(data, chunksize):
+    """
+    Split data in sequential chunks.
+    """
+    # TODO option for alternating chunks
     return [data[i:i+chunksize] for i in range(0, len(data), chunksize)]
 
 def rotate_left(value, shift):
     return ((value << shift) & 0xffffffff) | (value >> (32 - shift))
+

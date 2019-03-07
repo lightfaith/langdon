@@ -252,8 +252,6 @@ except Exception as e:
 
 # TODO stream cipher reuse - 2 XORed with same key...
 
-# TODO hash extension
-# https://blog.skullsecurity.org/2012/everything-you-need-to-know-about-hash-length-extension-attacks
 
 if method == 'test':
     with open(filename, 'rb') as f:
@@ -263,30 +261,51 @@ if method == 'test':
 ################################################################################
 ################################################################################
 if method == 'bin':
+    """
+    Input:  b'AB'
+    Output: b'0100000101000010'
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     prynt(binary(data))
 
 if method == 'unbin':
+    """
+    Input:  b'0100000101000010'
+    Output: b'AB'
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     prynt(unbinary(data))
 
 if method == 'hex':
+    """
+    Input:  b'AB'
+    Output: b'4142'
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     prynt(hexadecimal(data))
 
 if method == 'unhex':
+    """
+    Input:  b'4142'
+    Output: b'AB'
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     prynt(unhexadecimal(data), end='')
 
 if method == 'entropy':
+    """
+    Computes entropy as <0;1>
+    """
+    # TODO also plot?
     with open(filename, 'rb') as f:
         data = f.read()
     ent = entropy(data)
     print(ent)
+    '''
     if chunksize:
         chunk_ent_X, chunk_ent_Y = entropy_chunks(data, chunksize) 
         plt.figure(figsize=(10, 5))
@@ -299,8 +318,12 @@ if method == 'entropy':
         plt.legend()
         plt.ylim(bottom=0.0, top=1.0)
         plt.show()
+    '''
     
 if method == 'histogram':
+    """
+    Shows byte histogram.
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     histogram_colors = ['#005073', '#107dac', '#189ad3', '#71c7ec']
@@ -320,6 +343,10 @@ if method == 'histogram':
     plt.show()
     
 if method == 'histogram-sorted':
+    """
+    Shows byte histogram sorted by count.
+    This is for identification of ROT, single-XOR etc.
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     histogram_colors = ['#005073', '#107dac', '#189ad3', '#71c7ec']
@@ -334,11 +361,18 @@ if method == 'histogram-sorted':
     plt.show()
 
 if method == 'language-error':
+    """
+    Shows how much the input does not reflect common language letter 
+    frequencies as <0;1>. Characters are converted to lowercase.
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     print(get_frequency_error(data, language))
 
 if method == 'hamming':
+    """
+    Prints Hamming distance of 2 samples.
+    """
     with open(filename1, 'rb') as f:
         data1 = f.read()
     with open(filename2, 'rb') as f:
@@ -351,6 +385,9 @@ if method == 'hamming':
 ################################################################################
 
 if method == 'xorfiles':
+    """
+    XORs 2 files, repeats pattern for the smaller one.
+    """
     with open(filename1, 'rb') as f:
         data1 = f.read()
     with open(filename2, 'rb') as f:
@@ -358,11 +395,17 @@ if method == 'xorfiles':
     prynt(xor(data1, data2), end='')
 
 if method == 'brute-single-xor':
+    """
+    Brute-forces single XOR, shows all results.
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     single_xor_print(data)
  
 if method == 'break-xor':
+    """
+    Use Hamming distance and letter frequency to break XOR.
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     # get normalized hamming for some keysizes, smallest should be the correct
@@ -404,6 +447,9 @@ if method == 'break-xor':
 ################################################################################
 ################################################################################
 if method == 'encrypt':
+    """
+    Encrypt with specific algorithm.
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     with open(keyfilename, 'rb') as f:
@@ -431,6 +477,9 @@ if method == 'encrypt':
 
 
 if method == 'decrypt':
+    """
+    Decrypt with specific algorithm.
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     with open(keyfilename, 'rb') as f:
@@ -464,6 +513,9 @@ if method == 'decrypt':
 
 
 if method == 'mac':
+    """
+    Compute hash of (key + data).
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     if keyfilename:
@@ -480,6 +532,10 @@ if method == 'mac':
         print('[-] Unknown algorithm.')
 
 if method == 'hmac':
+    """
+    Compute HMAC of chosen data:
+       ~ hash(key + hash(key + data))
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     with open(keyfilename, 'rb') as f:
@@ -494,6 +550,9 @@ if method == 'hmac':
 ################################################################################
 ################################################################################
 if method == 'analyze':
+    """
+    Runs analysis and probable methods on unknown data.
+    """
     with open(filename, 'rb') as f:
         data = f.read()
     analyze(data, interactive=True)
@@ -574,7 +633,8 @@ if method == 'ecb-chosen-plaintext':
                                    {k:v for k,v in 
                                    list(payloads.items())[i*workload:(i+1)*workload]},
                                   (lambda i,r,o,e,kw: 
-                                   (o[kw['reference_index']:kw['reference_index'] + kw['blocksize']] == kw['reference'])),
+                                   (o[kw['reference_index']:kw['reference_index'] 
+                                    + kw['blocksize']] == kw['reference'])),
                                   reference=reference,
                                   reference_index=reference_index,
                                   blocksize=blocksize)
@@ -613,6 +673,9 @@ if method == 'ecb-chosen-plaintext':
 if method == 'cbc-padding':
     """
     CBC Padding Oracle Attack
+
+        We can use CBC principles to test faked PKCS#7 padding. This
+    leads to plaintext revelation.
     """
     """load data"""
     with open(filename, 'rb') as f:
@@ -621,7 +684,6 @@ if method == 'cbc-padding':
     blocks = [input_data[i:i+blocksize] 
               for i in range(0, len(input_data), blocksize)]
     # TODO test if blocks have same len
-
 
     final_plaintexts = []
     """run through blocks in reverse order"""
@@ -698,6 +760,11 @@ if method == 'cbc-padding':
 
 
 if method == 'hash-extension':
+    """
+    If incorrect method (e.g. MAC) is used for signing data with their hash,
+    we can append data of our choosing.
+    """
+    # https://blog.skullsecurity.org/2012/everything-you-need-to-know-about-hash-length-extension-attacks
     with open(plaintext_file, 'rb') as f:
         data = f.read()
     with open(mac_file, 'rb') as f:
@@ -714,12 +781,18 @@ if method == 'hash-extension':
 ################################################################################
 ################################################################################
 if method == 'diehard':
+    """
+    Methods for Random Number Generator testing.
+    """
     diehard(rng_path)
 
 ################################################################################
 ################################################################################
 ################################################################################
 if method == 'cp-4':
+    """
+    Find string encrypted with single XOR.
+    """
     with open(filename, 'rb') as f:
         lines = f.read().splitlines()
     entropies = {i:entropy(unhexadecimal(line)) 
@@ -732,6 +805,9 @@ if method == 'cp-4':
     p.waitfor()
 
 if method == 'cp-8':
+    """
+    Find ciphertext that is ECB.
+    """
     with open(filename, 'rb') as f:
         lines = [unhexadecimal(line) for line in f.read().splitlines()]
     """check entropy"""
@@ -746,6 +822,9 @@ if method == 'cp-8':
             print('ECB at %d:' % i, line)
 
 if method == 'cp-11':
+    """
+    AES ECB/CBC detection oracle.
+    """
     data = b'''Give me the right to be heard, to be seen, to be loved, to be free, to be
     Everything I need, to be me, to be safe, to believe in something
     I have a right to be heard, to be seen, to be loved, to be free, to be
@@ -904,7 +983,7 @@ if method == 'cp-20':
     """
     Fixed-nonce CTR
 
-    
+    CTR with fixed nonce is basically XOR.
     """
     with open(filename, 'r') as f:
         lines = [base64.b64decode(line) for line in f.read().splitlines()]
@@ -930,6 +1009,9 @@ if method == 'cp-20':
         print(xor(line, xor_key))
 
 if method == 'cp-22':
+    """
+    Check whether a RNG seed is based on time.
+    """
     debug('Waiting random time.')
     from rng.mersenne32 import *
     time.sleep(random.randint(1, 10))
@@ -949,6 +1031,9 @@ if method == 'cp-22':
     debug('Original seed was', original_seed)
 
 if method == 'cp-23':
+    """
+    Clone a Mersenne Twister from its output.
+    """
     def unshift_left_mask_xor(mt, value, shift, mask):
         result = 0
         for i in range(0, mt.w // shift + 1):
@@ -987,6 +1072,9 @@ if method == 'cp-23':
         print('Original/Duplicate: %10d  %10d' % (mt1.randint(), mt2.randint()))
 
 if method == 'cp-24':
+    """
+    Use and break RNG XOR stream cipher.
+    """
     from rng.mersenne32 import *
     with open(filename, 'rb') as f:
         data = f.read()
@@ -1094,6 +1182,9 @@ if method == 'cp-27':
     prynt(xor(decrypted_chunks[0], decrypted_chunks[2]))
 
 if method == 'cp-31':
+    """
+    Breaking SHA1 HMAC via timing leak
+    """
     digest_length = 20 # as we're dealing with SHA1
     guess = b''
     #guess = b'fcecf3ad7e55f0e2528ece2c8e08d88d4136b8' # TODO del

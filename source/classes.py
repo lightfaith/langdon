@@ -13,6 +13,9 @@ from source.lib import *
 Vital classes
 """
 class Parallelizer():
+    """
+    This classes runs given function on given data on multiple threads.
+    """
     # TODO terminate stuff
     def __init__(self, thread_count, data, function):
         self.thread_count = thread_count
@@ -40,6 +43,9 @@ class Parallelizer():
 
 
 class ParallelizerThread(threading.Thread):
+    """
+    Thread for Parallelizer class.
+    """
     # TODO terminate stuff...
     def __init__(self, data, function):
         threading.Thread.__init__(self)
@@ -55,6 +61,9 @@ class ParallelizerThread(threading.Thread):
 
 
 class OracleResult:
+    """
+    Simple object for Oracle data passing.
+    """
     def __init__(self, payload_id, ret, output, error):
         self.payload_id = payload_id
         self.ret = ret
@@ -63,9 +72,21 @@ class OracleResult:
 
 class Oracle(threading.Thread):
     """
+    Runs given program (oracle) for given payloads providing one argument.
 
+    Internally, the argument is encoded as Base64 to prevent problems.
+    
+    Desired results (selected by validate argument) are stored in self.matching
+    list as OracleResults.
+    The validate argument takes form of 
+    (lambda id,return_value,output,error,**kwargs: bool).
+
+    Payloads are given in dictionary, so they can be processed as threads.
+    
+    Oracle can terminate on first matching result.
+
+    Time of the oracle processing is measured and stored in self.time.
     """
-
     def __init__(
             self, 
             oracle_path, 
