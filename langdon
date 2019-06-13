@@ -24,6 +24,7 @@ grep_method = None
 while True:
     # print something from previous command if needed
     if output:
+        #pdb.set_trace()
         for line in output:
             if grep_method == 'normal':
                 if grep_value in line:
@@ -48,12 +49,13 @@ while True:
         continue
 
     # is there ~~ or ~ ? that's grep, remember it
-    quote_flag = {'\'': 0, '"': 0}
+    quote_flags = {'\'': 0, '"': 0}
     for i, c in enumerate(cmd):
-        if c in quote_flag.keys():
-            quote_flag[c] ^= 0x1
+        if c in quote_flags.keys():
+            quote_flags[c] ^= 0x1
             continue
-        if c == '~':
+        if c == '~' and not any(quote_flags.values()):
+            #pdb.set_trace()
             try:
                 if cmd[i+1] == '~':
                     grep_value = cmd[i+2:].strip()
@@ -61,9 +63,12 @@ while True:
                 else:
                     raise ValueError
             except:
+                traceback.print_exc()
                 grep_value = cmd[i+1:].strip()
                 grep_method = 'normal'
             cmd = cmd[:i].strip()
+            break
+            
                 
 
     # is this just a variable name? add to print queue
