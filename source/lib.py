@@ -13,6 +13,7 @@ import sys
 #import matplotlib.pyplot as plt
 #import matplotlib.ticker as ticker
 #import random
+from source import log
 
 """
 Constants
@@ -62,6 +63,24 @@ def prynt(*args, end='\n'):
             print(*args, end=end)
     else:
         sys.stdout.buffer.write(b' '.join(args))
+
+def quit_string(x):
+    if type(x) != str:
+        return False
+    x = x.lower()
+    if x in ['quit', 'exit', 'q', 'end', ':wq']:
+        return True
+    return False
+
+
+def exit_program(signal, frame):
+    """immediate termination due to -h, bad parameter or bind() fail"""
+    if signal == -1:
+        sys.exit(0)
+
+    log.newline() # newline
+    #log.info('Killing all the threads...') # TODO
+    sys.exit(0 if signal is None else 1)
 
 def size_human(value, integer=False):
     format_string = '{0:.0f}' if integer else '{0:.3f}'

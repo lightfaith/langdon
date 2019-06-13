@@ -5,6 +5,7 @@
 #import subprocess
 #import sys
 import base64
+import string
 import threading
 import time
 from source.lib import *
@@ -124,4 +125,104 @@ class Oracle(threading.Thread):
                 if self.break_on_success:
                     break
         self.time = time.time() - start
+
+
+class Algorithm:
+    def __init__(self):
+        pass
+
+class Variable:
+    """
+    Class loads given value (from user, file, etc.)
+    and can yield different representations.
+    """
+    def __init__(self, value, constant=False):
+        self.preferred_form = self.as_escaped
+
+        # instance of algorithm
+        if isinstance(value, Algorithm):
+            self.value = value
+            self.preferred_form = self.as_algorithm
+            return
+
+        if constant:
+            # value in quotes - as string
+            if value[0] in ('\'', '"') and value[-1] in ('\'', '"'):
+                self.value = value[1:-1].encode()
+                self.preferred_form = self.as_raw
+                return
+            # starts with 'file:' - load as bytes
+            if value.startswith('file:'):
+                with open(value[5:], 'rb') as f:
+                    self.value = f.read()
+                return
+            # starts with 'base64:' - decode
+            if value.startswith('base64:'):
+                try:
+                    self.value = base64.b64decode(value[7:])
+                    printables = string.printable.encode()
+                    if all(c in printables for c in self.value):
+                        self.preferred_form = self.as_raw
+                    return
+                except:
+                    log.err('Cannot decode as Base64.')
+                    self.value = b''
+
+        # as bytes:
+        if isinstance(value, bytes):
+            self.value = value
+            printables = string.printable.encode()
+            if all(c in printables for c in self.value):
+                self.preferred_form = self.as_raw
+            return
+        # value as int
+        try:
+            self.value = int_to_bytes(int(value))
+            self.preferred_form = self.as_int
+            return
+        except:
+            pass
+        # value as hex number/stream
+        try:
+            self.value = int_to_bytes(int(value, 16))
+            self.preferred_form = self.as_hex
+            return
+        except:
+            pass
+        # finally, use as string
+        if constant:
+            self.value = value.encode()
+            self.preferred_form = self.as_raw
+            return
+            
+        log.err('Not parsed!', value)
+
+    """
+    representation methods
+    """
+    def as_int(self):
+        return str(bytes_to_int(self.value))
+
+    def as_hex(self):
+        return '0x' + ''.join('%02x' % c for c in self.value)
+
+    def as_raw(self):
+        return self.value
+
+    def as_escaped(self):
+        #  \xAA values
+        return ''.join('\\x%02x' % c for c in self.value)
+
+    def as_base64(self):
+        return base64.b64encode(self.value).decode()
+
+    def as_algorithm(self):
+        return str(self.value)
+
+    def __str__(self):
+        preferred = self.preferred_form()
+        if type(preferred) == bytes:
+            return preferred.decode()
+        return preferred
+
 
