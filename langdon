@@ -96,6 +96,20 @@ try:
     if method == 'srp':
         what = sys.argv[2]
         arg_files = sys.argv[3:]
+    if method == 'sign':
+        algorithm = sys.argv[2]
+        hash_algorithm = sys.argv[3]
+        filename = sys.argv[4]
+        exponent_file = sys.argv[5]
+        modulus_file = sys.argv[6]
+    if method == 'verify':
+        algorithm = sys.argv[2]
+        hash_algorithm = sys.argv[3]
+        filename = sys.argv[4]
+        signature_file = sys.argv[5]
+        exponent_file = sys.argv[6]
+        modulus_file = sys.argv[7]
+
 
     if method == 'analyze':
         filename = sys.argv[2]
@@ -190,7 +204,12 @@ try:
         modulus_file = sys.argv[4]
         oracle_path = sys.argv[5]
         with open(oracle_path, 'rb') as f:
-            pass        
+            pass
+    if method == 'cp-42':
+        filename = sys.argv[2]
+        private_exponent_file = sys.argv[3]
+        public_exponent_file = sys.argv[4]
+        modulus_file = sys.argv[5]
 
 except Exception as e:
     #traceback.print_exc()
@@ -237,8 +256,8 @@ except Exception as e:
     print('    %s --srp server-pubkey <private number> <multiplier> <verifier> <generator> <modulus>' % sys.argv[0])
     print('    %s --srp client-session-key <private number> <private key> <server public key> <multiplier> <generator> <scrambler> <modulus>' % sys.argv[0])
     print('    %s --srp server-session-key <private number> <client public key> <verifier> <scrambler> <modulus>' % sys.argv[0])
-    print('    %s --sign rsa <file> <private exponent> <modulus>' % sys.argv[0])
-    print('    %s --verify rsa <file> <public exponent> <modulus>' % sys.argv[0])
+    print('    %s --sign rsa sha1|md4 <file> <private exponent> <modulus>' % sys.argv[0])
+    print('    %s --verify rsa sha1|md4 <file> <signature> <public exponent> <modulus>' % sys.argv[0])
     
     # sophisticated stuff
     print('  # sophisticated attacks:')
@@ -269,7 +288,7 @@ except Exception as e:
     print('    %s --cp-27 <file> <encrypt_oracle_path> <decrypt_oracle_path>' % sys.argv[0])
     print('    %s --cp-31 <file> <oracle>' % sys.argv[0])
     print('    %s --cp-41 <ciphertext> <exponent> <modulus> <oracle>' % sys.argv[0])
-    print('    %s --cp-42 <message>' % sys.argv[0])
+    print('    %s --cp-42 <message> <private exponent> <public exponent> <modulus>' % sys.argv[0])
     sys.exit(1)
 
 # TODO --analyze
@@ -706,6 +725,97 @@ if method == 'srp':
         sys.exit(1)
     prynt(int_to_bytes(result))
 
+if method == 'sign':
+    hashes = {
+        'sha1': sha1,
+        'md4': md4,
+    }
+    if hash_algorithm not in hashes.keys():
+        print('[-] Unknown hashing algorithm.', file=sys.stderr)
+
+    elif algorithm == 'rsa':
+        # https://tools.ietf.org/html/rfc3447#section-9.2
+        asns = {
+            'sha1': b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14',
+            # TODO more
+        }
+        with open(filename, 'rb') as f:
+            data = f.read()
+        with open(exponent_file, 'rb') as f:
+            exponent = bytes_to_int(f.read())
+        with open(modulus_file, 'rb') as f:
+            modulus = bytes_to_int(f.read())
+        
+        # it is like encryption (with private key) of hash
+        # but PKCS1.5 uses special format
+
+        hash_f = hashes[hash_algorithm]
+        asn_value = asns.get(hash_algorithm)
+        if asn_value:
+            hash_value = hash_f(data)
+            block = (b'\x00\x01'
+                     + b'\xff' * (len(data) - len(asn_value) - 3)
+                     + b'\x00'
+                     + asn_value
+                     + hash_value)
+            #print(type(block), block, file=sys.stderr)
+            result = pow(bytes_to_int(block), exponent, modulus)
+            prynt(int_to_bytes(result))
+
+        else:
+            print('[-] Hashing algorithm unsupported for signing with this algorithm.', file=sys.stderr)
+    else:
+        print('[-] Unknown algorithm.', file=sys.stderr)
+
+if method == 'verify':
+    hashes = {
+        'sha1': sha1,
+        'md4': md4,
+    }
+    if hash_algorithm not in hashes.keys():
+        print('[-] Unknown hashing algorithm.', file=sys.stderr)
+
+    elif algorithm == 'rsa':
+        # https://tools.ietf.org/html/rfc3447#section-9.2
+        asns = {
+            'sha1': b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14',
+            # TODO more
+        }
+        with open(filename, 'rb') as f:
+            data = f.read()
+        with open(signature_file, 'rb') as f:
+            signature = bytes_to_int(f.read())
+        with open(exponent_file, 'rb') as f:
+            exponent = bytes_to_int(f.read())
+        with open(modulus_file, 'rb') as f:
+            modulus = bytes_to_int(f.read())
+        
+        # it is like decryption (with public key) of encrypted hash
+        # but PKCS1.5 uses special format
+
+        hash_f = hashes[hash_algorithm]
+        asn_value = asns.get(hash_algorithm)
+        if asn_value:
+            expected_hash = hash_f(data)
+            decrypted = int_to_bytes(pow(signature, exponent, modulus))
+            expected = (b'\x01' # initial \x00 is lost because of int conversion
+                        + b'\xff' * (len(data) - len(asn_value) - 3)
+                        + b'\x00'
+                        + asn_value
+                        + expected_hash)
+            #print('decrypted:', decrypted, file=sys.stderr)
+            #print('expected: ', expected, file=sys.stderr)
+            if decrypted.startswith(expected[:-len(expected_hash)]):
+                if decrypted == expected:
+                    prynt('OK.')
+                else:
+                    prynt('FAIL (invalid signature).')
+            else:
+                prynt('FAIL (bad PKCS1.5 structure).')
+        else:
+            print('[-] Hashing algorithm unsupported for signing with this algorithm.', file=sys.stderr)
+    else:
+        print('[-] Unknown algorithm.', file=sys.stderr)
 ################################################################################
 ################################################################################
 ################################################################################
@@ -1449,4 +1559,39 @@ if method == 'cp-41':
     result = (px * invmod(s, modulus)) % modulus
     prynt(int_to_bytes(result))
 
+if method == 'cp-42':
+    with open(filename, 'rb') as f:
+        data = f.read()
+    with open(private_exponent_file, 'rb') as f:
+        private_exponent = bytes_to_int(f.read())
+    with open(public_exponent_file, 'rb') as f:
+        public_exponent = bytes_to_int(f.read())
+    with open(modulus_file, 'rb') as f:
+        modulus = bytes_to_int(f.read())
 
+    # forge signature
+    asn_value = b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14'
+    hash_value = sha1(data)
+    block = (b'\x00\x01'
+             + b'\xff'
+             + b'\x00'
+             + asn_value
+             + hash_value)
+    block += b'\x00' * (128 - len(block))
+    print('block:', block, file=sys.stderr)
+    signature = pow(bytes_to_int(block), private_exponent, modulus)
+
+    # do vulnerable verification
+    expected_hash = sha1(data)
+    decrypted = int_to_bytes(pow(signature, public_exponent, modulus))
+    r = re.compile(b'\x01\xff+?\x00.{15}(.{20})', re.DOTALL) # initial \x00 is lost because of int conversion
+    m = r.match(decrypted)
+    print('decrypted:', decrypted, file=sys.stderr)
+    if not m:
+        prynt('FAIL (bad PKCS1.5 structure).')
+    else:
+        if m.group(1) == expected_hash:
+            prynt('OK.')
+        else:
+            prynt('FAIL (invalid signature).')
+    
