@@ -58,7 +58,6 @@ try:
         a_file = sys.argv[2]
         b_file = sys.argv[3]
         
-
     if method == 'xorfiles':
         filename1 = sys.argv[2]
         filename2 = sys.argv[3]

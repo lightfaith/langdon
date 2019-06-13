@@ -107,11 +107,3 @@ def int_to_bytes(x, length=None, byteorder='big'):
 def bytes_to_int(x, byteorder='big'):
     return int.from_bytes(x, byteorder=byteorder)
 
-''' # unused
-def bytes_to_int(bs):
-    result = 0
-    for b in bs:
-        result <<= 8
-        result += int(b)
-    return result
-'''
