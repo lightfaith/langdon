@@ -77,6 +77,7 @@ while True:
         if isinstance(v, Algorithm):
             v.detail()
         else:
+            # TODO if to_file, use as_raw() only and without other garbage
             output.append('Bin:    ' + binary(v.as_raw()).decode())
             output.append('Int:    ' + v.as_int())
             output.append('Hex:    ' + v.as_hex())
@@ -118,6 +119,48 @@ while True:
         for k, v in variables.items():
             output.append('%*s  %s' % (k_len, k, str(v)))
             
+    if cmd.startswith('export '):
+        parts = cmd[7:].split()
+        format_f = None
+        if len(parts) == 2:
+            variable = parts[0]
+            filename = parts[1]
+            format_f = lambda x: x.as_raw()
+        elif len(parts) == 3:
+            variable = parts[0]
+            filename = parts[1]
+            formats = {
+                'raw': lambda x: x.as_raw(),
+                'int': lambda x: x.as_int(),
+                'hex': lambda x: x.as_hex(),
+                'escaped': lambda x: x.as_escaped(),
+                'base64': lambda x: x.as_base64(),
+            }
+            format_f = formats.get(parts[2])
+        else:
+            log.err('Invalid arguments.')
+
+        if format_f:
+            if variable  == 'all':
+                for k,v in variables.items():
+                    with open('%s_%s' % (filename, k), 'wb') as f:
+                        to_output = format_f(v)
+                        try:
+                            f.write(to_output)
+                        except:
+                            f.write(to_output.encode())
+            elif variable in variables.keys():
+                with open(filename, 'wb') as f:
+                    to_output = format_f(variables[variable])
+                    try:
+                        f.write(to_output)
+                    except:
+                        f.write(to_output.encode())
+            else:
+                log.err('No such variable.')
+            
+            
+
 
     #################################
     # basic methods
