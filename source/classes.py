@@ -257,7 +257,6 @@ class Variable:
             return preferred.decode()
         return preferred
         
-
     def __str__(self):
         preferred = self.preferred_form()
         if type(preferred) == bytes:
