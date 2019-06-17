@@ -1,370 +1,230 @@
 #!/usr/bin/python3
-"""
-This script takes filename as an argument and tries every known
-cryptanalysis method on it.
-"""
 
-import subprocess
-import sys
-import base64
-import threading
+import os
+import pdb
 import re
+import sys
+import gnureadline
+import traceback
+from collections import OrderedDict
+
+from source import lib
+from source import log
+from source.classes import Algorithm, Variable
+from source.functions import *
 
 """
-Standard functions
+deal with commands
 """
-def debug(*args):
-    if debug_flag:
-        print('\033[90m[.]', *args, '\033[0m')
+variables = OrderedDict()
+output = []
+grep_value = None
+grep_method = None
 
-def run_command(command):
-    p = subprocess.Popen(command, 
-                         shell=True, 
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
-    return (p.returncode, out, err)
+while True:
+    # print something from previous command if needed
+    if output:
+        #pdb.set_trace()
+        for line in output:
+            if grep_method == 'normal':
+                if grep_value in line:
+                    prynt(line)
+            elif grep_method == 'regex':
+                if re.search(grep_value, line):
+                    prynt(line)
+            else:
+                prynt(line)
+        output = []
+    grep_value = None
+    grep_method = None
 
-def prynt(*args, end='\n'):
+    # get command
     try:
-        print(*[(arg.decode() 
-                 if (type(arg) == bytes)
-                 else arg)
-                for arg in args], end=end)
-    except:
-        print(*args, end=end)
-
-"""
-Vital classes
-"""
-class Parallelizer():
-    # TODO terminate stuff
-    def __init__(self, thread_count, data, function):
-        self.thread_count = thread_count
-        self.data = data
-        self.function = function
-        self.threads = []
-        self.results = []
-
-    def start(self):
-        chunk_size = len(self.data) // self.thread_count
-        if not chunk_size:
-            chunk_size = 1
-        indexed_data = list(enumerate(self.data, 1))
-        data_chunks = [indexed_data[i:i+chunk_size] 
-                       for i in range(0, len(indexed_data), chunk_size)]
-        self.threads = [ParallelizerThread(data_chunks[i], self.function)
-                        for i in range(len(data_chunks))]
-        for t in self.threads:
-            t.start()
-
-    def waitfor(self):
-        for t in self.threads:
-            t.join()
-            self.results += t.results
-
-
-
-class ParallelizerThread(threading.Thread):
-    # TODO terminate stuff...
-    def __init__(self, data, function):
-        threading.Thread.__init__(self)
-        self.data = data
-        self.function = function
-        self.results = []
-
-    def run(self):
-        indices, samples = zip(*self.data)
-        print('Running thread (samples %d through %d).' 
-              % (indices[0], indices[-1]))
-        self.results = self.function(indices, samples)
-
-
-class Oracle(threading.Thread):
-    """
-
-    """
-    def __init__(self, oracle_path, payloads):
-        threading.Thread.__init__(self)
-        self.oracle_path = oracle_path
-        self.payloads = payloads
-        self.matching = []
-
-    def run(self):
-        """
-        sends payloads to given oracle, returns True if Oracle is happy
-        The payload is base64-encoded
-        """
-        for byte_value, payload in self.payloads.items():
-            #print('Oracle testing', byte_value)
-            r, _, _ = run_command('%s %s' % (oracle_path, 
-                                             base64.b64encode(payload).decode()))
-            if r == 0:
-                self.matching.append(byte_value)
-                break
-
-"""
-Crypto functions
-"""
-def hex(data):
-    return b''.join(b'%02x' % c for c in data)
-
-def unhex(stream):
-    return b''.join(b'%c' % int(stream[i:i+2], 16) 
-                    for i in range(0, len(stream), 2))
-
-def xor(data1, data2):
-    return b''.join(b'%c' % (data1[i % len(data1)] ^ data2[i % len(data2)]) 
-                    for i in range(max(len(data1), len(data2))))
-
-def bruteforce_xor(data1, keys):
-    for key in keys:
-        yield xor(data1, key)
-
-def dict_success(sample, min_word_match=1, min_word_len=1): # TODO or different constants?
-    match_count = 0
-    words = [w for w in re.sub(b'[^a-z]+', b' ', sample.lower()).split()
-             if len(w) >= min_word_len]
-    if not words:
-        return 0
-    found = [w for w in words if w in wordlist]
-    if len(found) < min_word_match:
-        return 0
-    success = len(found) / len(words)
-    return success
-
-def hamming(data1, data2):
-    result = 0
-    for i in range(max(len(data1), len(data2))):
-        c1 = data1[i] if i < len(data1) else 0
-        c2 = data2[i] if i < len(data2) else 0
-        xored = c1 ^ c2
-        for bit in range(8):
-            result += (xored >> bit) & 0x1
-    return result
-        
-"""
-Specific functions (e.g. print all ROTs or the valid one)
-"""
-def single_xor_print(data):
-    results = bruteforce_xor(data, [b'%c' % i for i in range(256)])
-    for byte, result in enumerate(results):
-        if wordlist:
-            if dict_success(result, 
-                            min_word_match=3, 
-                            min_word_len=3) > 0.2:
-                print('0x%02x: ' % byte, end='')
-                prynt(result)
-        else:
-            print(result)
-
-
-"""
-Cryptopals challenges
-"""
-def cp_1_4_function(indices, lines):
-    for index, line in zip(indices, lines):
-        unhexed = unhex(line)
-        results = bruteforce_xor(unhexed, [b'%c' % i for i in range(256)])
-        for byte, result in enumerate(results):
-            if dict_success(result, min_word_match=3, min_word_len=3)>0.8:
-                prynt('%d: 0x%02x:' % (index, byte), result)
-    return []
-
-
-
-
-"""
-Load arguments
-"""
-method = ''
-filename = ''
-try:
-    #filename = [a for a in sys.argv[1:] if not a.startswith('--')][0]
-    debug_flag = '--debug' in sys.argv
-    debug_flag = True # TODO delete after testing
-    method = sys.argv[1][2:]
-    if method == 'hex':
-        filename = sys.argv[2]
-    if method == 'unhex':
-        payload = sys.argv[2]
-    if method == 'xorfiles':
-        filename1 = sys.argv[2]
-        filename2 = sys.argv[3]
-    if method == 'brute-single-xor':
-        filename = sys.argv[2]
-        try:
-            with open(sys.argv[3], 'rb') as f:
-                wordlist = f.read().splitlines()
-        except:
-            wordlist = None
-    if method == 'cp-1-4':
-        filename = sys.argv[2]
-        with open(sys.argv[3], 'rb') as f:
-            wordlist = f.read().splitlines()
-    if method == 'hamming':
-        filename1 = sys.argv[2]
-        filename2 = sys.argv[3]
-    if method == 'cbc-padding':
-        filename = sys.argv[2]
-        blocksize = int(sys.argv[3])
-        oracle_path = sys.argv[4]
-        with open(oracle_path, 'rb') as f:
-            pass        
-except:
-    #print('[-] Usage: %s <filename>' % sys.argv[0])
-    print('[-] Usage:')
-    print('    %s --hex <file>' % sys.argv[0])
-    print('    %s --unhex faceb00cdeadbeef' % sys.argv[0])
-    print('    %s --xorfiles <file1> <file2>' % sys.argv[0])
-    print('    %s --brute-single-xor <file> [<wordlist>]' % sys.argv[0])
-    print('    %s --cp-1-4 <file> <wordlist>' % sys.argv[0])
-    print('    %s --hamming <file1> <file2>' % sys.argv[0])
-    print('    %s --cbc-padding <file> <blocksize> <oracle_path>' % sys.argv[0])
-    sys.exit(1)
-
-# TODO --analyze
-# TODO file, entropy, plaintext?
-# TODO caesar, freqanal etc.
-
-# TODO findmyhash
-
-# TODO stream cipher reuse - 2 XORed with same key...
-# ECB block reordering - we can use input to create separated desired data (like admin=1)
-# ECB key reuse - add unencrypted stuff in the middle of stuff we can encrypt
-
-# TODO hash extension
-# https://blog.skullsecurity.org/2012/everything-you-need-to-know-about-hash-length-extension-attacks
-
-
-if method == 'hex':
-    with open(filename, 'rb') as f:
-        data = f.read()
-    prynt(hex(data))
-
-if method == 'unhex':
-    prynt(unhex(payload), end='')
-
-if method == 'xorfiles':
-    with open(filename1, 'rb') as f:
-        data1 = f.read()
-    with open(filename2, 'rb') as f:
-        data2 = f.read()
-    prynt(xor(data1, data2), end='')
-
-if method == 'brute-single-xor':
-    with open(filename, 'rb') as f:
-        data = f.read()
-    single_xor_print(data)
-
-if method == 'cp-1-4':
-    with open(filename, 'rb') as f:
-        lines = f.read().splitlines()
-    """run XOR and dict analysis in parallel"""
-    p = Parallelizer(8, lines, cp_1_4_function)
-    p.start()
-    p.waitfor()
+        cmd = input(log.COLOR_PURPLE + '*** ' + log.COLOR_NONE).strip()
+    except EOFError: # Ctrl+D -> quit
+        log.newline()
+        lib.exit_program(None, None)
     
-if method == 'hamming':
-    with open(filename1, 'rb') as f:
-        data1 = f.read()
-    with open(filename2, 'rb') as f:
-        data2 = f.read()
-    print(hamming(data1, data2))
-#############################################################
-#############################################################
-#############################################################
+    if len(cmd) == 0:
+        continue
 
-if method == 'cbc-padding':
-    """
-    CBC Padding Oracle Attack
-    """
-    """load data"""
-    with open(filename, 'rb') as f:
-        input_data = f.read()
-    """create blocks of blocksize"""
-    blocks = [input_data[i:i+blocksize] 
-              for i in range(0, len(input_data), blocksize)]
-    # TODO test if blocks have same len
+    # is there ~~ or ~ ? that's grep, remember it
+    quote_flags = {'\'': 0, '"': 0}
+    for i, c in enumerate(cmd):
+        if c in quote_flags.keys():
+            quote_flags[c] ^= 0x1
+            continue
+        if c == '~' and not any(quote_flags.values()):
+            #pdb.set_trace()
+            try:
+                if cmd[i+1] == '~':
+                    grep_value = cmd[i+2:].strip()
+                    grep_method = 'regex'
+                else:
+                    raise ValueError
+            except:
+                traceback.print_exc()
+                grep_value = cmd[i+1:].strip()
+                grep_method = 'normal'
+            cmd = cmd[:i].strip()
+            break
+            
+                
 
-    final_plaintexts = []
-    """run through blocks in reverse order"""
-    for block_index, block in enumerate(blocks[::-1]):
-        block_plaintext = b''
+    # is this just a variable name? add to print queue
+    if cmd in variables.keys():
+        v = variables[cmd]
+        if isinstance(v, Algorithm):
+            v.detail()
+        else:
+            length = len(v.as_raw())
+            if length < 256:
+                output.append('Bin:    ' + v.as_binary())
+            if length < 4096:
+                output.append('Int:    ' + v.as_int())
+            if length < 4096:
+                output.append('Hex:    ' + v.as_hex())
+            output.append('Raw:    ' + str(v.as_raw()))
+            output.append('Base64: ' + v.as_base64())
+        continue
+    
+    # or is this an assign?
+    variable_name = None
+    variable_match = re.match('^([A-Za-z0-9_-]+) *= *(.*)$', cmd)
+    if variable_match:
+        variable_name = variable_match.group(1).strip()
+        cmd = variable_match.group(2).strip()
+    
+
+    # run following commands, return result into variable if defined
+    #     else store in output and print on the next iteration
+    # if no command matches, use the content as variable value (constant)
+
+
+
+    # quit?
+    if lib.quit_string(cmd):
+        log.warn('Do you really want to quit? ', new_line=False)
+        if lib.positive(input()):
+            lib.exit_program(None, None)
+        continue
+
+    # test
+    if cmd.startswith('test'):
+        #venn(events, 'category == auth', 'severity == critical')
+        list_overview(by_db_id, 'source', 'score >= 5')
+        
+        pass
+        
+    # list variables
+    if cmd in ('var', 'vars', 'variables'):
+        k_len = max([0] + [len(k) for k in variables.keys()])
+        for k, v in variables.items():
+            output.append('%*s  %s' % (k_len, k, v.short()))
+            
+    if cmd.startswith('export '):
+        parts = cmd[7:].split()
+        format_f = None
+        if len(parts) == 2:
+            variable = parts[0]
+            filename = parts[1]
+            format_f = lambda x: x.as_raw()
+        elif len(parts) == 3:
+            variable = parts[0]
+            filename = parts[1]
+            formats = {
+                'raw': lambda x: x.as_raw(),
+                'int': lambda x: x.as_int(),
+                'hex': lambda x: x.as_hex(),
+                'bin': lambda x: x.as_binary(),
+                'escaped': lambda x: x.as_escaped(),
+                'base64': lambda x: x.as_base64(),
+            }
+            format_f = formats.get(parts[2])
+        else:
+            log.err('Invalid arguments.')
+
+        if format_f:
+            if variable  == 'all':
+                for k,v in variables.items():
+                    with open('%s_%s' % (filename, k), 'wb') as f:
+                        to_output = format_f(v)
+                        try:
+                            f.write(to_output)
+                        except:
+                            f.write(to_output.encode())
+            elif variable in variables.keys():
+                with open(filename, 'wb') as f:
+                    to_output = format_f(variables[variable])
+                    try:
+                        f.write(to_output)
+                    except:
+                        f.write(to_output.encode())
+            else:
+                log.err('No such variable.')
+            
+            
+
+
+    #################################
+    # basic methods
+    #################################
+    # xor with any number of arguments
+    elif cmd.startswith('xor '):
+        arguments = cmd[4:].split()
+        if arguments:
+            result = variables[arguments[0]].as_raw()
+            for a in arguments[1:]:
+                if a in variables.keys():
+                    result = xor(result, variables[a].as_raw())
+                else:
+                    log.err('The \'%s\' is not a variable.' % a)
+            if variable_name:
+                variables[variable_name] = Variable(result)
+            else:
+                output.append(result)
+        else:
+            log.err('You must provide arguments')
+    
+    # bruteforce xor of given variable
+    elif cmd.startswith('brute-single-xor '):
+        v = cmd[17:].strip()
+        if v in variables.keys():
+            source = variables[v]
+            for b in range(256):
+                v2 = '%s_%02x' % (v, b)
+                variables[v2] = Variable(xor(source.as_raw(), b'%c' % b))
+        else:
+            log.err('No such variable.')
+
+    # check wordlist compatibility for all variables (except the wordlist)
+    elif cmd.startswith('wordlist '):
         try:
-            previous_block = blocks[::-1][block_index + 1]
-            debug('Previous block:', 
-                  ' '.join('%02x' % c for c in previous_block))
+            wordlist_name = cmd[9:].strip()
+            w = variables[wordlist_name].as_raw().split()
+            variable_max_length = max([0] + [len(k) for k in variables.keys()])
+            log.info('  %*s  Score' % (variable_max_length, 'Variable'))
+            for k,v in variables.items():
+                if k == wordlist_name:
+                    continue
+                success = dict_success(v.as_raw(), w, min_word_len=2)
+                if success >= 0.8:
+                    log.ok('  %*s:  %0.3f' % (variable_max_length, k, success))
+                else:
+                    log.info('  %*s:  %0.3f' % (variable_max_length, k, success))
+                    
         except:
-            previous_block = None
-            debug('Previous block: None')
-        
-        debug('Actual block:  ', ' '.join('%02x' % c for c in block))
-        
-        """for each byte in block in reverse order"""
-        for byte_index in range(blocksize-1, -1, -1):
-            debug('Dealing with byte #%d (%02x)' 
-                  % (byte_index, block[byte_index]))
-
-            """prepare payloads for bruteforce"""
-            valid_padding_byte = -1
-            payloads = {}
-            for bf_byte in range(256):
-                """prepare fake previous block - start with zeros"""
-                fake_prev = b'\x00' * (blocksize - len(block_plaintext) - 1)
-                """add bruteforced byte"""
-                fake_prev += b'%c' % bf_byte
-                """
-                then add values so xor with block gives expected padding values
-                skipped on the first run
-                """
-                for byte_pos, plaintext_byte in enumerate(block_plaintext):
-                    fake_prev += b'%c' % (plaintext_byte
-                                          ^ (len(block_plaintext) + 1) # expected padding
-                                          ^ (previous_block[blocksize-len(block_plaintext)+byte_pos]
-                                             if previous_block
-                                             else 0))
-                """add the block and test it"""
-                payloads[bf_byte] = fake_prev + block
-            """bruteforce the padding"""
-            #oracle_count = 1 # use this for debug
-            oracle_count = 16 # use this for speed
-            oracles = [Oracle(oracle_path, {k:v for k,v in payloads.items() 
-                                            if (k // (len(payloads)/oracle_count) 
-                                                == i)})
-                       for i in range(oracle_count)]
-            for oracle in oracles:
-                oracle.start()
-            for oracle in oracles:
-                oracle.join()
-                if oracle.matching:
-                    valid_padding_byte = oracle.matching[0]
-            
-            '''
-            #print('Will test payload:', payload)
-            #print('Sending payload (%02x) to oracle...' % bf_byte)
-            if cbc_padding_oracle(payload):
-                valid_padding_byte = bf_byte
-                break
-            '''
-            
-            if valid_padding_byte == -1:
-                debug('Failed to find valid padding byte!')
-
-            debug('Found valid padding byte:', valid_padding_byte)
-            """compute plaintext byte from padding byte"""
-            block_plaintext = (b'%c' % ((len(block_plaintext) + 1) # expected padding
-                                        ^ (previous_block[byte_index] 
-                                           if previous_block 
-                                           else 0) # byte of previous block
-                                        ^ valid_padding_byte) # 
-                               + block_plaintext)
-            debug('New block plaintext:', block_plaintext)
-        final_plaintexts.append(block_plaintext)
-    try:
-        print('Final plaintext:', (b''.join(final_plaintexts[::-1])).decode())
-    except:
-        print('Final plaintext:', b''.join(final_plaintexts[::-1]))
-
-    #print(cbc_padding_oracle(base64.b64decode(b'4ET5cY0cfSnomIvhYPc0+Q==')))
+            traceback.print_exc()
+            log.err('No such wordlist.')
+    ######################################
+    # constant value OR bad command
+    ######################################
+    else:
+        if variable_name:
+            v = Variable(cmd, constant=True)
+            variables[variable_name] = v
+            log.info(variable_name, '=', v.short())
+        else:
+            log.warn('Unknown command.')
+############
 
