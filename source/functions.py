@@ -70,10 +70,11 @@ def bruteforce_xor(data1, keys):
     for key in keys:
         yield xor(data1, key)
 
-def dict_success(sample, wordlist, min_word_match=1, min_word_len=1): # TODO or different constants?
+def dict_success(sample, wordlist=None, min_word_match=1, min_word_len=1): # TODO or different constants?
     """
     Return how many of given words are actually in wordlist (as fraction).
     """
+    wordlist = wordlist or []
 
     match_count = 0
     words = [w for w in re.sub(b'[^a-z]+', b' ', sample.lower()).split()
@@ -84,6 +85,7 @@ def dict_success(sample, wordlist, min_word_match=1, min_word_len=1): # TODO or 
     if len(found) < min_word_match:
         return 0
     success = len(found) / len(words)
+    #print(found)
     return success
 
 def hamming(data1, data2):

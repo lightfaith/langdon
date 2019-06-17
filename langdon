@@ -10,7 +10,7 @@ from collections import OrderedDict
 
 from source import lib
 from source import log
-from source.classes import Algorithm, Variable
+from source.classes import Algorithm, Variable, Parallelizer
 from source.functions import *
 
 """
@@ -45,7 +45,7 @@ while True:
         log.newline()
         lib.exit_program(None, None)
     
-    if len(cmd) == 0:
+    if len(cmd) == 0 or cmd.startswith('#'):
         continue
 
     # is there ~~ or ~ ? that's grep, remember it
@@ -63,7 +63,6 @@ while True:
                 else:
                     raise ValueError
             except:
-                traceback.print_exc()
                 grep_value = cmd[i+1:].strip()
                 grep_method = 'normal'
             cmd = cmd[:i].strip()
@@ -115,7 +114,10 @@ while True:
         list_overview(by_db_id, 'source', 'score >= 5')
         
         pass
-        
+    
+    ##########################
+    # framework control
+    ##########################
     # list variables
     if cmd in ('var', 'vars', 'variables'):
         k_len = max([0] + [len(k) for k in variables.keys()])
@@ -169,10 +171,109 @@ while True:
     #################################
     # basic methods
     #################################
+    # check wordlist compatibility for all variables (except the wordlist)
+    elif cmd.startswith('wordlist '):
+        try:
+            wordlist_name = cmd[9:].strip()
+            w = variables[wordlist_name].as_raw().split()
+            variable_max_length = max([0] + [len(k) for k in variables.keys()])
+
+            thread_count = 1 if len(variables) < 8 else 8
+
+            def wordlist_worker(indices, samples, data_f = lambda x: x, **kwargs):
+                for i, x in zip(indices, samples):
+                    success = dict_success(data_f(x), **kwargs)
+                    if success >= 0.8:
+                        log.ok('  %s:  %0.3f  %s' % (x[0], success, x[1].short()))
+                    elif success > 0:
+                        log.info('  %s:  %0.3f' % (x[0], success))
+                return [] # not needed
+
+            #log.info('  %*s  Score' % (variable_max_length, 'Variable'))
+            p = Parallelizer(thread_count, 
+                             [(k, v) for k,v in variables.items() if k != wordlist_name], 
+                             wordlist_worker,
+                             {'data_f': lambda x: x[1].as_raw(),
+                              'wordlist': w,
+                              'min_word_match': 3,
+                              'min_word_len': 3,
+                             }
+                            )
+            p.start()
+            p.waitfor()
+            '''
+            for k,v in variables.items():
+                if k == wordlist_name:
+                    continue
+                success = dict_success(v.as_raw(), w, min_word_match=3, min_word_len=3)
+                if success >= 0.8:
+                    log.ok('  %*s:  %0.3f  %s' % (variable_max_length, k, success, v.short()))
+                elif success > 0:
+                    log.info('  %*s:  %0.3f' % (variable_max_length, k, success))
+            '''     
+        except:
+            traceback.print_exc()
+            log.err('No such wordlist.')
+
+    # compute entropy for given variable / all variables
+    elif cmd.startswith('entropy'):
+        parts = cmd.split()
+        if len(parts) > 1:
+            keys = parts[1:]
+        else:
+            keys = variables.keys()
+        variable_max_length = max([0] + [len(k) for k in keys])
+        for k in keys:
+            v = variables[k]
+            ent = entropy(v.as_raw())
+            comment = ''
+            if ent > 0.998:
+                comment = ' (probably eccrypted)'
+            elif ent > 0.95:
+                comment = ' (probably compressed)'
+            log.info('  %*s  %0.3f%s' % (variable_max_length, k, ent, comment))
+    
+    # compute hamming distance of 2 given variables / 1-N / M-N
+    elif cmd.startswith('hamming'):
+        parts = cmd.split()
+        pairs = []
+        # detect variant, prepare pairs
+        if len(parts) == 3:
+            pairs.append((parts[1], parts[2]))
+        elif len(parts) == 2 and parts[1] in variables.keys():
+            for k in variables.keys():
+                if k == parts[1]:
+                    continue
+                pairs.append((parts[1], k))
+        elif len(parts) == 1:
+            for k1 in variables.keys():
+                for k2 in variables.keys():
+                    if k1 == k2:
+                        continue
+                    if (k2, k1) not in pairs:
+                        pairs.append((k1, k2))
+        # print
+        if len(pairs) == 1:
+            try:
+                log.info(hamming(variables[pairs[0][0]].as_raw(), 
+                                 variables[pairs[0][1]].as_raw()))
+            except:
+                traceback.print_exc()
+                log.err('No such variable.')
+        elif pairs:
+            pair_names = ['%s-%s' % (a, b) for a, b in pairs]
+            max_pair_name_length = max([0] + [len(x) for x in pair_names])
+            for (a, b), name in zip(pairs, pair_names):
+                distance = hamming(variables[a].as_raw(), variables[b].as_raw())
+                log.info('%*s:  %d' % (max_pair_name_length, name, distance))
+
+    ######################################
+    # XOR
+    ######################################
     # xor with any number of arguments
     elif cmd.startswith('xor '):
         arguments = cmd[4:].split()
-        if arguments:
+        if arguments and arguments[0] in variables.keys():
             result = variables[arguments[0]].as_raw()
             for a in arguments[1:]:
                 if a in variables.keys():
@@ -184,7 +285,7 @@ while True:
             else:
                 output.append(result)
         else:
-            log.err('You must provide arguments')
+            log.err('You must provide existing variables as arguments.')
     
     # bruteforce xor of given variable
     elif cmd.startswith('brute-single-xor '):
@@ -197,25 +298,6 @@ while True:
         else:
             log.err('No such variable.')
 
-    # check wordlist compatibility for all variables (except the wordlist)
-    elif cmd.startswith('wordlist '):
-        try:
-            wordlist_name = cmd[9:].strip()
-            w = variables[wordlist_name].as_raw().split()
-            variable_max_length = max([0] + [len(k) for k in variables.keys()])
-            log.info('  %*s  Score' % (variable_max_length, 'Variable'))
-            for k,v in variables.items():
-                if k == wordlist_name:
-                    continue
-                success = dict_success(v.as_raw(), w, min_word_len=2)
-                if success >= 0.8:
-                    log.ok('  %*s:  %0.3f' % (variable_max_length, k, success))
-                else:
-                    log.info('  %*s:  %0.3f' % (variable_max_length, k, success))
-                    
-        except:
-            traceback.print_exc()
-            log.err('No such wordlist.')
     ######################################
     # constant value OR bad command
     ######################################

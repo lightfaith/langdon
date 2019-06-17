@@ -5,10 +5,13 @@
 #import subprocess
 #import sys
 import base64
+import pdb
 import string
 import threading
 import time
+import traceback
 from source.lib import *
+from source.functions import binary
 
 """
 Vital classes
@@ -18,12 +21,13 @@ class Parallelizer():
     This classes runs given function on given data on multiple threads.
     """
     # TODO terminate stuff
-    def __init__(self, thread_count, data, function):
+    def __init__(self, thread_count, data, function, kwargs):
         self.thread_count = thread_count
         self.data = data
         self.function = function
         self.threads = []
         self.results = []
+        self.kwargs = kwargs
 
     def start(self):
         chunk_size = len(self.data) // self.thread_count
@@ -32,8 +36,9 @@ class Parallelizer():
         indexed_data = list(enumerate(self.data, 1))
         data_chunks = [indexed_data[i:i+chunk_size] 
                        for i in range(0, len(indexed_data), chunk_size)]
-        self.threads = [ParallelizerThread(data_chunks[i], self.function)
+        self.threads = [ParallelizerThread(data_chunks[i], self.function, self.kwargs)
                         for i in range(len(data_chunks))]
+        #print(self.threads)
         for t in self.threads:
             t.start()
 
@@ -48,17 +53,19 @@ class ParallelizerThread(threading.Thread):
     Thread for Parallelizer class.
     """
     # TODO terminate stuff...
-    def __init__(self, data, function):
+    def __init__(self, data, function, kwargs):
         threading.Thread.__init__(self)
         self.data = data
         self.function = function
         self.results = []
+        self.kwargs = kwargs
 
     def run(self):
         indices, samples = zip(*self.data)
-        print('Running thread (samples %d through %d).' 
+        log.info('Running thread (samples %d through %d).' 
               % (indices[0], indices[-1]))
-        self.results = self.function(indices, samples)
+        #pdb.set_trace()
+        self.results = self.function(indices, samples, **(self.kwargs))
 
 
 class OracleResult:
@@ -158,8 +165,12 @@ class Variable:
                         self.value = f.read().encode()
                         self.preferred_form = self.as_raw
                 except:
-                    with open(value[5:], 'rb') as f:
-                        self.value = f.read()
+                    try:
+                        with open(value[5:], 'rb') as f:
+                            self.value = f.read()
+                    except FileNotFoundError:
+                        log.err('No such file.')
+                        self.value = ''
                 return
             # starts with 'base64:' - decode
             if value.startswith('base64:'):
