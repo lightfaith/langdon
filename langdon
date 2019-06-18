@@ -10,7 +10,7 @@ from collections import OrderedDict
 
 from source import lib
 from source import log
-from source.classes import Algorithm, Variable, Parallelizer
+from source.classes import *
 from source.functions import *
 
 """
@@ -165,9 +165,25 @@ while True:
             else:
                 log.err('No such variable.')
             
-            
+    elif cmd.startswith('edit '):
+        # algorithm param editation
+        try:
+            variable, param = tuple(cmd[5:].split('.'))
+            v = variables[variable]
+            old_data = v.params[param].as_raw()
+            new_data = edit_in_file(old_data)
+            if isinstance(v, SymmetricCipher):
+                if param in ('plaintext', 'ciphertext'):
+                    log.info('Trying to update key from %s change...' % param)
+                    v.update_key(param, new_data)
 
+            else:
+                log.warn('Algorithm may be inconsistent now...')
+        except:
+            traceback.print_exc()
+            log.err('You must specify variable of algorithm and the parameter.')
 
+    
     #################################
     # basic methods
     #################################
@@ -206,16 +222,6 @@ while True:
                             )
             p.start()
             p.waitfor()
-            '''
-            for k,v in variables.items():
-                if k == wordlist_name:
-                    continue
-                success = dict_success(v.as_raw(), w, min_word_match=3, min_word_len=3)
-                if success >= 0.8:
-                    log.ok('  %*s:  %0.3f  %s' % (variable_max_length, k, success, v.short()))
-                elif success > 0:
-                    log.info('  %*s:  %0.3f' % (variable_max_length, k, success))
-            '''     
         except:
             traceback.print_exc()
             log.err('No such wordlist.')
@@ -233,7 +239,7 @@ while True:
             ent = entropy(v.as_raw())
             comment = ''
             if ent > 0.998:
-                comment = ' (probably eccrypted)'
+                comment = ' (probably encrypted)'
             elif ent > 0.95:
                 comment = ' (probably compressed)'
             log.info('  %*s  %0.3f%s' % (variable_max_length, k, ent, comment))
@@ -272,6 +278,37 @@ while True:
                 distance = hamming(variables[a].as_raw(), variables[b].as_raw())
                 log.info('%*s:  %d' % (max_pair_name_length, name, distance))
 
+    elif cmd.startswith('encrypt '):
+        v = cmd[8:].strip()
+        try:
+            result = variables[v].encrypt()
+            if variable_name:
+                variables[variable_name] = Variable(result)
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('You must specify an algorithm variable.')
+
+    elif cmd.startswith('decrypt '):
+        v = cmd[8:].strip()
+        try:
+            result = variables[v].decrypt()
+            if variable_name:
+                print('adding into variable', variable_name)
+                variables[variable_name] = Variable(result)
+            else:
+                output.append(result)
+        except:
+            log.err('You must specify an algorithm variable.')
+
+    elif cmd.startswith('hexdump '):
+        v = cmd[8:].strip()
+        try:
+            for line in hexdump(variables[v].as_raw()):
+                print(line)
+        except:
+            log.err('You must specify a variable.')
     ######################################
     # XOR
     ######################################
@@ -304,11 +341,17 @@ while True:
             log.err('No such variable.')
 
     elif cmd.startswith('break-xor '):
+        """
+        Returns XORAlgorithm instance.
+        """
         parts = cmd.split()
+        result = None
+
         try:
-            variable = parts[1]
-            wordlist = parts[2]
+            data = variables[parts[1]].as_raw()
+            language = parts[2]
             # get normalized hamming for keysizes, smallest should be correct
+            distances = {}
             for keysize in range(2, min(40, len(data))):
                 tmp_distance = 0
                 sample_count = 0
@@ -316,16 +359,58 @@ while True:
                 for i in range(0, len(data) - keysize, keysize):
                     sample1 = data[i:i+keysize]
                     sample2 = data[i+keysize:i+2*keysize]
-                    sample_count += 1 
+                    sample_count += 1
                     tmp_distance += hamming(sample1, sample2)
                     distances[keysize] = tmp_distance / sample_count / keysize
+            for k,v in distances.items():
+                print(k, v)
             best = sorted(distances.items(), key=lambda x: x[1])
             
-            for keysize, distance in best.items()[:2]:
+            # use 2 best distances and try to get characters based on best frequency
+            for keysize, distance in best[:2]:
                 key = b''
                 debug('Trying keysize %d (distance %.3f)' % (keysize, distance))
+                for offset in range(keysize):
+                    transposed = data[offset::keysize]
+                    xors = list(bruteforce(transposed, 
+                                           [b'%c' % c for c in range(256)],
+                                           lambda a, b: xor(a, b)))
+                    best = sorted(xors, key=lambda x: get_frequency_error(x, language))
+                    #for i in range(3):
+                    #    print(get_frequency_error(best[i], language))
+                    key += b'%c' % (xors.index(best[0]))
+                    #for i in range(3):
+                    #    print(get_frequency_error(best[i], language))
+                if not result:
+                    result = XORAlgorithm(key=Variable(key),
+                                          ciphertext=Variable(data),
+                                          plaintext=Variable(xor(data, key)))
+                print('Key for keysize %d:' % keysize, key)
+                print('Deciphered message:')
+                prynt(xor(data, key))
+            if variable_name:
+                #variables[variable_name] = Variable(result)
+                variables[variable_name] = result
+            else:
+                output.append(result)
         except:
-            log.err('You must define variable and wordlist.')
+            traceback.print_exc()
+            log.err('You must define variable and language.')
+
+    # XORAlgorithm - create instance
+    # Usage: x = XOR key=k plaintext=p ciphertext=c
+    elif cmd.startswith('XOR '):
+        try:
+            params = parse_algorithm_params(cmd[4:], variables)
+            if variable_name:
+                variables[variable_name] = XORAlgorithm(**params)
+            else:
+                output.append(result)
+
+        except:
+            traceback.print_exc()
+            log.err('Specify known parameters and variables holding the values.')
+
     ######################################
     # constant value OR bad command
     ######################################

@@ -6,6 +6,7 @@ Standard functions.
 import signal
 import subprocess
 import sys
+import tempfile
 #import base64
 #import threading
 #import re
@@ -75,6 +76,18 @@ def quit_string(x):
         return True
     return False
 
+def edit_in_file(data):
+    """
+    Runs vim and allows the user to alter data.
+    """
+    # TODO favourite editor
+    with tempfile.NamedTemporaryFile() as f:
+        f.write(data)
+        f.flush()
+        subprocess.call(['vim', f.name])
+        f.seek(0)
+        changes = f.read()
+    return changes
 
 def exit_program(signal, frame):
     if background_jobs:
@@ -134,4 +147,56 @@ def int_to_bytes(x, length=None, byteorder='big'):
 
 def bytes_to_int(x, byteorder='big'):
     return int.from_bytes(x, byteorder=byteorder)
+
+def get_colored_printable(b):
+    """
+
+    """
+    color = log.COLOR_BROWN
+    if b in (0x9, 0xa, 0xd):
+        color = log.COLOR_DARK_GREEN
+        b = ord('.')
+    elif b<0x20 or b>=0x7f:
+        color = log.COLOR_NONE
+        b = ord('.')
+    return color+chr(b)+log.COLOR_NONE
+
+def get_colored_printable_hex(b):
+    """
+
+    """
+    color = log.COLOR_NONE
+    if b>=0x20 and b<0x7f:
+        color = log.COLOR_BROWN
+    elif b in (0x9, 0xa, 0xd):
+        color = log.COLOR_DARK_GREEN
+    return color + '%02x' % b + log.COLOR_NONE
+
+def hexdump(data):
+    """
+    Prints data as with `hexdump -C` command.
+    """
+    result = []
+    line_count = 0
+    for chunk in chunks(data, 16):
+        hexa = ' '.join(''.join(get_colored_printable_hex(b) for b in byte)
+                        for byte in [chunk[start:start+2]
+                                     for start in range(0, 16, 2)])
+
+        """add none with coloring - for layout"""
+        if len(hexa)<199:
+            hexa += (log.COLOR_NONE+'  '+log.COLOR_NONE)*(16-len(chunk))
+
+        result.append(log.COLOR_DARK_GREEN
+                      + '%08x' % (line_count*16)
+                      + log.COLOR_NONE
+                      + '  %-160s' % (hexa)
+                      + ' |'
+                      + ''.join(get_colored_printable(b) for b in chunk) + '|')
+        line_count += 1
+    return result
+
+def parse_algorithm_params(command, variables):
+    result = dict([(kv.split('=')) for kv in command.split(' ')])
+    return {k: variables[v] for k,v in result.items()}
 
