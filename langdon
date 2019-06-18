@@ -21,6 +21,23 @@ output = []
 grep_value = None
 grep_method = None
 
+
+def update_variable(name, value):
+    """
+    updates value, distinguishes between Variable and Algorithm parameter
+    """
+    if '.' in name:
+        name, _, param = name.partition('.')
+        try:
+            variables[name].params[param] = Variable(value)
+        except:
+            log.err('No such algorithm.')
+    else:
+        variables[name] = (value 
+                           if isinstance(value, Variable) 
+                               or isinstance(value, Algorithm)
+                           else Variable(value))
+
 while True:
     # print something from previous command if needed
     if output:
@@ -69,10 +86,19 @@ while True:
             break
             
                 
+    # prepare dict of all variables (including algorithm params)
+    all_variables = {}
+    for k,v in variables.items():
+        if isinstance(v, Variable):
+            all_variables[k] = v
+        elif isinstance(v, Algorithm):
+            for k2, v2 in v.params.items():
+                all_variables['%s.%s' % (k, k2)] = v2
 
-    # or is this an assign?
+
+    # is this an assign?
     variable_name = None
-    variable_match = re.match('^([A-Za-z0-9_-]+) *= *(.*)$', cmd)
+    variable_match = re.match('^([A-Za-z0-9_\-\.]+) *= *(.*)$', cmd)
     if variable_match:
         variable_name = variable_match.group(1).strip()
         cmd = variable_match.group(2).strip()
@@ -83,18 +109,18 @@ while True:
 
     
     # is this just a variable name? add to print queue
-    if cmd in variables.keys():
-        v = variables[cmd]
+    if cmd in all_variables.keys():
+        v = all_variables[cmd]
         if isinstance(v, Algorithm):
             # algorithm, print detail of it
             if variable_name:
-                variables[variable_name] = v
+                update_variable(variable_name, v)
             else:
                 v.detail()
         else:
-            # standard variable
+            # Variable
             if variable_name:
-                variables[variable_name] = v
+                update_variable(variable_name, v)
             else:
                 length = len(v.as_raw())
                 if length < 256:
@@ -106,7 +132,7 @@ while True:
                 output.append('Raw:    ' + str(v.as_raw()))
                 output.append('Base64: ' + v.as_base64())
         continue
-    
+    ''' 
     elif '.' in cmd and ' ' not in cmd.strip():
         # algorithm parameter, just print value of it
         vn, _, param = cmd.partition('.')
@@ -127,7 +153,7 @@ while True:
         else:
             log.err('No such algorithm/parameter.')
         continue
-    
+    '''
 
     # quit?
     if lib.quit_string(cmd):
@@ -176,16 +202,16 @@ while True:
 
         if format_f:
             if variable  == 'all':
-                for k,v in variables.items():
+                for k,v in all_variables.items():
                     with open('%s_%s' % (filename, k), 'wb') as f:
                         to_output = format_f(v)
                         try:
                             f.write(to_output)
                         except:
                             f.write(to_output.encode())
-            elif variable in variables.keys():
+            elif variable in all_variables.keys():
                 with open(filename, 'wb') as f:
-                    to_output = format_f(variables[variable])
+                    to_output = format_f(all_variables[variable])
                     try:
                         f.write(to_output)
                     except:
@@ -259,15 +285,6 @@ while True:
     # compute entropy for given variable / all variables
     elif cmd.startswith('entropy'):
         parts = cmd.split()
-
-        # prepare data (variables and algorithm params)
-        all_variables = {}
-        for k,v in variables.items():
-            if isinstance(v, Variable):
-                all_variables[k] = v
-            elif isinstance(v, Algorithm):
-                for k2, v2 in v.params.items():
-                    all_variables['%s.%s' % (k, k2)] = v2
 
         if len(parts) > 1:
             interesting_keys = parts[1:]
@@ -344,7 +361,7 @@ while True:
         try:
             result = variables[v].encrypt()
             if variable_name:
-                variables[variable_name] = Variable(result)
+                update_variable(variable_name, result)
             else:
                 output.append(result)
         except:
@@ -356,7 +373,7 @@ while True:
         try:
             result = variables[v].decrypt()
             if variable_name:
-                variables[variable_name] = Variable(result)
+                update_variable(variable_name, result)
             else:
                 output.append(result)
         except:
@@ -384,7 +401,7 @@ while True:
                 else:
                     log.err('The \'%s\' is not a variable.' % a)
             if variable_name:
-                variables[variable_name] = Variable(result)
+                update_variable(variable_name, result)
             else:
                 output.append(result)
         else:
@@ -451,7 +468,8 @@ while True:
                 prynt(xor(data, key))
             if variable_name:
                 #variables[variable_name] = Variable(result)
-                variables[variable_name] = result
+                #variables[variable_name] = result
+                update_variable(variable_name, result)
             else:
                 output.append(result)
         except:
@@ -464,7 +482,7 @@ while True:
         try:
             params = parse_algorithm_params(cmd[4:], variables)
             if variable_name:
-                variables[variable_name] = XORAlgorithm(**params)
+                update_variable(variable_name, XORAlgorithm(**params))
             else:
                 output.append(result)
 
@@ -480,7 +498,7 @@ while True:
         try:
             params = parse_algorithm_params(cmd[4:], variables)
             if variable_name:
-                variables[variable_name] = AESAlgorithm(**params)
+                update_variable(variable_name, AESAlgorithm(**params))
             else:
                 output.append(result)
 
@@ -494,7 +512,7 @@ while True:
     else:
         if variable_name:
             v = Variable(cmd, constant=True)
-            variables[variable_name] = v
+            update_variable(variable_name, v)
             log.info(variable_name, '=', v.short())
         else:
             log.warn('Unknown command.')
