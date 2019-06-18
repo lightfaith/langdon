@@ -259,36 +259,62 @@ while True:
     # compute entropy for given variable / all variables
     elif cmd.startswith('entropy'):
         parts = cmd.split()
+
+        # prepare data (variables and algorithm params)
+        all_variables = {}
+        for k,v in variables.items():
+            if isinstance(v, Variable):
+                all_variables[k] = v
+            elif isinstance(v, Algorithm):
+                for k2, v2 in v.params.items():
+                    all_variables['%s.%s' % (k, k2)] = v2
+
         if len(parts) > 1:
-            keys = parts[1:]
+            interesting_keys = parts[1:]
         else:
-            keys = variables.keys()
-        variable_max_length = max([0] + [len(k) for k in keys])
-        for k in keys:
-            v = variables[k]
+            interesting_keys = all_variables.keys()
+
+        variable_max_length = max([0] + [len(k) for k in interesting_keys])
+        for k,v in all_variables.items():
+            # skip those we are not interested in
+            if k not in interesting_keys:
+                continue
+            # skip non-Variable data (e.g. AES mode)
+            if not isinstance(v, Variable):
+                continue
             ent = entropy(v.as_raw())
             comment = ''
             if ent > 0.998:
                 comment = ' (probably encrypted)'
             elif ent > 0.95:
                 comment = ' (probably compressed)'
-            log.info('  %*s  %0.3f%s' % (variable_max_length, k, ent, comment))
+            log.info('  %*s  %0.5f%s' % (variable_max_length, k, ent, comment))
     
     # compute hamming distance of 2 given variables / 1-N / M-N
     elif cmd.startswith('hamming'):
         parts = cmd.split()
         pairs = []
+        
+        # prepare data (variables and algorithm params)
+        all_variables = {}
+        for k,v in variables.items():
+            if isinstance(v, Variable):
+                all_variables[k] = v
+            elif isinstance(v, Algorithm):
+                for k2, v2 in v.params.items():
+                    all_variables['%s.%s' % (k, k2)] = v2
+        
         # detect variant, prepare pairs
         if len(parts) == 3:
             pairs.append((parts[1], parts[2]))
-        elif len(parts) == 2 and parts[1] in variables.keys():
-            for k in variables.keys():
+        elif len(parts) == 2 and parts[1] in all_variables.keys():
+            for k in all_variables.keys():
                 if k == parts[1]:
                     continue
                 pairs.append((parts[1], k))
         elif len(parts) == 1:
-            for k1 in variables.keys():
-                for k2 in variables.keys():
+            for k1 in all_variables.keys():
+                for k2 in all_variables.keys():
                     if k1 == k2:
                         continue
                     if (k2, k1) not in pairs:
@@ -296,17 +322,22 @@ while True:
         # print
         if len(pairs) == 1:
             try:
-                log.info(hamming(variables[pairs[0][0]].as_raw(), 
-                                 variables[pairs[0][1]].as_raw()))
-            except:
-                traceback.print_exc()
-                log.err('No such variable.')
+                log.info(hamming(all_variables[pairs[0][0]].as_raw(), 
+                                 all_variables[pairs[0][1]].as_raw()))
+            except: 
+                #traceback.print_exc()
+                pass # probably not Variable
+                #log.err('No such variable.')
         elif pairs:
             pair_names = ['%s-%s' % (a, b) for a, b in pairs]
             max_pair_name_length = max([0] + [len(x) for x in pair_names])
             for (a, b), name in zip(pairs, pair_names):
-                distance = hamming(variables[a].as_raw(), variables[b].as_raw())
-                log.info('%*s:  %d' % (max_pair_name_length, name, distance))
+                try:
+                    distance = hamming(all_variables[a].as_raw(), all_variables[b].as_raw())
+                    log.info('%*s:  %d' % (max_pair_name_length, name, distance))
+                except:
+                    #traceback.print_exc()
+                    pass # probably not Variable
 
     elif cmd.startswith('encrypt '):
         v = cmd[8:].strip()
