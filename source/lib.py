@@ -198,5 +198,5 @@ def hexdump(data):
 
 def parse_algorithm_params(command, variables):
     result = dict([(kv.split('=')) for kv in command.split(' ')])
-    return {k: variables[v] for k,v in result.items()}
+    return {k: (variables.get(v) or v) for k,v in result.items()}
 

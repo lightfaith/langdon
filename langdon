@@ -70,36 +70,64 @@ while True:
             
                 
 
-    # is this just a variable name? add to print queue
-    if cmd in variables.keys():
-        v = variables[cmd]
-        if isinstance(v, Algorithm):
-            v.detail()
-        else:
-            length = len(v.as_raw())
-            if length < 256:
-                output.append('Bin:    ' + v.as_binary())
-            if length < 4096:
-                output.append('Int:    ' + v.as_int())
-            if length < 4096:
-                output.append('Hex:    ' + v.as_hex())
-            output.append('Raw:    ' + str(v.as_raw()))
-            output.append('Base64: ' + v.as_base64())
-        continue
-    
     # or is this an assign?
     variable_name = None
     variable_match = re.match('^([A-Za-z0-9_-]+) *= *(.*)$', cmd)
     if variable_match:
         variable_name = variable_match.group(1).strip()
         cmd = variable_match.group(2).strip()
-    
 
     # run following commands, return result into variable if defined
     #     else store in output and print on the next iteration
     # if no command matches, use the content as variable value (constant)
 
-
+    
+    # is this just a variable name? add to print queue
+    if cmd in variables.keys():
+        v = variables[cmd]
+        if isinstance(v, Algorithm):
+            # algorithm, print detail of it
+            if variable_name:
+                variables[variable_name] = v
+            else:
+                v.detail()
+        else:
+            # standard variable
+            if variable_name:
+                variables[variable_name] = v
+            else:
+                length = len(v.as_raw())
+                if length < 256:
+                    output.append('Bin:    ' + v.as_binary())
+                if length < 4096:
+                    output.append('Int:    ' + v.as_int())
+                if length < 4096:
+                    output.append('Hex:    ' + v.as_hex())
+                output.append('Raw:    ' + str(v.as_raw()))
+                output.append('Base64: ' + v.as_base64())
+        continue
+    
+    elif '.' in cmd:
+        # algorithm parameter, just print value of it
+        vn, _, param = cmd.partition('.')
+        if vn in variables.keys() and param in variables[vn].params.keys():
+            v = variables[vn].params[param]
+            if variable_name:
+                variables[variable_name] = v
+            else:
+                length = len(v.as_raw())
+                if length < 256:
+                    output.append('Bin:    ' + v.as_binary())
+                if length < 4096:
+                    output.append('Int:    ' + v.as_int())
+                if length < 4096:
+                    output.append('Hex:    ' + v.as_hex())
+                output.append('Raw:    ' + str(v.as_raw()))
+                output.append('Base64: ' + v.as_base64())
+        else:
+            log.err('No such algorithm/parameter.')
+        continue
+    
 
     # quit?
     if lib.quit_string(cmd):
@@ -174,9 +202,11 @@ while True:
             new_data = edit_in_file(old_data)
             if isinstance(v, SymmetricCipher):
                 if param in ('plaintext', 'ciphertext'):
-                    log.info('Trying to update key from %s change...' % param)
-                    v.update_key(param, new_data)
-
+                    try:
+                        v.update_key(param, new_data)
+                        log.info('Algorithm parameters updated.' % param)
+                    except AttributeError: # function undefined
+                        pass
             else:
                 log.warn('Algorithm may be inconsistent now...')
         except:
@@ -295,11 +325,11 @@ while True:
         try:
             result = variables[v].decrypt()
             if variable_name:
-                print('adding into variable', variable_name)
                 variables[variable_name] = Variable(result)
             else:
                 output.append(result)
         except:
+            traceback.print_exc()
             log.err('You must specify an algorithm variable.')
 
     elif cmd.startswith('hexdump '):
@@ -404,6 +434,22 @@ while True:
             params = parse_algorithm_params(cmd[4:], variables)
             if variable_name:
                 variables[variable_name] = XORAlgorithm(**params)
+            else:
+                output.append(result)
+
+        except:
+            traceback.print_exc()
+            log.err('Specify known parameters and variables holding the values.')
+
+    ######################################
+    # Symmetric algorithms
+    ######################################
+    # AESAlgorithm - create instance
+    elif cmd.startswith('AES '):
+        try:
+            params = parse_algorithm_params(cmd[4:], variables)
+            if variable_name:
+                variables[variable_name] = AESAlgorithm(**params)
             else:
                 output.append(result)
 

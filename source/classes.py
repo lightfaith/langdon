@@ -10,6 +10,9 @@ import string
 import threading
 import time
 import traceback
+
+from Crypto.Cipher import AES
+
 from source.lib import *
 from source.functions import *
 
@@ -146,171 +149,7 @@ class Oracle(threading.Thread):
                     break
         self.time = time.time() - start
 
-
-
-class Algorithm:
-    def __init__(self, name):
-        self.name = name
-
-    def short(self):
-        return(self.name)
-
-    def detail(self):
-        print('Detailed overview not implemented.')
-
-
-class SymmetricCipher(Algorithm):
-    def __init__(self, name):
-        super().__init__(name)
-
-
-class XORAlgorithm(SymmetricCipher):
-    def __init__(self, **kwargs):
-        super().__init__('XORAlgorithm()')
-
-        # parameters of the algorithm
-        # Variable objects are expected as values
-        self.params = {
-            'key': None,
-            'plaintext': None,
-            'ciphertext': None,
-        }
-        # apply defined values
-        for k, v in kwargs.items():
-            if k in self.params.keys():
-                self.params[k] = v
-        # temporary stuff for remembering some states
-        self.tmp = {}
-
-    def detail(self):
-        print('Key:', self.params['key'].short())
-        print('Plaintext:', self.params['plaintext'].short())
-        print('Ciphertext:', self.params['ciphertext'].short())
-
-    def encrypt(self):
-        self.params['ciphertext'] = Variable(
-                                        xor(self.params['plaintext'].as_raw(), 
-                                            self.params['key'].as_raw()))
-        return self.params['ciphertext']
-
-    def decrypt(self):
-        self.params['plaintext'] = Variable(
-                                        xor(self.params['ciphertext'].as_raw(), 
-                                            self.params['key'].as_raw()))
-        return self.params['plaintext']
-
-    def update_key(self, param, new_value):
-        if param not in ('plaintext', 'ciphertext'):
-            log.err('You can only use plaintext or ciphertext to update key.')
-            return
-        new_key = bytearray(self.params['key'].as_raw())
-        old_value = self.params[param].as_raw()
-        modulos = set()
-
-        for i in range(min([len(old_value), len(new_value)])):
-            if old_value[i] != new_value[i]:
-                modulo = i % len(new_key)
-                debug('Detected change at %d (modulo = %d): 0x%02x != 0x%02x' % (i, modulo, old_value[i], new_value[i]))
-                if modulo in modulos:
-                    debug('  but the modulo has been used.')
-                else:
-                    modulos.add(modulo)
-                    new_key[modulo] = (new_key[modulo]
-                                       ^ (old_value[i]
-                                          ^ new_value[i]))
-                    print('New key:', Variable(new_key))
-
-        if new_key != self.params['key'].as_raw():
-            debug('The key has changed, applying...')
-        self.params['key'] = Variable(new_key)
-        if param == 'plaintext':
-            self.decrypt()
-        else:
-            self.encrypt()
-        '''
-        """
-        Find difference between old and new plaintext (ciphertext, respectively)
-        and update the key accordingly.
-
-        By default, master mode is run. It creates slave (temporary algorithm),
-        that processes one change at a time. Master uses its data.
-        
-        """
-        if param not in ('plaintext', 'ciphertext'):
-            log.err('You can only use plaintext or ciphertext to update key.')
-            return
-
-        if master:
-            # create temp XORAlgorithm which will process one change at a time
-            tmp_xor = XORAlgorithm(**self.params)
-            #tmp_xor = XORAlgorithm()
-            while True:
-                ## fill actual values
-                #tmp_xor.params['key'] = self.params['key']
-                #tmp_xor.params['plaintext'] = self.params['plaintext']
-                #tmp_xor.params['ciphertext'] = self.params['ciphertext']
-                tmp_xor.update_key(param, new_value, master=False)
-                if tmp_xor.params[param] != self.params[param]: # change detected
-                    debug('Master uses key.')
-                    self.params['key'] = tmp_xor.params['key']
-                    debug('Master uses', param)
-                    new_value = tmp_xor.params[param]
-                else: # they are the same
-                    break
-
-        else: 
-            # slave
-            # create modulos in self.tmp (remembers which key byte changed in all runs)
-            if not 'modulos' in self.tmp:
-                self.tmp['modulos'] = set()
-
-            old = (self.params['plaintext'].as_raw() 
-                   if new_plaintext 
-                   else self.params['ciphertext'].as_raw())
-            new = new_plaintext if new_plaintext else new_ciphertext
-            key = self.params['key'].as_raw()
-            # find first change, update key
-            for i in range((self.tmp.get('offset') or 0), len(old)):
-                if old[i] != new[i]:
-                    modulo = i % len(key)
-                    debug('Slave detected change at %d (modulo = %d): 0x%02x != 0x%02x' % (i, modulo, old[i], new[i]))
-                    if modulo not in self.tmp['modulos']:
-                        modulos.add(modulo)
-                        key[modulo] = (chr(ord(key[modulo])
-                                                 ^ (ord(old[i]) 
-                                                    ^ ord(new[i]))))
-
-                        # change detected, break (but remember offset)
-                        self.tmp['offset'] = i + 1
-                        break
-                    else:
-                        # detected already changed byte, skip and continue
-                        continue
-            self.params['key'] = Variable(key)
-            # apply new key
-            if new_plaintext:
-                self.decrypt()
-            else:
-                self.encrypt()
-            
-        '''
-        '''
-        old_key = self.params['key'].as_raw()
-        for i in range(len(old)):
-            if old[i] != new[i]:
-                tmp_key = old_key
-                tmp_key[i % len(tmp_key)] = (chr(ord(tmp_key[i % len(tmp_key)])
-                                             ^ (ord(tmp[i]) 
-                                               ^ ord(new[i]))))
-
-        # new key? save it and encrypt/decrypt again
-        self.params['key'] = Variable(tmp_key)
-        if new_plaintext:
-            self.decrypt()
-        else:
-            self.encrypt()
-        '''
-
+####################################################
 class Variable:
     """
     Class loads given value (from user, file, etc.)
@@ -445,4 +284,222 @@ class Variable:
             return preferred.decode()
         return preferred
 
+
+#############################################
+
+class Algorithm:
+    def __init__(self, name):
+        self.name = name
+        # temporary stuff for remembering some states
+        self.tmp = {}
+
+    def short(self):
+        return(self.name)
+
+    def detail(self):
+        print('Detailed overview not implemented.')
+
+
+class SymmetricCipher(Algorithm):
+    def __init__(self, name):
+        super().__init__(name)
+
+
+class AESAlgorithm(SymmetricCipher):
+    def __init__(self, **kwargs):
+        super().__init__('AESAlgorithm()')
+        self.params = {
+            'mode': None,
+            'blocksize': '16',
+            'key': None,
+            'iv': None,
+            'plaintext': None,
+            'ciphertext': None,
+        }
+        # apply defined values
+        for k, v in kwargs.items():
+            if k in self.params.keys():
+                self.params[k] = v
+    
+    def detail(self):
+        try:
+            print('Mode:', self.params['mode'])
+        except:
+            pass
+        try:
+            print('Block size: %s B', self.params['blocksize'])
+        except:
+            pass
+        try:
+            print('Key:', self.params['key'].short())
+        except:
+            pass
+        try:
+            print('IV:', self.params['iv'].short())
+        except:
+            pass
+        try:
+            print('Plaintext:', self.params['plaintext'].short())
+        except:
+            pass
+        try:
+            print('Ciphertext:', self.params['ciphertext'].short())
+        except:
+            pass
+
+    def encrypt(self):
+        plaintext = self.params['plaintext'].as_raw()
+        key = self.params['key'].as_raw()
+        if self.params.get('iv'):
+            iv = self.params['iv'].as_raw()
+        cipher = AES.new(key, AES.MODE_ECB)
+        blocksize = int(self.params['blocksize'])
+        ciphertext = b''
+        
+        padded = pkcs7_pad(plaintext)
+        blocks = [padded[i:i+blocksize] 
+                  for i in range(0, len(padded), blocksize)]
+
+        if self.params['mode'] == 'ecb':
+             ciphertext = cipher.encrypt(padded)
+        elif self.params['mode'] == 'cbc':
+            """
+               P1      P2
+               |       |
+        IV ---(X)  ,--(X)
+               |   |   |
+               |   |   |
+        key --AES  |  AES-- key
+               |__/    |__ ...
+               |       |
+               C1      C2
+            """
+            previous_block = iv
+            for block in blocks:
+                tmp = xor(block, previous_block)
+                previous_block = cipher.encrypt(tmp)
+                result += previous_block
+        else:
+            log.err('Unsupported mode.')
+            return None
+
+        self.params['ciphertext'] = Variable(ciphertext)
+        return self.params['ciphertext']
+
+    def decrypt(self):
+        ciphertext = self.params['ciphertext'].as_raw()
+        key = self.params['key'].as_raw()
+        if self.params.get('iv'):
+            iv = self.params['iv'].as_raw()
+        cipher = AES.new(key, AES.MODE_ECB)
+        blocksize = int(self.params['blocksize'])
+        
+        padded = b''
+        blocks = [ciphertext[i:i+blocksize] 
+                  for i in range(0, len(ciphertext), blocksize)]
+        
+        if self.params['mode'] == 'ecb':
+             padded = cipher.decrypt(ciphertext)
+        elif self.params['mode'] == 'cbc':
+            """
+               C1      C2
+               |____   |__ ...
+               |    |  |
+        key --AES   | AES-- key
+               |    |  |
+        IV ---(X)    `(X)
+               |       |
+               P1      P2
+            """
+            previous_block = iv
+            for block in blocks:
+                tmp = cipher.decrypt(block)
+                padded += xor(tmp, previous_block)
+        
+        else:
+            log.err('Unsupported mode.')
+            return None
+
+        # TODO langdon-cli had ignore_padding flag...
+        #      ... maybe for CBC oracle?
+        plaintext = pkcs7_unpad(padded)
+        self.params['plaintext'] = Variable(plaintext)
+        return self.params['plaintext']
+
+
+
+class XORAlgorithm(SymmetricCipher):
+    def __init__(self, **kwargs):
+        super().__init__('XORAlgorithm()')
+
+        # parameters of the algorithm
+        # Variable objects are expected as values
+        self.params = {
+            'key': None,
+            'plaintext': None,
+            'ciphertext': None,
+        }
+        # apply defined values
+        for k, v in kwargs.items():
+            if k in self.params.keys():
+                self.params[k] = v
+
+    def detail(self):
+        try:
+            print('Key:', self.params['key'].short())
+        except:
+            pass
+        try:
+            print('Plaintext:', self.params['plaintext'].short())
+        except:
+            pass
+        try:
+            print('Ciphertext:', self.params['ciphertext'].short())
+        except:
+            pass
+
+    def encrypt(self):
+        self.params['ciphertext'] = Variable(
+                                        xor(self.params['plaintext'].as_raw(), 
+                                            self.params['key'].as_raw()))
+        return self.params['ciphertext']
+
+    def decrypt(self):
+        self.params['plaintext'] = Variable(
+                                        xor(self.params['ciphertext'].as_raw(), 
+                                            self.params['key'].as_raw()))
+        return self.params['plaintext']
+
+    def update_key(self, param, new_value):
+        """
+        Find difference between old and new plaintext (ciphertext, respectively)
+        and update the key accordingly.
+        """
+        if param not in ('plaintext', 'ciphertext'):
+            log.err('You can only use plaintext or ciphertext to update key.')
+            return
+        new_key = bytearray(self.params['key'].as_raw())
+        old_value = self.params[param].as_raw()
+        modulos = set()
+
+        for i in range(min([len(old_value), len(new_value)])):
+            if old_value[i] != new_value[i]:
+                modulo = i % len(new_key)
+                debug('Detected change at %d (modulo = %d): 0x%02x != 0x%02x' % (i, modulo, old_value[i], new_value[i]))
+                if modulo in modulos:
+                    debug('  but the modulo has been used.')
+                else:
+                    modulos.add(modulo)
+                    new_key[modulo] = (new_key[modulo]
+                                       ^ (old_value[i]
+                                          ^ new_value[i]))
+                    print('New key:', Variable(new_key))
+
+        if new_key != self.params['key'].as_raw():
+            debug('The key has changed, applying...')
+        self.params['key'] = Variable(new_key)
+        if param == 'plaintext':
+            self.decrypt()
+        else:
+            self.encrypt()
 
