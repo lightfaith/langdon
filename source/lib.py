@@ -3,6 +3,7 @@
 Standard functions.
 """
 
+import signal
 import subprocess
 import sys
 #import base64
@@ -31,8 +32,10 @@ character_frequencies = {
     }
 }
 
-debug_flag = False
+debug_flag = True
 wordlist = []
+
+background_jobs = []
 
 """
 Standard functions
@@ -74,13 +77,19 @@ def quit_string(x):
 
 
 def exit_program(signal, frame):
-    """immediate termination due to -h, bad parameter or bind() fail"""
-    if signal == -1:
-        sys.exit(0)
+    if background_jobs:
+        """only terminate background jobs"""
+        for b in background_jobs:
+            b.stop()
+    else:
+        """immediate termination due to -h, bad parameter or bind() fail"""
+        if signal == -1:
+            sys.exit(0)
 
-    log.newline() # newline
-    #log.info('Killing all the threads...') # TODO
-    sys.exit(0 if signal is None else 1)
+        log.newline() # newline
+        #log.info('Killing all the threads...') # TODO
+        sys.exit(0 if signal is None else 1)
+signal.signal(signal.SIGINT, exit_program)
 
 def size_human(value, integer=False):
     format_string = '{0:.0f}' if integer else '{0:.3f}'

@@ -180,8 +180,13 @@ while True:
 
             thread_count = 1 if len(variables) < 8 else 8
 
-            def wordlist_worker(indices, samples, data_f = lambda x: x, **kwargs):
+            def wordlist_worker(indices, samples, data_f = lambda x: x, thread_ref=None, **kwargs):
+                if not thread_ref:
+                    log.err('Worker has no thread reference!')
+                    return []
                 for i, x in zip(indices, samples):
+                    if thread_ref.terminate:
+                        break
                     success = dict_success(data_f(x), **kwargs)
                     if success >= 0.8:
                         log.ok('  %s:  %0.3f  %s' % (x[0], success, x[1].short()))
@@ -189,7 +194,7 @@ while True:
                         log.info('  %s:  %0.3f' % (x[0], success))
                 return [] # not needed
 
-            #log.info('  %*s  Score' % (variable_max_length, 'Variable'))
+            log.info('  %*s  Score' % (variable_max_length, 'Variable'))
             p = Parallelizer(thread_count, 
                              [(k, v) for k,v in variables.items() if k != wordlist_name], 
                              wordlist_worker,
@@ -298,6 +303,29 @@ while True:
         else:
             log.err('No such variable.')
 
+    elif cmd.startswith('break-xor '):
+        parts = cmd.split()
+        try:
+            variable = parts[1]
+            wordlist = parts[2]
+            # get normalized hamming for keysizes, smallest should be correct
+            for keysize in range(2, min(40, len(data))):
+                tmp_distance = 0
+                sample_count = 0
+                #go through keysize block pairs, get average hamming
+                for i in range(0, len(data) - keysize, keysize):
+                    sample1 = data[i:i+keysize]
+                    sample2 = data[i+keysize:i+2*keysize]
+                    sample_count += 1 
+                    tmp_distance += hamming(sample1, sample2)
+                    distances[keysize] = tmp_distance / sample_count / keysize
+            best = sorted(distances.items(), key=lambda x: x[1])
+            
+            for keysize, distance in best.items()[:2]:
+                key = b''
+                debug('Trying keysize %d (distance %.3f)' % (keysize, distance))
+        except:
+            log.err('You must define variable and wordlist.')
     ######################################
     # constant value OR bad command
     ######################################

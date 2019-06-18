@@ -70,6 +70,11 @@ def bruteforce_xor(data1, keys):
     for key in keys:
         yield xor(data1, key)
 
+# generalization of bruteforce_xor
+def bruteforce(data, keys, f):
+    for key in keys:
+        yield f(data, key)
+
 def dict_success(sample, wordlist=None, min_word_match=1, min_word_len=1): # TODO or different constants?
     """
     Return how many of given words are actually in wordlist (as fraction).

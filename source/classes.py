@@ -30,6 +30,7 @@ class Parallelizer():
         self.kwargs = kwargs
 
     def start(self):
+        background_jobs.append(self)
         chunk_size = len(self.data) // self.thread_count
         if not chunk_size:
             chunk_size = 1
@@ -46,6 +47,15 @@ class Parallelizer():
         for t in self.threads:
             t.join()
             self.results += t.results
+        try:
+            background_jobs.remove(self)
+        except:
+            pass
+
+    def stop(self):
+        for t in self.threads:
+            t.stop()
+        self.waitfor()
 
 
 class ParallelizerThread(threading.Thread):
@@ -59,14 +69,17 @@ class ParallelizerThread(threading.Thread):
         self.function = function
         self.results = []
         self.kwargs = kwargs
+        self.terminate = False
 
     def run(self):
         indices, samples = zip(*self.data)
-        log.info('Running thread (samples %d through %d).' 
+        debug('Running thread (samples %d through %d).' 
               % (indices[0], indices[-1]))
         #pdb.set_trace()
-        self.results = self.function(indices, samples, **(self.kwargs))
+        self.results = self.function(indices, samples, thread_ref=self, **(self.kwargs))
 
+    def stop(self):
+        self.terminate = True
 
 class OracleResult:
     """
