@@ -221,7 +221,9 @@ class Variable:
             pass
         # value as hex number/stream
         try:
-            self.value = int_to_bytes(int(value, 16))
+            to_unhex = value[2:] if value.startswith('0x') else value
+            self.value = unhexadecimal(to_unhex)
+            #self.value = int_to_bytes(int(value, 16))
             self.preferred_form = self.as_hex
             return
         except:
@@ -347,7 +349,7 @@ class AESAlgorithm(SymmetricCipher):
         except:
             pass
 
-    def encrypt(self):
+    def encrypt(self): # AES encrypt
         plaintext = self.params['plaintext'].as_raw()
         key = self.params['key'].as_raw()
         if self.params.get('iv'):
@@ -378,7 +380,7 @@ class AESAlgorithm(SymmetricCipher):
             for block in blocks:
                 tmp = xor(block, previous_block)
                 previous_block = cipher.encrypt(tmp)
-                result += previous_block
+                ciphertext += previous_block
         else:
             log.err('Unsupported mode.')
             return None
@@ -386,7 +388,7 @@ class AESAlgorithm(SymmetricCipher):
         self.params['ciphertext'] = Variable(ciphertext)
         return self.params['ciphertext']
 
-    def decrypt(self):
+    def decrypt(self): # AES decrypt
         ciphertext = self.params['ciphertext'].as_raw()
         key = self.params['key'].as_raw()
         if self.params.get('iv'):
@@ -415,6 +417,7 @@ class AESAlgorithm(SymmetricCipher):
             for block in blocks:
                 tmp = cipher.decrypt(block)
                 padded += xor(tmp, previous_block)
+                previous_block = block
         
         else:
             log.err('Unsupported mode.')
@@ -458,13 +461,13 @@ class XORAlgorithm(SymmetricCipher):
         except:
             pass
 
-    def encrypt(self):
+    def encrypt(self): # XOR encrypt
         self.params['ciphertext'] = Variable(
                                         xor(self.params['plaintext'].as_raw(), 
                                             self.params['key'].as_raw()))
         return self.params['ciphertext']
 
-    def decrypt(self):
+    def decrypt(self): # XOR decrypt
         self.params['plaintext'] = Variable(
                                         xor(self.params['ciphertext'].as_raw(), 
                                             self.params['key'].as_raw()))

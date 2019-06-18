@@ -197,6 +197,16 @@ def hexdump(data):
     return result
 
 def parse_algorithm_params(command, variables):
-    result = dict([(kv.split('=')) for kv in command.split(' ')])
-    return {k: (variables.get(v) or v) for k,v in result.items()}
+    parsed = dict([(kv.split('=')) for kv in command.split(' ')])
+    result = {}
+    for k, v in parsed.items():
+        if v in variables.keys():
+            result[k] = variables[v]
+        elif '.' in v:
+            algo, _, param = v.partition('.')
+            if algo in variables.keys() and param in variables[algo].params.keys():
+                result[k] = variables[algo].params[param]
+        else:
+            result[k] = v
+    return result
 

@@ -107,7 +107,7 @@ while True:
                 output.append('Base64: ' + v.as_base64())
         continue
     
-    elif '.' in cmd:
+    elif '.' in cmd and ' ' not in cmd.strip():
         # algorithm parameter, just print value of it
         vn, _, param = cmd.partition('.')
         if vn in variables.keys() and param in variables[vn].params.keys():

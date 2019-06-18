@@ -63,6 +63,10 @@ def get_frequency_error(data, language):
     return sum(abs((fs[c]-actual[c]) / len(actual)) for c in actual.keys())
 
 def xor(data1, data2):
+    #print(len(data1), len(data2))
+    if not data1 or not data2:
+        log.warn('Using XOR with empty value.')
+        return data1 + data2
     return b''.join(b'%c' % (data1[i % len(data1)] ^ data2[i % len(data2)]) 
                     for i in range(max(len(data1), len(data2))))
 
