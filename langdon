@@ -239,7 +239,29 @@ while True:
             traceback.print_exc()
             log.err('You must specify variable of algorithm and the parameter.')
 
-    
+    elif cmd.startswith('multiline '):
+        # variables are in file 1 per line, load it
+        parts = cmd.split()
+        if len(parts) == 3:
+            filename = parts[1]
+            prefix = parts[2]
+            form = None
+        elif len(parts) == 4:
+            filename = parts[1]
+            prefix = parts[2]
+            form = parts[3]
+        try:
+            with open(filename, 'r') as f:
+                lines = f.read().splitlines()
+                for i, line in enumerate(lines):
+                    if form and form in ('file', 'base64'):
+                        line = '%s:%s' % (form, line)
+                    elif form:
+                        raise ValueError
+                    update_variable('%s_%d' % (prefix, i), Variable(line, constant=True))
+
+        except:
+            traceback.print_exc()
     #################################
     # basic methods
     #################################

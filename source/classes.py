@@ -199,7 +199,7 @@ class Variable:
                         self.preferred_form = self.as_raw
                     return
                 except:
-                    log.err('Cannot decode as Base64.')
+                    log.err('Cannot decode \'%s\' as Base64.' % value)
                     self.value = b''
 
         # as bytearray - convert to bytes
