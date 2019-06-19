@@ -488,8 +488,6 @@ def analyze(data, interactive=False):
     analyze levels:
         0: entropy, histogram
     """
-    if isinstance(data, Variable):
-        data = data.as_raw()
 
     analysis_level = 0
     ent = entropy(data)

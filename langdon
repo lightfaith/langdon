@@ -2,6 +2,7 @@
 
 import os
 import pdb
+import random
 import re
 import sys
 import gnureadline
@@ -321,6 +322,7 @@ while True:
         for k in keys:
             output.append(log.info('Analysis for %s%s%s:' % (log.COLOR_BOLD, k, log.COLOR_NONE), stdout=False))
             output += variable_source[k].analyze(output_offset=2)
+
     # compute entropy for given variable / all variables
     elif cmd.startswith('entropy'):
         parts = cmd.split()
@@ -426,6 +428,69 @@ while True:
                 print(line)
         except:
             log.err('You must specify a variable.')
+
+    elif cmd.startswith('random '):
+        parts = cmd.split()
+        args = {}
+        try:
+            # parse arguments
+            for arg, index in [('start', 1), ('end', 2), ('count', 3)]:
+                for f in [
+                    lambda x: int(x),
+                    lambda x: int(x, 16),
+                    lambda x: int(all_variables[x].as_int())
+                ]:
+                    try:
+                        args[arg] = f(parts[index])
+                        break
+                    except:
+                        continue
+            # generate number/bytes
+            if args.get('count'):
+                result = b''.join(int_to_bytes(random.randint(args['start'], args['end'])) or b'\x00' 
+                                  for i in range(args['count']))
+            else:
+                result = random.randint(args['start'], args['end'])
+            # save / prepare for output
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('You must provide start, end and optional length.')
+
+    elif cmd.startswith(('len ', 'length ')):
+        v = cmd.partition(' ')[2]
+        try:
+            result = len(all_variables[v].as_raw())
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+            
+        except:
+            traceback.print_exc()
+            log.err('No such variable.')
+    
+    elif cmd.startswith('concat '):
+        parts = cmd.split()[1:]
+        result = b''
+        for part in parts:
+            try:
+                result += all_variables[part].as_raw()
+            except:
+                log.err('Non-existent variable %s.' % part)
+        if result:
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+
+        except:
+            log.err('Oracle does not exist.')
+    # TODO prime command
+    # TODO math operations
     ######################################
     # XOR
     ######################################

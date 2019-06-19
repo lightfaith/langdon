@@ -259,8 +259,9 @@ class Variable:
             64: '(base64?)',
             65: '(base64 with separators?)',
         }
-        output.append(log.info('Entropy:          ', ent, entropy_hint, offset=output_offset, stdout=False))
+        output.append(log.info('Length (B):       ', len(self.as_raw()), offset=output_offset, stdout=False))
         output.append(log.info('Unique byte count:', ubc, ubc_hints.get(ubc) or '', offset=output_offset, stdout=False))
+        output.append(log.info('Entropy:          ', ent, entropy_hint, offset=output_offset, stdout=False))
         # ECB detection
         if find_repeating_patterns(self.value, min_size=16):
             output.append(log.warn('Repeating patterns of blocksize=16 found, this could be AES-ECB ciphertext.', offset=output_offset, stdout=False))
