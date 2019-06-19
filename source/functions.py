@@ -10,7 +10,7 @@ from struct import pack, unpack
 
 from source import lib
 from source.lib import *
-from source.classes import *
+#from source.classes import Variable
 
 """
 Crypto functions
@@ -480,12 +480,17 @@ def hash_extension(algorithm, data, digest, append, oracle_path):
 """
 Specific functions (e.g. print all ROTs or the valid one)
 """
+
 def analyze(data, interactive=False):
+    # TODO ALREADY OBSOLETE, objects have analyze() method
     """
 
     analyze levels:
         0: entropy, histogram
     """
+    if isinstance(data, Variable):
+        data = data.as_raw()
+
     analysis_level = 0
     ent = entropy(data)
     his = histogram(data)

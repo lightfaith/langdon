@@ -303,7 +303,24 @@ while True:
         except:
             traceback.print_exc()
             log.err('No such wordlist.')
+    
+    elif cmd.startswith('analyze'):
+        parts = cmd.split()
 
+        if len(parts) == 1:
+            keys = variables.keys() # algorithms will run analysis on its params...
+            variable_source = variables
+        else:
+            keys = [parts[1]] if variables.get(parts[1]) else [] # standard Variable or Algorithms
+            if keys: 
+                variable_source = variables
+            else:
+                keys = [parts[1]] if all_variables.get(parts[1]) else [] # so Algorithm param?
+                variable_source = all_variables
+
+        for k in keys:
+            output.append(log.info('Analysis for %s%s%s:' % (log.COLOR_BOLD, k, log.COLOR_NONE), stdout=False))
+            output += variable_source[k].analyze(output_offset=2)
     # compute entropy for given variable / all variables
     elif cmd.startswith('entropy'):
         parts = cmd.split()

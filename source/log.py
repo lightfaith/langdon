@@ -55,7 +55,7 @@ def newline(stdout=True):
 """
 OK, INFO, WARN, ERR, QUESTION
 """
-def show_marked(c, color='', *args, new_line=True, stdout=True, file=sys.stdout):
+def show_marked(c, color='', *args, new_line=True, stdout=True, file=sys.stdout, offset=0):
     #lines = []
     #lines.append('%s%s%s%s%s' % (color, COLOR_BOLD, c, COLOR_NONE, str(string)))
     #if stdout:
@@ -63,28 +63,31 @@ def show_marked(c, color='', *args, new_line=True, stdout=True, file=sys.stdout)
     #        for line in lines:
     #            print(line, end=('\n' if new_line else ''), file=file)
     #return lines
+    start = '%s%s%s%s%s' % (color, COLOR_BOLD, c, COLOR_NONE, ' ' * offset)
     if stdout:
-        print('%s%s%s%s' % (color, COLOR_BOLD, c, COLOR_NONE), *args, end='', file=file)
+        print(start, *args, end='', file=file)
         if new_line:
-            print('', file=file)
-    return None
+            print('', file=file)        
+        return None
+    else:
+        return start + ' ' + ' '.join(str(a) for a in args)
         
 
 
-def ok(*args, new_line=True, stdout=True):
-    return show_marked('[+]', COLOR_GREEN, *args, new_line=new_line, stdout=stdout)
+def ok(*args, new_line=True, stdout=True, offset=0):
+    return show_marked('[+]', COLOR_GREEN, *args, new_line=new_line, stdout=stdout, offset=offset)
  
-def info(*args, new_line=True, stdout=True, file=sys.stderr):
-    return show_marked('[.]', COLOR_BLUE, *args, new_line=new_line, stdout=stdout)
+def info(*args, new_line=True, stdout=True, file=sys.stderr, offset=0):
+    return show_marked('[.]', COLOR_BLUE, *args, new_line=new_line, stdout=stdout, offset=offset)
  
-def warn(*args, new_line=True, stdout=True, file=sys.stderr):
-    return show_marked('[!]', COLOR_YELLOW, *args, new_line=new_line, stdout=stdout)
+def warn(*args, new_line=True, stdout=True, file=sys.stderr, offset=0):
+    return show_marked('[!]', COLOR_YELLOW, *args, new_line=new_line, stdout=stdout, offset=offset)
  
-def err(*args, new_line=True, stdout=True, file=sys.stderr):
-    return show_marked('[-]', COLOR_RED, *args, new_line=new_line, stdout=stdout)
+def err(*args, new_line=True, stdout=True, file=sys.stderr, offset=0):
+    return show_marked('[-]', COLOR_RED, *args, new_line=new_line, stdout=stdout, offset=offset)
  
-def question(*args, new_line=True, stdout=True):
-    return show_marked('[?]', COLOR_CYAN, *args, new_line=new_line, stdout=stdout)
+def question(*args, new_line=True, stdout=True, offset=0):
+    return show_marked('[?]', COLOR_CYAN, *args, new_line=new_line, stdout=stdout, offset=offset)
  
 
 """

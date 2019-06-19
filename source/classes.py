@@ -236,6 +236,38 @@ class Variable:
             
         log.err('Not parsed!', value)
 
+    def analyze(self, output_offset=0, interactive=False): # Variable analysis
+        output = []
+        # get basic statistics 
+        ent = entropy(self.value)
+        his = histogram(self.value)
+        ubc = len(set(self.value)) # unique byte count
+        entropy_hint = ''
+        if ent > 0.998:
+            entropy_hint = '(probably encrypted)'
+        if ent > 0.95:
+            entropy_hint = '(probably compressed)'
+        ubc_hints = {
+            2: '(binary?)',
+            3: '(morse/binary with separators?)',
+            16: '(hex?)',
+            17: '(hex with separators?)',
+            32: '(base32?)',
+            33: '(base32 with separators?)',
+            58: '(base58?)',
+            59: '(base58 with separators?)',
+            64: '(base64?)',
+            65: '(base64 with separators?)',
+        }
+        output.append(log.info('Entropy:          ', ent, entropy_hint, offset=output_offset, stdout=False))
+        output.append(log.info('Unique byte count:', ubc, ubc_hints.get(ubc) or '', offset=output_offset, stdout=False))
+        # ECB detection
+        if find_repeating_patterns(self.value, min_size=16):
+            output.append(log.warn('Repeating patterns of blocksize=16 found, this could be AES-ECB ciphertext.', offset=output_offset, stdout=False))
+
+        # TODO more
+        return output
+
     """
     representation methods
     """
@@ -300,6 +332,11 @@ class Algorithm:
 
     def detail(self):
         print('Detailed overview not implemented.')
+
+    def analyze(self, output_offset=0, interactive=False):
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset+2, stdout=False))
+        return output
 
 
 class SymmetricCipher(Algorithm):
@@ -429,6 +466,19 @@ class AESAlgorithm(SymmetricCipher):
         self.params['plaintext'] = Variable(plaintext)
         return self.params['plaintext']
 
+    def analyze(self, output_offset=0, interactive=False): # AES analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+
+        # run analysis for params
+        for k,v in self.params.items():
+            if isinstance(v, Variable) or isinstance(v, Algorithm):
+                output.append(log.info('Analysis for %s%s%s:' % (log.COLOR_BOLD, k, log.color_NONE), 
+                                       offset=output_offset+2, stdout=False))
+                output += v.analyze(output_offset+4, interactive)
+        
+        return output
 
 
 class XORAlgorithm(SymmetricCipher):
@@ -506,3 +556,16 @@ class XORAlgorithm(SymmetricCipher):
         else:
             self.encrypt()
 
+    def analyze(self, output_offset=0, interactive=False): # XOR analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        # key present in ciphertext?
+        # something with key entropy?
+
+        # run analysis for params
+        for k,v in self.params.items():
+            if isinstance(v, Variable) or isinstance(v, Algorithm):
+                output.append(log.info('Analysis for', k, offset=output_offset+2, stdout=False))
+                output += v.analyze(output_offset+4, interactive)
+        return output
