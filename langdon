@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 from source import lib
 from source import log
+from source import attacks
 from source.classes import *
 from source.functions import *
 
@@ -111,6 +112,7 @@ while True:
     
     # is this just a variable name? add to print queue
     if cmd in all_variables.keys():
+        pdb.set_trace()
         v = all_variables[cmd]
         if isinstance(v, Algorithm):
             # algorithm, print detail of it
@@ -133,28 +135,14 @@ while True:
                 output.append('Raw:    ' + str(v.as_raw()))
                 output.append('Base64: ' + v.as_base64())
         continue
-    ''' 
-    elif '.' in cmd and ' ' not in cmd.strip():
-        # algorithm parameter, just print value of it
-        vn, _, param = cmd.partition('.')
-        if vn in variables.keys() and param in variables[vn].params.keys():
-            v = variables[vn].params[param]
-            if variable_name:
-                variables[variable_name] = v
-            else:
-                length = len(v.as_raw())
-                if length < 256:
-                    output.append('Bin:    ' + v.as_binary())
-                if length < 4096:
-                    output.append('Int:    ' + v.as_int())
-                if length < 4096:
-                    output.append('Hex:    ' + v.as_hex())
-                output.append('Raw:    ' + str(v.as_raw()))
-                output.append('Base64: ' + v.as_base64())
+    elif cmd in variables.keys(): # only Algorithms are left
+        v = variables[cmd]
+        if variable_name:
+            update_variable(variable_name, v)
         else:
-            log.err('No such algorithm/parameter.')
+            v.detail()
         continue
-    '''
+        
 
     # quit?
     if lib.quit_string(cmd):
@@ -178,6 +166,7 @@ while True:
         k_len = max([0] + [len(k) for k in variables.keys()])
         for k, v in variables.items():
             output.append('%*s  %s' % (k_len, k, v.short()))
+        continue
             
     if cmd.startswith('export '):
         parts = cmd[7:].split()
@@ -231,7 +220,7 @@ while True:
                 if param in ('plaintext', 'ciphertext'):
                     try:
                         v.update_key(param, new_data)
-                        log.info('Algorithm parameters updated.' % param)
+                        log.info('Algorithm parameters updated.')
                     except AttributeError: # function undefined
                         pass
             else:
@@ -320,7 +309,7 @@ while True:
                 variable_source = all_variables
 
         for k in keys:
-            output.append(log.info('Analysis for %s%s%s:' % (log.COLOR_BOLD, k, log.COLOR_NONE), stdout=False))
+            output.append(log.info('Analysis for %s%s%s:' % (log.COLOR_PURPLE, k, log.COLOR_NONE), stdout=False))
             output += variable_source[k].analyze(output_offset=2)
 
     # compute entropy for given variable / all variables
@@ -487,8 +476,6 @@ while True:
             else:
                 output.append(result)
 
-        except:
-            log.err('Oracle does not exist.')
     # TODO prime command
     # TODO math operations
     ######################################
@@ -523,56 +510,12 @@ while True:
             log.err('No such variable.')
 
     elif cmd.startswith('break-xor '):
-        """
-        Returns XORAlgorithm instance.
-        """
-        parts = cmd.split()
-        result = None
-
         try:
+            parts = cmd.split()
             data = variables[parts[1]].as_raw()
             language = parts[2]
-            # get normalized hamming for keysizes, smallest should be correct
-            distances = {}
-            for keysize in range(2, min(40, len(data))):
-                tmp_distance = 0
-                sample_count = 0
-                #go through keysize block pairs, get average hamming
-                for i in range(0, len(data) - keysize, keysize):
-                    sample1 = data[i:i+keysize]
-                    sample2 = data[i+keysize:i+2*keysize]
-                    sample_count += 1
-                    tmp_distance += hamming(sample1, sample2)
-                    distances[keysize] = tmp_distance / sample_count / keysize
-            for k,v in distances.items():
-                print(k, v)
-            best = sorted(distances.items(), key=lambda x: x[1])
-            
-            # use 2 best distances and try to get characters based on best frequency
-            for keysize, distance in best[:2]:
-                key = b''
-                debug('Trying keysize %d (distance %.3f)' % (keysize, distance))
-                for offset in range(keysize):
-                    transposed = data[offset::keysize]
-                    xors = list(bruteforce(transposed, 
-                                           [b'%c' % c for c in range(256)],
-                                           lambda a, b: xor(a, b)))
-                    best = sorted(xors, key=lambda x: get_frequency_error(x, language))
-                    #for i in range(3):
-                    #    print(get_frequency_error(best[i], language))
-                    key += b'%c' % (xors.index(best[0]))
-                    #for i in range(3):
-                    #    print(get_frequency_error(best[i], language))
-                if not result:
-                    result = XORAlgorithm(key=Variable(key),
-                                          ciphertext=Variable(data),
-                                          plaintext=Variable(xor(data, key)))
-                print('Key for keysize %d:' % keysize, key)
-                print('Deciphered message:')
-                prynt(xor(data, key))
+            result = attacks.break_xor(data, language)
             if variable_name:
-                #variables[variable_name] = Variable(result)
-                #variables[variable_name] = result
                 update_variable(variable_name, result)
             else:
                 output.append(result)

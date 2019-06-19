@@ -325,6 +325,8 @@ class Variable:
 class Algorithm:
     def __init__(self, name):
         self.name = name
+        # important parameters of given algorithm, e.g. plaintext, key, ...
+        self.params = {}
         # temporary stuff for remembering some states
         self.tmp = {}
 
@@ -337,6 +339,16 @@ class Algorithm:
     def analyze(self, output_offset=0, interactive=False):
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset+2, stdout=False))
+        return output
+    
+    def analyze_params(self, output_offset=0, interactive=False):
+        # run analysis for all params, collect output
+        output = []
+        for k,v in self.params.items():
+            if isinstance(v, Variable) or isinstance(v, Algorithm):
+                output.append(log.info('Analysis for %s%s%s:' % (log.COLOR_PURPLE, k, log.COLOR_NONE), 
+                                       offset=output_offset+2, stdout=False))
+                output += v.analyze(output_offset+4, interactive)
         return output
 
 
@@ -471,14 +483,7 @@ class AESAlgorithm(SymmetricCipher):
         # TODO
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
-
-        # run analysis for params
-        for k,v in self.params.items():
-            if isinstance(v, Variable) or isinstance(v, Algorithm):
-                output.append(log.info('Analysis for %s%s%s:' % (log.COLOR_BOLD, k, log.color_NONE), 
-                                       offset=output_offset+2, stdout=False))
-                output += v.analyze(output_offset+4, interactive)
-        
+        output += self.analyze_params(output_offset, interactive)
         return output
 
 
@@ -539,15 +544,13 @@ class XORAlgorithm(SymmetricCipher):
         for i in range(min([len(old_value), len(new_value)])):
             if old_value[i] != new_value[i]:
                 modulo = i % len(new_key)
-                debug('Detected change at %d (modulo = %d): 0x%02x != 0x%02x' % (i, modulo, old_value[i], new_value[i]))
-                if modulo in modulos:
-                    debug('  but the modulo has been used.')
-                else:
+                if modulo not in modulos:
+                    debug('Detected change at %d (modulo = %d): 0x%02x != 0x%02x' % (i, modulo, old_value[i], new_value[i]))
                     modulos.add(modulo)
                     new_key[modulo] = (new_key[modulo]
                                        ^ (old_value[i]
                                           ^ new_value[i]))
-                    print('New key:', Variable(new_key))
+                    log.info('New key:', Variable(new_key))
 
         if new_key != self.params['key'].as_raw():
             debug('The key has changed, applying...')
@@ -563,10 +566,5 @@ class XORAlgorithm(SymmetricCipher):
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
         # key present in ciphertext?
         # something with key entropy?
-
-        # run analysis for params
-        for k,v in self.params.items():
-            if isinstance(v, Variable) or isinstance(v, Algorithm):
-                output.append(log.info('Analysis for', k, offset=output_offset+2, stdout=False))
-                output += v.analyze(output_offset+4, interactive)
+        output += self.analyze_params(output_offset, interactive)
         return output
