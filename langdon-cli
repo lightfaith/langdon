@@ -871,14 +871,14 @@ if method == 'ecb-chosen-plaintext':
                 debug('Using block offset', offset)
                 """get reference cipher string"""
                 reference_payload = start_padding + b'A' * offset
-                #print('reference payload:', reference_payload)
+                print('reference payload:', reference_payload)
                 oracle = Oracle(oracle_path, 
                                 {0: reference_payload}, 
                                 lambda i,r,o,e,kw: True)
                 oracle.start()
                 oracle.join()
                 reference_index = block_counter * blocksize
-                #print('reference index:', reference_index)
+                print('reference index:', reference_index)
                 reference = oracle.matching[0].output[reference_index:reference_index + blocksize]
                 if not reference:
                     """end of ciphertext"""

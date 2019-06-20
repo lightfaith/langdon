@@ -112,7 +112,7 @@ while True:
     
     # is this just a variable name? add to print queue
     if cmd in all_variables.keys():
-        pdb.set_trace()
+        #pdb.set_trace()
         v = all_variables[cmd]
         if isinstance(v, Algorithm):
             # algorithm, print detail of it
@@ -478,6 +478,7 @@ while True:
 
     # TODO prime command
     # TODO math operations
+    # TODO help command
     ######################################
     # XOR
     ######################################
@@ -553,6 +554,16 @@ while True:
             traceback.print_exc()
             log.err('Specify known parameters and variables holding the values.')
 
+    elif cmd.startswith('ecb-chosen-plaintext '):
+        oracle_path = cmd.rpartition(' ')[2]
+        if oracle_path in all_variables.keys():
+            result = attacks.ecb_chosen_plaintext(all_variables[oracle_path])
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        else:
+            log.err('You must specify an oracle.')
     ######################################
     # constant value OR bad command
     ######################################
