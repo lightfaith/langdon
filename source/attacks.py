@@ -57,7 +57,7 @@ def break_xor(data, language):
 def ecb_chosen_plaintext(oracle_path):
     """
     ECB Chosen Plaintext Attack
-    (Cryptopals 2.12)
+    (Cryptopals 2.12, 2.14)
     
     We can decrypt message if start of the plaintext is under our control.
     
@@ -90,6 +90,8 @@ def ecb_chosen_plaintext(oracle_path):
         return b''
     else:
         # Now do the attack:
+        #   If there is some prepended stuffing, add chars to end the block.
+        #
         #   Prepend block 1 byte short, e.g. 'AAAAAAA_' and get the ciphertext.
         #   That means the last byte will be first character from the unknown 
         #   plaintext.
@@ -176,14 +178,14 @@ def ecb_chosen_plaintext(oracle_path):
                 break
             block_counter += 1
             debug('Dealing with new block.')
-            break # TODO del
             #prynt(plaintext, end='')
-        return plaintext
+        return pkcs7_unpad(plaintext)
 
 
 def ecb_injection(e_oracle_path, d_oracle_path):
     """
     ECB injection
+    (Cryptopals 2.13)
 
     With control of portion of the plaintext, we can create fake blocks
     that we can feed into decryption routine, in this case resulting in
