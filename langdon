@@ -567,15 +567,27 @@ while True:
     
     elif cmd.startswith('ecb-injection '):
         try:
-            _, e_oracle_path, d_oracle_path = cmd.split()
-            result = attacks.ecb_injection(all_variables[e_oracle_path],
-                                           all_variables[d_oracle_path])
+            try:
+                _, e_oracle_path, d_oracle_path, expected, desired, payload = cmd.split()
+                result = attacks.ecb_injection(all_variables[e_oracle_path],
+                                               all_variables[d_oracle_path],
+                                               all_variables[expected].as_raw(),
+                                               all_variables[desired].as_raw(),
+                                               all_variables[payload].as_raw())
+            except:
+                _, e_oracle_path, d_oracle_path, expected, desired = cmd.split()
+                result = attacks.ecb_injection(all_variables[e_oracle_path],
+                                               all_variables[d_oracle_path],
+                                               all_variables[expected].as_raw(),
+                                               all_variables[desired].as_raw())
+                
             if variable_name:
                 update_variable(variable_name, result)
             else:
                 output.append(result)
         except:
-            log.err('You must specify an oracle.')
+            traceback.print_exc()
+            log.err('You must specify encryption and decryption oracle, expected value, desired value and optional payload.')
     ######################################
     # constant value OR bad command
     ######################################

@@ -182,7 +182,7 @@ def ecb_chosen_plaintext(oracle_path):
         return pkcs7_unpad(plaintext)
 
 
-def ecb_injection(e_oracle_path, d_oracle_path):
+def ecb_injection(e_oracle_path, d_oracle_path, expected, desired, payload=None):
     """
     ECB injection
     (Cryptopals 2.13)
@@ -190,20 +190,41 @@ def ecb_injection(e_oracle_path, d_oracle_path):
     With control of portion of the plaintext, we can create fake blocks
     that we can feed into decryption routine, in this case resulting in
     authorization bypass.
+
+    This approach expect the sensitive value to spoof is at the end
+    (or it matches a block perfectly, but you must manually order chunks).
+
+    The final payload kept in the ciphertext must be fixed length, which
+    is computed here.
     """
-    # TODO not automated
-    """find blocksize"""
-    payload = b'A' * 129
-    encrypted = Oracle.once(payload, e_oracle_path)
+
+    # find blocksize
+    blocksize_payload = b'A' * 129
+    encrypted = Oracle.once(blocksize_payload, e_oracle_path)
     patterns = find_repeating_patterns(encrypted)
     if not patterns:
         log.err('No patterns present -> probably not ECB.')
     else:
         blocksize = patterns[0][1] - patterns[0][0]
         debug('Determined blocksize:', blocksize)
+        
+        decrypted = Oracle.once(encrypted, d_oracle_path)
+        # determine payload offset
+        debug('Determining payload offset...')
+        payload_offset = decrypted.index(blocksize_payload)
+        debug('Payload offset:', payload_offset)
+    
+        debug('Determining size of data between payload and expected...')
+        # find length of data between the 'A' payload and the expected value
+        payload_to_expected = decrypted.index(expected) - payload_offset - len(blocksize_payload)
+        debug('Found difference: %d.' % payload_to_expected)
+        real_payload_size = (blocksize - payload_offset - payload_to_expected) % 16
+        debug('You must use payload of length %d (or + n * %d)' % (real_payload_size, blocksize))
 
-        """find role=user offset"""
-        payload = b'ninja@cia.gov'
+        if not payload:
+            payload = b'X' * real_payload_size
+
+        # find expected value offset
         debug('Using', payload, 'as payload, len:', len(payload))
         encrypted = Oracle.once(payload, e_oracle_path)
         decrypted = Oracle.once(encrypted, d_oracle_path)
@@ -211,32 +232,107 @@ def ecb_injection(e_oracle_path, d_oracle_path):
         debug('Decrypted chunks:', [decrypted[i:i+blocksize]
                                     for i in range(0, len(decrypted), blocksize)])
 
-        payload_offset = decrypted.index(payload)
-        debug('Payload offset:', payload_offset)
-        role_to_payload_offset = (decrypted.index(b'user')
-                                  - payload_offset
-                                  - len(payload))
-        debug('Role offset from the end of the payload:', role_to_payload_offset)
 
+        # the fake block must be created in the middle of attacker-controlled
+        # payload -> get left and right lengths
+        # PKCS#7 pad the fake block
         start_payload_padding = blocksize - payload_offset
         end_payload_padding = len(payload) - start_payload_padding
-        debug('Payload must have', start_payload_padding + end_payload_padding, 'bytes.')
-        """in this case, the payload is OK"""
-        payload = b'ninja@cia.gov'
-        fake_block = pkcs7_pad(b'admin', blocksize)
+        
+        fake_block = pkcs7_pad(desired, blocksize)
         payload = (payload[:start_payload_padding]
                    + fake_block
                    + payload[start_payload_padding:])
-        debug('Using', payload, 'as payload, len:', len(payload))
+        debug('Using', payload, 'as final payload, len:', len(payload))
 
         encrypted = Oracle.once(payload, e_oracle_path)
         encrypted_chunks = [encrypted[i:i+blocksize]
                             for i in range(0, len(encrypted), blocksize)]
-        reordered = b''.join(encrypted_chunks[x] for x in (0, 2, 1))
+        # drop the expected chunk, put desired chunk in the place
+        # 1, 2 -> 0, 2, 1
+        # 2, 5 -> 0, 1, 5, 3, 4, 2
+        fake_block_index = payload_offset // blocksize + 1
+        #reordered = b''.join(encrypted_chunks[x] for x in (0, 2, 1))
+        encrypted_chunks[-1] = encrypted_chunks[fake_block_index]
+        del encrypted_chunks[fake_block_index]
+
+        reordered = b''.join(encrypted_chunks)
         decrypted = Oracle.once(reordered, d_oracle_path)
         debug('Decrypted message:', decrypted)
         debug('Decrypted chunks:', [decrypted[i:i+blocksize]
                                     for i in range(0, len(decrypted), blocksize)])
         return decrypted
 
+
+def cbc_bitflipping(e_oracle_path, d_oracle_path):
+    """
+    CBC bitflipping
+    (Cryptopals 2.16)
+
+    We can use unneeded chunk to hold specific value than, after XORed
+    with next decoded chunk, will create desired payload. In total,
+    2 blocks are destroyed. In CP 16, authorization is bypassed.
+    """
+    # determine blocksize
+    blocksize = None
+    common_match = 0
+    previous_encrypted = b''
+    for payload_length in range(8, 129):
+        encrypted = Oracle.once(b'A' * payload_length, e_oracle_path)
+        if previous_encrypted:
+            match = len([0 for i in range(len(encrypted)) if encrypted[i] == previous_encrypted[i]])
+            if not common_match:
+                common_match = match
+            if match > common_match:
+                blocksize = match - common_match
+                """isn't it just an anomaly?"""
+                if blocksize % 8 == 0:
+                    break
+        previous_encrypted = encrypted
+    if not blocksize:
+        print('Cannot determine blocksize -> probably not CBC.', file=sys.stderr)
+    debug('Determined blocksize:', blocksize)
+
+    """Run one E-D cycle"""
+    debug('Trying sample payload.')
+    payload = b'thisishalloween'
+    debug('Payload:', payload)
+    encrypted = Oracle.once(payload, e_oracle_path)
+    original_e_blocks = chunks(encrypted, blocksize)
+    debug('Encrypted blocks:', original_e_blocks)
+
+    decrypted = Oracle.once(encrypted, d_oracle_path)
+    original_d_blocks = chunks(decrypted, blocksize)
+    debug('Decrypted:', decrypted)
+    debug('Decrypted blocks:', original_d_blocks)
+
+    desired = b';admin=true;aa='
+    target_block = 3 # holding some comment...
+    """
+        C2      C3
+         |    ___|__
+        1|    | AES |
+         |    ```|```
+         |       |2
+         `-------X
+                 |3
+                 P
+        3 = 1 ^ 2
+        3' = 1' ^ 2
+        -----------
+        1' = 3' ^ 2
+        1' = 3' ^ (1 ^ 3)
+        1' = 3' (desired) ^ 1 (previous encrypted block) ^ 3 (string to replace)
+    """
+    fake_block = xor(xor(desired,
+                         original_e_blocks[target_block - 1]),
+                     original_d_blocks[target_block])
+
+    new_blocks = (original_e_blocks[0:target_block - 1]
+                  + [fake_block]
+                  + original_e_blocks[target_block:])
+    debug('New blocks:', new_blocks)
+    decrypted = Oracle.once(b''.join(new_blocks), d_oracle_path)
+    prynt(decrypted)
+ 
 #####

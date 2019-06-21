@@ -1228,7 +1228,7 @@ if method == 'cp-16':
     common_match = 0
     previous_encrypted = b''
     for payload_length in range(8, 129):
-        encrypted = oracle_send(b'A' * payload_length, e_oracle_path)
+        encrypted = Oracle.once(b'A' * payload_length, e_oracle_path)
         if previous_encrypted:
             match = len([0 for i in range(len(encrypted)) if encrypted[i] == previous_encrypted[i]])
             if not common_match:
@@ -1247,11 +1247,11 @@ if method == 'cp-16':
     debug('Trying sample payload.')
     payload = b'thisishalloween'
     debug('Payload:', payload)
-    encrypted = oracle_send(payload, e_oracle_path)
+    encrypted = Oracle.once(payload, e_oracle_path)
     original_e_blocks = chunks(encrypted, blocksize)
     debug('Encrypted blocks:', original_e_blocks)
     
-    decrypted = oracle_send(encrypted, d_oracle_path)
+    decrypted = Oracle.once(encrypted, d_oracle_path)
     original_d_blocks = chunks(decrypted, blocksize)
     debug('Decrypted:', decrypted)
     debug('Decrypted blocks:', original_d_blocks)
@@ -1282,7 +1282,7 @@ if method == 'cp-16':
                   + [fake_block] 
                   + original_e_blocks[target_block:])
     debug('New blocks:', new_blocks)
-    decrypted = oracle_send(b''.join(new_blocks), d_oracle_path)
+    decrypted = Oracle.once(b''.join(new_blocks), d_oracle_path)
     prynt(decrypted)
 
 
