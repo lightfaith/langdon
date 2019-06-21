@@ -476,9 +476,23 @@ while True:
             else:
                 output.append(result)
 
+    elif cmd.startswith('oracle '):
+        try:
+            _, oracle_path, payload = cmd.split()
+            result = Oracle.once(all_variables[payload].as_raw(), 
+                                 all_variables[oracle_path])
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('You must specify oracle and payload.')
+
     # TODO prime command
     # TODO math operations
     # TODO help command
+    # TODO DeBruijn command
     ######################################
     # XOR
     ######################################
