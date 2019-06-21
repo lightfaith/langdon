@@ -1227,16 +1227,23 @@ if method == 'cp-16':
     blocksize = None
     common_match = 0
     previous_encrypted = b''
+    debug('Running')
     for payload_length in range(8, 129):
+        debug('Len', payload_length)
         encrypted = Oracle.once(b'A' * payload_length, e_oracle_path)
         if previous_encrypted:
             match = len([0 for i in range(len(encrypted)) if encrypted[i] == previous_encrypted[i]])
+            debug('  has %d same bytes' % match)
             if not common_match:
                 common_match = match
             if match > common_match:
                 blocksize = match - common_match
+                debug('  which should denote new block -> got blocksize', blocksize)
                 """isn't it just an anomaly?"""
-                if blocksize % 8 == 0:
+                if blocksize % 8 != 0:
+                    debug('  That is weird blocksize (just accident), continuing...')
+                else:
+                    debug('  blocksize % 8 == 0 => probably not false positive; stopping')
                     break
         previous_encrypted = encrypted
     if not blocksize:

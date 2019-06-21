@@ -165,9 +165,11 @@ class Oracle(threading.Thread):
                         lambda i,r,o,e,kw: True)
         oracle.start()
         oracle.join()
-        #debug('once result:', oracle.matching[0].output, oracle.matching[0].error)
+        #debug('once result:', oracle.matching[0].output)
         #for line in hexdump(oracle.matching[0].output):
         #    print(line)
+        if oracle.matching[0].error:
+            debug('Oracle has some error output:', oracle.matching[0].error)
         result = oracle.matching[0].output
         return result
 
