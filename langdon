@@ -564,6 +564,18 @@ while True:
                 output.append(result)
         else:
             log.err('You must specify an oracle.')
+    
+    elif cmd.startswith('ecb-injection '):
+        try:
+            _, e_oracle_path, d_oracle_path = cmd.split()
+            result = attacks.ecb_injection(all_variables[e_oracle_path],
+                                           all_variables[d_oracle_path])
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        except:
+            log.err('You must specify an oracle.')
     ######################################
     # constant value OR bad command
     ######################################

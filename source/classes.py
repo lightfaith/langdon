@@ -142,16 +142,34 @@ class Oracle(threading.Thread):
             #debug('Oracle testing 0x%02x' % payload_id, payload)
             r, o, e = run_command('%s "%s"' % (self.oracle_path, 
                                              base64.b64encode(payload).decode()))
+            #print(r, o, e)
             o = base64.b64decode(o)
-            #if payload_id == 0x52:
-            #    debug('Oracle testing 0x%02x' % payload_id, payload)
-            #    prynt('0x%02x' % payload_id, o[self.kwargs['reference_index']:self.kwargs['reference_index']+self.kwargs['blocksize']], e)
             if self.validate(payload_id, r, o, e, self.kwargs):
                 #debug('Payload 0x%02x matches condition!' % payload_id)
                 self.matching.append(OracleResult(payload_id, r, o, e))
                 if self.break_on_success:
                     break
         self.time = time.time() - start
+
+    @staticmethod
+    def once(payload, oracle_path):
+        """
+        Quick method to run an oracle with given payload and receive output.
+        """
+        #print('RUNNING', oracle_path)
+        #print('payload:', payload)
+        #for line in hexdump(payload):
+        #    print(line)
+        oracle = Oracle(oracle_path,
+                        {0: payload},
+                        lambda i,r,o,e,kw: True)
+        oracle.start()
+        oracle.join()
+        #debug('once result:', oracle.matching[0].output, oracle.matching[0].error)
+        #for line in hexdump(oracle.matching[0].output):
+        #    print(line)
+        result = oracle.matching[0].output
+        return result
 
 ####################################################
 class Variable:

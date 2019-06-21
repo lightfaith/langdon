@@ -179,4 +179,62 @@ def ecb_chosen_plaintext(oracle_path):
             break # TODO del
             #prynt(plaintext, end='')
         return plaintext
+
+
+def ecb_injection(e_oracle_path, d_oracle_path):
+    """
+    ECB injection
+
+    With control of portion of the plaintext, we can create fake blocks
+    that we can feed into decryption routine, in this case resulting in
+    authorization bypass.
+    """
+    # TODO not automated
+    """find blocksize"""
+    payload = b'A' * 129
+    encrypted = Oracle.once(payload, e_oracle_path)
+    patterns = find_repeating_patterns(encrypted)
+    if not patterns:
+        log.err('No patterns present -> probably not ECB.')
+    else:
+        blocksize = patterns[0][1] - patterns[0][0]
+        debug('Determined blocksize:', blocksize)
+
+        """find role=user offset"""
+        payload = b'ninja@cia.gov'
+        debug('Using', payload, 'as payload, len:', len(payload))
+        encrypted = Oracle.once(payload, e_oracle_path)
+        decrypted = Oracle.once(encrypted, d_oracle_path)
+        debug('Decrypted message:', decrypted)
+        debug('Decrypted chunks:', [decrypted[i:i+blocksize]
+                                    for i in range(0, len(decrypted), blocksize)])
+
+        payload_offset = decrypted.index(payload)
+        debug('Payload offset:', payload_offset)
+        role_to_payload_offset = (decrypted.index(b'user')
+                                  - payload_offset
+                                  - len(payload))
+        debug('Role offset from the end of the payload:', role_to_payload_offset)
+
+        start_payload_padding = blocksize - payload_offset
+        end_payload_padding = len(payload) - start_payload_padding
+        debug('Payload must have', start_payload_padding + end_payload_padding, 'bytes.')
+        """in this case, the payload is OK"""
+        payload = b'ninja@cia.gov'
+        fake_block = pkcs7_pad(b'admin', blocksize)
+        payload = (payload[:start_payload_padding]
+                   + fake_block
+                   + payload[start_payload_padding:])
+        debug('Using', payload, 'as payload, len:', len(payload))
+
+        encrypted = Oracle.once(payload, e_oracle_path)
+        encrypted_chunks = [encrypted[i:i+blocksize]
+                            for i in range(0, len(encrypted), blocksize)]
+        reordered = b''.join(encrypted_chunks[x] for x in (0, 2, 1))
+        decrypted = Oracle.once(reordered, d_oracle_path)
+        debug('Decrypted message:', decrypted)
+        debug('Decrypted chunks:', [decrypted[i:i+blocksize]
+                                    for i in range(0, len(decrypted), blocksize)])
+        return decrypted
+
 #####

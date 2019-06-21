@@ -11,19 +11,26 @@ except:
     print('[-] Usage: %s <base64>' % sys.argv[0])
     sys.exit(1)
 
-data = base64.b64decode(data)
-datafile = '/tmp/cryptopals_13_%d_decryptdata' % os.getpid()
-keyfile = '/tmp/cryptopals_13_key'
-with open(datafile, 'wb') as f:
-    f.write(data)
-with open(keyfile, 'wb') as f:
-    f.write(b'YELLOW SUBMARINE')
+result_file = '/tmp/p'
+payload = b"""
+ciphertext = base64:%s
+key = 'YELLOW SUBMARINE'
+aes = AES mode=ecb ciphertext=ciphertext key=key
+p = decrypt aes
+export p %s
+""" % (data.encode(), result_file.encode())
 
-#sys.stderr.buffer.write(data)
-p = subprocess.Popen('./langdon --decrypt aes-ecb {0} {1}; rm {0}'.format(
-    datafile, keyfile),
+#p = subprocess.Popen('./langdon-cli --decrypt aes-ecb {0} {1}; rm {0}'.format(
+#    datafile, keyfile),
+p = subprocess.Popen('./langdon',
                      shell=True,
-                     stdout=subprocess.PIPE,
-                     stderr=subprocess.PIPE)
-(out, err) = p.communicate()
-sys.stdout.buffer.write(out)
+                     stdin=subprocess.PIPE,
+                     stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL)
+p.stdin.write(payload)
+p.stdin.close()
+p.wait()
+#(out, err) = p.communicate()
+with open(result_file, 'rb') as f:
+    sys.stdout.buffer.write(base64.b64encode(f.read()))
+

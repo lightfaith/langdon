@@ -1169,7 +1169,7 @@ if method == 'cp-13':
     """
     """find blocksize"""
     payload = b'A' * 129
-    encrypted = oracle_send(payload, e_oracle_path)
+    encrypted = Oracle.once(payload, e_oracle_path)
     patterns = find_repeating_patterns(encrypted)
     if not patterns:
         print('No patterns present -> probably not ECB.', file=sys.stderr)
@@ -1180,8 +1180,8 @@ if method == 'cp-13':
         """find role=user offset"""
         payload = b'ninja@cia.gov'
         debug('Using', payload, 'as payload, len:', len(payload))
-        encrypted = oracle_send(payload, e_oracle_path)
-        decrypted = oracle_send(encrypted, d_oracle_path)
+        encrypted = Oracle.once(payload, e_oracle_path)
+        decrypted = Oracle.once(encrypted, d_oracle_path)
         debug('Decrypted message:', decrypted)
         debug('Decrypted chunks:', [decrypted[i:i+blocksize] 
                                     for i in range(0, len(decrypted), blocksize)])
@@ -1204,11 +1204,11 @@ if method == 'cp-13':
                    + payload[start_payload_padding:])
         debug('Using', payload, 'as payload, len:', len(payload))
         
-        encrypted = oracle_send(payload, e_oracle_path)
+        encrypted = Oracle.once(payload, e_oracle_path)
         encrypted_chunks = [encrypted[i:i+blocksize] 
                             for i in range(0, len(encrypted), blocksize)]
         reordered = b''.join(encrypted_chunks[x] for x in (0, 2, 1))
-        decrypted = oracle_send(reordered, d_oracle_path)
+        decrypted = Oracle.once(reordered, d_oracle_path)
         debug('Decrypted message:', decrypted)
         debug('Decrypted chunks:', [decrypted[i:i+blocksize] 
                                     for i in range(0, len(decrypted), blocksize)])

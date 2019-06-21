@@ -130,7 +130,7 @@ def invmod(a, b):
 
 
 def oracle_send(payload, oracle_path):
-    """
+    '''"""
     Quick method to run an oracle with given payload and receive output.
     """
     oracle = Oracle(oracle_path,
@@ -140,6 +140,8 @@ def oracle_send(payload, oracle_path):
     oracle.join()
     result = oracle.matching[0].output
     return result
+    '''
+    return Oracle.once(payload, oracle_path)
 
 def pkcs7_pad(data, blocksize=16):
     """
