@@ -154,7 +154,9 @@ while True:
     # test
     if cmd.startswith('test'):
         #venn(events, 'category == auth', 'severity == critical')
-        list_overview(by_db_id, 'source', 'score >= 5')
+        #for x in range(4):
+        #    for y in range(4):
+        #        print(x, y, debruijn(190, params=(x, y))[-10:])
         
         pass
     
@@ -489,10 +491,20 @@ while True:
             traceback.print_exc()
             log.err('You must specify oracle and payload.')
 
+    elif cmd.startswith('debruijn '):
+        try:
+            length = int(cmd[9:].strip())
+            result = debruijn(length)
+            if variable_name:
+                update_variable(variable_name, Variable(result, constant=True))
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('Length must be specified.')
     # TODO prime command
     # TODO math operations
     # TODO help command
-    # TODO DeBruijn command
     ######################################
     # XOR
     ######################################

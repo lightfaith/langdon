@@ -128,6 +128,31 @@ def invmod(a, b):
         return t + b
     return t
 
+def debruijn(length, unique_length=3, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890', params=(1, 1)):
+    # https://gist.github.com/rgov/891712
+    # DIFFERENT FROM r2! 
+    a = [0] * (unique_length + 1)
+    k = len(alphabet)
+    def gen(t, p):
+        if t > unique_length:
+            for v in a[1:p+1]:
+                yield v
+        else:
+            a[t] = a[t-p]
+            for v in gen(t+1, p):
+                yield v
+            for j in range(a[t-p]+1, k):
+                a[t] = j
+                for v in gen(t+1, t):
+                    yield v
+    #print(''.join(chr(x) for x in list(gen(1, 1))[:length]))
+    #for x in gen(1, 1):
+    #    print(alphabet[x % k], end='')
+    #    sys.stdout.flush()
+    #    time.sleep(0.1)
+    g = gen(*params)
+    return ''.join([alphabet[next(g) % len(alphabet)] for _ in range(length)])
+
 
 def oracle_send(payload, oracle_path):
     '''"""
