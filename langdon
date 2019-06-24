@@ -630,6 +630,33 @@ while True:
             traceback.print_exc()
             log.err('You must specify encryption and decryption oracle, block index to alter and desired value.')
 
+    elif cmd.startswith('cbc-padding '):
+        try:
+            try:
+                try:
+                    _, ciphertext, oracle_path, blocksize, iv = cmd.split()
+                    blocksize = int(blocksize)
+                except:
+                    _, ciphertext, oracle_path, blocksize = cmd.split()
+                    iv = None
+                    blocksize = int(blocksize)
+            except:
+                _, ciphertext, oracle_path = cmd.split()
+                iv = None
+                blocksize = 16
+            
+            result = attacks.cbc_padding(all_variables[ciphertext].as_raw(), 
+                                         all_variables[oracle_path], 
+                                         blocksize,
+                                         all_variables[iv].as_raw())
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('You must specify ciphertext, oracle path and optional blocksize.')
+
     ######################################
     # constant value OR bad command
     ######################################

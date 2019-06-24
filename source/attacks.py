@@ -277,7 +277,6 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
     blocksize = None
     common_match = 0
     previous_encrypted = b''
-    #pdb.set_trace()
     for payload_length in range(8, 129):
         encrypted = Oracle.once(b'A' * payload_length, e_oracle_path)
         if previous_encrypted:
@@ -294,7 +293,7 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
         print('Cannot determine blocksize -> probably not CBC.', file=sys.stderr)
     debug('Determined blocksize:', blocksize)
 
-    """Run one E-D cycle"""
+    # Run one E-D cycle
     debug('Trying sample payload.')
     payload = b'thisishalloween'
     debug('Payload:', payload)
@@ -307,6 +306,7 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
     debug('Decrypted:', decrypted)
     debug('Decrypted blocks:', original_d_blocks)
 
+    # modify (target_block-1) to get correct target_block
     """
         C2      C3
          |    ___|__
@@ -333,5 +333,94 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
     debug('New blocks:', new_blocks)
     decrypted = Oracle.once(b''.join(new_blocks), d_oracle_path)
     return decrypted
+
+
+def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):    
+    """
+    CBC Padding Oracle Attack
+
+    We can use CBC principles to test faked PKCS#7 padding. This
+    leads to plaintext revelation.
+    """
+    # create blocks of blocksize
+    blocks = [ciphertext[i:i+blocksize]
+              for i in range(0, len(ciphertext), blocksize)]
+
+    if any(len(b) != blocksize for b in blocks):
+        log.warn('Not all blocks have correct blocksize.')
+
+    final_plaintexts = []
+    # run through blocks in reverse order
+    for block_index, block in enumerate(blocks[::-1]):
+        block_plaintext = b''
+        try:
+            previous_block = blocks[::-1][block_index + 1]
+            debug('Previous block:',
+                  ' '.join('%02x' % c for c in previous_block))
+        except:
+            previous_block = iv # even None
+            debug('Previous block:',
+                  ' '.join('%02x' % c for c in previous_block))
+
+        debug('Actual block:  ', ' '.join('%02x' % c for c in block))
+
+        # for each byte in block in reverse order
+        for byte_index in range(blocksize-1, -1, -1):
+            debug('Dealing with byte #%d (%02x)'
+                  % (byte_index, block[byte_index]))
+
+            # prepare payloads for bruteforce
+            valid_padding_byte = -1
+            payloads = {}
+            for bf_byte in range(256):
+                # prepare fake previous block - start with zeros
+                fake_prev = b'\x00' * (blocksize - len(block_plaintext) - 1)
+                # add bruteforced byte
+                fake_prev += b'%c' % bf_byte
+
+                # then add values so xor with block gives expected padding values
+                # skipped on the first run
+                for byte_pos, plaintext_byte in enumerate(block_plaintext):
+                    fake_prev += b'%c' % (plaintext_byte
+                                          ^ (len(block_plaintext) + 1) # expected padding
+                                          ^ (previous_block[blocksize-len(block_plaintext)+byte_pos]
+                                             if previous_block
+                                             else 0))
+                # add the block and test it
+                payloads[bf_byte] = fake_prev + block
+            # bruteforce the padding
+            oracle_count = 1 # use this for debug
+            oracle_count = 8 # use this for speed
+            oracles = [Oracle(oracle_path,
+                              {k:v for k,v in payloads.items()
+                                   if (k // (len(payloads)/oracle_count) == i)},
+                              lambda i,r,o,e,kw: (r == 0))
+                       for i in range(oracle_count)]
+            for oracle in oracles:
+                oracle.start()
+            for oracle in oracles:
+                oracle.join()
+                if oracle.matching:
+                    valid_padding_byte = oracle.matching[0].payload_id
+
+            if valid_padding_byte == -1:
+                debug('Failed to find valid padding byte!')
+                break
+
+            debug('Found valid padding byte:', valid_padding_byte)
+            """compute plaintext byte from padding byte"""
+            block_plaintext = (b'%c' % ((len(block_plaintext) + 1) # expected padding
+                                        ^ (previous_block[byte_index]
+                                           if previous_block
+                                           else 0) # byte of previous block
+                                        ^ valid_padding_byte) #
+                               + block_plaintext)
+            debug('New block plaintext:', block_plaintext)
+        final_plaintexts.append(block_plaintext)
+    #try:
+    #    print('Final plaintext:', (b''.join(final_plaintexts[::-1])).decode())
+    #except:
+    #    print('Final plaintext:', b''.join(final_plaintexts[::-1]))
+    return b''.join(final_plaintexts[::-1])
  
 #####
