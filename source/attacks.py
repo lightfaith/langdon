@@ -264,7 +264,7 @@ def ecb_injection(e_oracle_path, d_oracle_path, expected, desired, payload=None)
         return decrypted
 
 
-def cbc_bitflipping(e_oracle_path, d_oracle_path):
+def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
     """
     CBC bitflipping
     (Cryptopals 2.16)
@@ -277,6 +277,7 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path):
     blocksize = None
     common_match = 0
     previous_encrypted = b''
+    #pdb.set_trace()
     for payload_length in range(8, 129):
         encrypted = Oracle.once(b'A' * payload_length, e_oracle_path)
         if previous_encrypted:
@@ -306,8 +307,6 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path):
     debug('Decrypted:', decrypted)
     debug('Decrypted blocks:', original_d_blocks)
 
-    desired = b';admin=true;aa='
-    target_block = 3 # holding some comment...
     """
         C2      C3
          |    ___|__
@@ -333,6 +332,6 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path):
                   + original_e_blocks[target_block:])
     debug('New blocks:', new_blocks)
     decrypted = Oracle.once(b''.join(new_blocks), d_oracle_path)
-    prynt(decrypted)
+    return decrypted
  
 #####

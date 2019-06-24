@@ -614,6 +614,22 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must specify encryption and decryption oracle, expected value, desired value and optional payload.')
+
+    elif cmd.startswith('cbc-bitflipping '):
+        try:
+            _, e_oracle_path, d_oracle_path, target_block, payload = cmd.split()
+            result = attacks.cbc_bitflipping(all_variables[e_oracle_path], 
+                                             all_variables[d_oracle_path], 
+                                             int(all_variables[target_block].as_int()), 
+                                             all_variables[payload].as_raw())
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('You must specify encryption and decryption oracle, block index to alter and desired value.')
+
     ######################################
     # constant value OR bad command
     ######################################
