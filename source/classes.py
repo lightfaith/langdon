@@ -387,8 +387,9 @@ class AESAlgorithm(SymmetricCipher):
         self.params = {
             'mode': None,
             'blocksize': '16',
-            'key': None,
-            'iv': None,
+            'key': None,         # the password
+            'iv': None,          # for CBC mode, fictional previous block
+            'nonce': 0,          # for CTR mode, similar to IV
             'plaintext': None,
             'ciphertext': None,
         }
@@ -428,6 +429,8 @@ class AESAlgorithm(SymmetricCipher):
         key = self.params['key'].as_raw()
         if self.params.get('iv'):
             iv = self.params['iv'].as_raw()
+        if self.params.get('nonce'):
+            nonce = int(self.params['nonce'].as_int())
         cipher = AES.new(key, AES.MODE_ECB)
         blocksize = int(self.params['blocksize'])
         ciphertext = b''
@@ -455,6 +458,18 @@ class AESAlgorithm(SymmetricCipher):
                 tmp = xor(block, previous_block)
                 previous_block = cipher.encrypt(tmp)
                 ciphertext += previous_block
+        elif self.params['mode'] == 'ctr':
+            """
+              Nonce;Counter
+                   |
+            Key --AES
+                   |
+            P ----(X)
+                   |
+                   C
+            """
+            ciphertext = self.ctr_crypt(plaintext, cipher, nonce)
+
         else:
             log.err('Unsupported mode.')
             return None
@@ -467,6 +482,8 @@ class AESAlgorithm(SymmetricCipher):
         key = self.params['key'].as_raw()
         if self.params.get('iv'):
             iv = self.params['iv'].as_raw()
+        if self.params.get('nonce'):
+            nonce = int(self.params['nonce'].as_int())
         cipher = AES.new(key, AES.MODE_ECB)
         blocksize = int(self.params['blocksize'])
         
@@ -492,6 +509,17 @@ class AESAlgorithm(SymmetricCipher):
                 tmp = cipher.decrypt(block)
                 padded += xor(tmp, previous_block)
                 previous_block = block
+        elif self.params['mode'] == 'ctr':
+            """
+              Nonce;Counter
+                   |
+            Key --AES
+                   |
+            P ----(X)
+                   |
+                   C
+            """
+            plaintext = self.ctr_crypt(ciphertext, cipher, nonce)
         
         else:
             log.err('Unsupported mode.')
@@ -499,9 +527,33 @@ class AESAlgorithm(SymmetricCipher):
 
         # TODO langdon-cli had ignore_padding flag...
         #      ... maybe for CBC oracle?
-        plaintext = pkcs7_unpad(padded)
+        try:
+            plaintext = pkcs7_unpad(padded)
+        except IndexError:
+            # no padding (e.g. for CTR), continue
+            pass
+        except:
+            traceback.print_exc()
         self.params['plaintext'] = Variable(plaintext)
         return self.params['plaintext']
+
+
+    def ctr_crypt(self, source, cipher, nonce):
+        # Same approach for both encryption and decryption
+        """
+          Nonce;Counter
+               |
+        Key --AES
+               |
+        P ----(X)
+               |
+               C
+        """
+        blocks = [cipher.encrypt(bytes(bytearray(pack('<Q', nonce))
+                                       + bytearray(pack('<Q', block_counter))))
+                  for block_counter in range((len(source) // 16) + 1)]
+        return xor(source, b''.join(blocks)[:len(source)])
+
 
     def analyze(self, output_offset=0, interactive=False): # AES analysis
         # TODO
