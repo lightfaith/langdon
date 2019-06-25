@@ -159,7 +159,11 @@ while True:
         #        print(x, y, debruijn(190, params=(x, y))[-10:])
         
         pass
-    
+   
+    if cmd.startswith('pdb'):
+        pdb.set_trace()
+        continue
+
     ##########################
     # framework control
     ##########################
@@ -677,6 +681,70 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must define variable, language and sample size.')
+
+    ######################################
+    # RNG
+    ######################################
+    elif cmd.startswith('Mersenne32'):
+        seed = 0 # TODO what default seed?
+        for f in [
+            lambda x: int(x),
+            lambda x: int(x, 16),
+            lambda x: int(all_variables[x].as_int())
+        ]:
+            try:
+                seed = f(cmd.split()[-1])
+                break
+            except:
+                continue
+        
+        result = MersenneTwister32(seed)
+        if variable_name:
+            update_variable(variable_name, result)
+        else:
+            output.append(result)
+
+    elif cmd.startswith('Mersenne64'):
+        seed = 0 # TODO what default seed?
+        for f in [
+            lambda x: int(x),
+            lambda x: int(x, 16),
+            lambda x: int(all_variables[x].as_int())
+        ]:
+            try:
+                seed = f(cmd.split()[-1])
+                break
+            except:
+                continue
+        
+        result = MersenneTwister64(seed)
+        if variable_name:
+            update_variable(variable_name, result)
+        else:
+            output.append(result)
+
+    elif cmd.startswith('rng '):
+        parts = cmd.split()
+        mt = variables[parts[1]]
+        mode = parts[2]
+        count = 1
+        for f in [
+            lambda x: int(x),
+            lambda x: int(x, 16),
+            lambda x: int(all_variables[x].as_int())
+        ]:
+            try:
+                count = f(parts[3])
+                break
+            except:
+                continue
+
+        result = mt.get(mode, count)
+        # TODO what format if 1 and if many?
+        if variable_name:
+            update_variable(variable_name, result)
+        else:
+            output.append(result)
 
     ######################################
     # constant value OR bad command
