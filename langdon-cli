@@ -1303,7 +1303,8 @@ if method == 'cp-20':
         lines = [base64.b64decode(line) for line in f.read().splitlines()]
     #print(lines)
     nonce = 0
-    key = b''.join(b'%c' % random.randint(0, 255) for _ in range(16))
+    #key = b''.join(b'%c' % random.randint(0, 255) for _ in range(16))
+    key = b'YELLOW SUBMARINE'
 
     encrypted_lines = [aes_ctr_crypt(line, key, nonce) for line in lines]
     aligned_e_lines = [l[:min(len(l) for l in encrypted_lines)] 
@@ -1317,7 +1318,7 @@ if method == 'cp-20':
                        for i in range(256)],
                       key = lambda x: x[1])
         xor_key += b'%c' % xors[0][0]
-
+        debug('Adding 0x%02x to key.' % xor_key[-1])
     print('XOR key:', xor_key)
     for line in encrypted_lines:
         print(xor(line, xor_key))

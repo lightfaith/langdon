@@ -246,6 +246,8 @@ while True:
             with open(filename, 'r') as f:
                 lines = f.read().splitlines()
                 for i, line in enumerate(lines):
+                    if not line.strip():
+                        continue
                     if form and form in ('file', 'base64'):
                         line = '%s:%s' % (form, line)
                     elif form:
@@ -395,7 +397,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
         except:
             traceback.print_exc()
             log.err('You must specify an algorithm variable.')
@@ -407,7 +409,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
         except:
             traceback.print_exc()
             log.err('You must specify an algorithm variable.')
@@ -415,7 +417,7 @@ while True:
     elif cmd.startswith('hexdump '):
         v = cmd[8:].strip()
         try:
-            for line in hexdump(variables[v].as_raw()):
+            for line in hexdump(all_variables[v].as_raw()):
                 print(line)
         except:
             log.err('You must specify a variable.')
@@ -446,7 +448,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
         except:
             traceback.print_exc()
             log.err('You must provide start, end and optional length.')
@@ -458,7 +460,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
             
         except:
             traceback.print_exc()
@@ -476,7 +478,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
 
     elif cmd.startswith('oracle '):
         try:
@@ -486,7 +488,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
         except:
             traceback.print_exc()
             log.err('You must specify oracle and payload.')
@@ -498,7 +500,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, Variable(result, constant=True))
             else:
-                output.append(result)
+                output.append(Variable(result))
         except:
             traceback.print_exc()
             log.err('Length must be specified.')
@@ -521,7 +523,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
         else:
             log.err('You must provide existing variables as arguments.')
     
@@ -541,14 +543,18 @@ while True:
             parts = cmd.split()
             data = variables[parts[1]].as_raw()
             language = parts[2]
-            result = attacks.break_xor(data, language)
+            try:
+                keysize = int(parts[3])
+            except:
+                keysize = None
+            result = attacks.break_xor(data, language, keysize)
             if variable_name:
                 update_variable(variable_name, result)
             else:
                 output.append(result)
         except:
             traceback.print_exc()
-            log.err('You must define variable and language.')
+            log.err('You must define variable, language and optional keysize.')
 
     # XORAlgorithm - create instance
     # Usage: x = XOR key=k plaintext=p ciphertext=c
@@ -587,7 +593,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
         else:
             log.err('You must specify an oracle.')
     
@@ -610,7 +616,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
         except:
             traceback.print_exc()
             log.err('You must specify encryption and decryption oracle, expected value, desired value and optional payload.')
@@ -625,7 +631,7 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
         except:
             traceback.print_exc()
             log.err('You must specify encryption and decryption oracle, block index to alter and desired value.')
@@ -652,10 +658,25 @@ while True:
             if variable_name:
                 update_variable(variable_name, result)
             else:
-                output.append(result)
+                output.append(Variable(result))
         except:
             traceback.print_exc()
             log.err('You must specify ciphertext, oracle path and optional blocksize.')
+
+    elif cmd.startswith('fixed-nonce '):
+        try:
+            parts = cmd.split()
+            texts = [all_variables[p].as_raw() for p in parts[1:-1]]
+            language = parts[-1]
+            #sample_size = int(parts[3])
+            result = attacks.fixed_nonce(texts, language)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('You must define variable, language and sample size.')
 
     ######################################
     # constant value OR bad command
@@ -667,5 +688,6 @@ while True:
             log.info(variable_name, '=', v.short())
         else:
             log.warn('Unknown command.')
+            log.err(cmd)
 ############
 

@@ -310,7 +310,8 @@ class Variable:
 
     def as_escaped(self):
         #  \xAA values
-        return ''.join('\\x%02x' % c for c in self.value)
+        #return ''.join('\\x%02x' % c for c in self.value)
+        return ''.join(chr(c) if chr(c) in string.printable else ('\\x%02x' % c) for c in self.value)
 
     def as_base64(self):
         return base64.b64encode(self.value).decode()

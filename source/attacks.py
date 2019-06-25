@@ -9,12 +9,43 @@ from source.log import *
 from source.functions import *
 from source.classes import *
 
+def fixed_nonce(texts, language):
+    """
+    If CTR mode is used with fixed nonce for multiple cases, it can be
+    broken as XOR.
+    """
+    #print('num of texts:', len(texts)) #TODO del
+    min_length = min([len(l) for l in texts])
+    aligned_lines = [l[:min_length] for l in texts]
+    #print('aligned to', min_length) # TODO del
+    transposed_lines = [b''.join(b'%c' % l[i]
+                                for l in aligned_lines)
+                       for i in range(min_length)]
+    xor_key = b''
+    #print('transposed count:', len(transposed_lines))
+    for line in transposed_lines:
+        #print('transposed len', len(line))
+        xors = list(bruteforce(line,
+                               [b'%c' % c for c in range(256)],
+                               lambda a, b: xor(a, b)))
+        best = sorted(xors, key=lambda x: get_frequency_error(x, language))
+        #for i in range(3):
+        #    print(get_frequency_error(best[i], language))
+        xor_key += b'%c' % (xors.index(best[0]))
+    #print(xor_key)
+    log.info('Revealed XOR value:', Variable(xor_key))
+    result = XORAlgorithm(key=Variable(xor_key),
+                          ciphertext=Variable(texts[0]),
+                          plaintext=Variable(xor(texts[0], xor_key)))
+    return result
 
-def break_xor(data, language):
+
+def break_xor(data, language, keysize=None):
     result = None
     # get normalized hamming for keysizes, smallest should be correct
     distances = {}
-    for keysize in range(2, min(40, len(data))):
+    keysizes = [keysize] if keysize else range(2, min(40, len(data)))
+    for keysize in keysizes:
         tmp_distance = 0
         sample_count = 0
         #go through keysize block pairs, get average hamming
@@ -42,6 +73,7 @@ def break_xor(data, language):
             #for i in range(3):
             #    print(get_frequency_error(best[i], language))
             key += b'%c' % (xors.index(best[0]))
+            debug('Adding 0x%02x to key.' % key[-1])
             #for i in range(3):
             #    print(get_frequency_error(best[i], language))
         if not result:
