@@ -291,6 +291,7 @@ class Variable:
             output.append(log.warn('Repeating patterns of blocksize=16 found, this could be AES-ECB ciphertext.', offset=output_offset, stdout=False))
 
         # TODO more
+        # TODO CP 3.24 Write a function to check if any given password token is actually the product of an MT19937 PRNG seeded with the current time. 
         return output
 
     """
@@ -596,15 +597,27 @@ class XORAlgorithm(SymmetricCipher):
             pass
 
     def encrypt(self): # XOR encrypt
+        if isinstance(self.params['key'], Variable):
+            key = self.params['key'].as_raw()
+        elif isinstance(self.params['key'], RNG):
+            key = self.params['key'].get('bytes', 
+                                         len(self.params['plaintext'].as_raw()))
+
         self.params['ciphertext'] = Variable(
                                         xor(self.params['plaintext'].as_raw(), 
-                                            self.params['key'].as_raw()))
+                                            key))
         return self.params['ciphertext']
 
     def decrypt(self): # XOR decrypt
+        if isinstance(self.params['key'], Variable):
+            key = self.params['key'].as_raw()
+        elif isinstance(self.params['key'], RNG):
+            key = self.params['key'].get('bytes', 
+                                         len(self.params['ciphertext'].as_raw()))
+
         self.params['plaintext'] = Variable(
                                         xor(self.params['ciphertext'].as_raw(), 
-                                            self.params['key'].as_raw()))
+                                            key))
         return self.params['plaintext']
 
     def update_key(self, param, new_value):

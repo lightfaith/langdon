@@ -517,12 +517,39 @@ def clone_rng(rng, states):
             #debug(y, 'untempered to', value)
             return value
 
-        print('states:', len(states))
+        #print('states:', len(states))
         result = MersenneTwister32(0) # seed is unknown and not important
         result.state = [untemper(result, x) for x in states]
     else:
         log.err('Cloning such RNG is not supported.')
         return None
     return result
+
+def brute_rng_xor(rng, ciphertext, known):
+    """
+    Using RNG to generate XOR key is cool, but the secret is only seed.
+    We can brute it easily if we know portion of plaintext.
+    """
+    rngs = {
+        'Mersenne32': MersenneTwister32,
+        'Mersenne64': MersenneTwister64,
+    }
+    if rng not in rngs.keys():
+        log.err('Unsupported RNG.')
+        return None
+
+    seed = 0
+    x = XORAlgorithm(ciphertext=ciphertext)
+    result = []
+    while True:
+        if seed % 1024 == 0:
+            debug(seed)
+        mt = rngs[rng](seed)
+        x.params['key'] = mt
+        plaintext = x.decrypt().as_raw()
+        if known in plaintext:
+            return seed
+        seed += 1
+    return None
 
 #####

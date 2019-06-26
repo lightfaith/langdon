@@ -814,6 +814,23 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must provide RNG type and newline-separated list of states.')
+
+    elif cmd.startswith('brute-rng-xor '):
+        try:
+            parts = cmd.split()
+            rng = parts[1]
+            ciphertext = all_variables[parts[2]]
+            known = all_variables[parts[3]].as_raw()
+            
+            result = attacks.brute_rng_xor(rng, ciphertext, known)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must provide RNG type, ciphertext and known portion.')
+            
     ######################################
     # constant value OR bad command
     ######################################
