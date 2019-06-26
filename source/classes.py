@@ -530,13 +530,11 @@ class AESAlgorithm(SymmetricCipher):
 
         # TODO langdon-cli had ignore_padding flag...
         #      ... maybe for CBC oracle?
-        try:
-            plaintext = pkcs7_unpad(padded)
-        except IndexError:
-            # no padding (e.g. for CTR), continue
-            pass
-        except:
-            traceback.print_exc()
+        if self.params['mode'] in ('ecb', 'cbc'):
+            try:
+                plaintext = pkcs7_unpad(padded)
+            except:
+                traceback.print_exc()
         self.params['plaintext'] = Variable(plaintext)
         return self.params['plaintext']
 

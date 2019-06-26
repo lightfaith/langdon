@@ -552,4 +552,18 @@ def brute_rng_xor(rng, ciphertext, known):
         seed += 1
     return None
 
+# just use 'oracle o plaintext'...
+''' 
+def ctr_random_access(oracle_path, plaintext):
+    """
+    Assuming oracle takes our plaintext and includes it in existing
+    CTR ciphertext, we can provide ciphertext instead. In CTR, encryption
+    and decryption is functionally identical => plaintext will be revealed.
+    """
+    result = Oracle.once(oracle_path, plaintext)
+    return result
+'''
+
+
+
 #####
