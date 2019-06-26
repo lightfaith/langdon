@@ -800,6 +800,20 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must specify RNG, optional mode and value and optional reference timestamp.')
+
+    elif cmd.startswith('clone-rng '):
+        try:
+            parts = cmd.split()
+            rng = parts[1]
+            states = [int(x) for x in all_variables[parts[2]].as_raw().split()]
+            result = attacks.clone_rng(rng, states)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('You must provide RNG type and newline-separated list of states.')
     ######################################
     # constant value OR bad command
     ######################################

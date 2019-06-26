@@ -489,4 +489,40 @@ def brute_timestamp_seed(rng, value, value_offset, reference_ts):
         if r == value.as_raw():
             return seed
         seed -= 1
+
+def clone_rng(rng, states):
+    """
+    Mersenne Twister (32b) can be cloned if we known 624 successive values. 
+    """
+    if rng == 'Mersenne32':
+        def unshift_left_mask_xor(mt, value, shift, mask):
+            result = 0
+            for i in range(0, mt.params['w'] // shift + 1):
+                part_mask = (mt.params['d'] >> (mt.params['w'] - shift)) << (shift * i)
+                part = value & part_mask
+                value ^= (part << shift) & mask
+                result |= part
+            return result
+        def unshift_right_xor(mt, value, shift):
+            result = 0
+            for i in range(mt.params['w'] // shift + 1):
+                result ^= value >> (shift * i)
+            return result
+        def untemper(mt, y):
+            value = y
+            value = unshift_right_xor(mt, value, mt.params['l'])
+            value = unshift_left_mask_xor(mt, value, mt.params['t'], mt.params['c'])
+            value = unshift_left_mask_xor(mt, value, mt.params['s'], mt.params['b'])
+            value = unshift_right_xor(mt, value, mt.params['u'])
+            #debug(y, 'untempered to', value)
+            return value
+
+        print('states:', len(states))
+        result = MersenneTwister32(0) # seed is unknown and not important
+        result.state = [untemper(result, x) for x in states]
+    else:
+        log.err('Cloning such RNG is not supported.')
+        return None
+    return result
+
 #####

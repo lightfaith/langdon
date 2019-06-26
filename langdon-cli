@@ -1369,10 +1369,12 @@ if method == 'cp-23':
         value = unshift_left_mask_xor(mt, value, mt.t, mt.c)
         value = unshift_left_mask_xor(mt, value, mt.s, mt.b)
         value = unshift_right_xor(mt, value, mt.u)
+        #debug(y, 'untempered to', value)
         return value
     # https://jazzy.id.au/2010/09/22/cracking_random_number_generators_part_3.html
     from rng.mersenne32 import *
-    mt1 = MersenneTwister32(time.time() / random.random())
+    #mt1 = MersenneTwister32(time.time() / random.random())
+    mt1 = MersenneTwister32(5489)
     #mt1 = MersenneTwister32()
     original_values = [mt1.randint() for _ in range(mt1.n)]
     
