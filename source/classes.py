@@ -655,10 +655,18 @@ class RNG(Algorithm):
 
     def get(self, mode, count=1):
         if mode == 'int':
-            return [self.randint() for i in range(count)]
+            results = [self.randint() for i in range(count)]
+            # one int? return as int
+            if count == 1:
+                return results[0]
+            # many ints? return as string, separate by newline
+            else:
+                return b'\n'.join(b'%d' % x for x in results)
         elif mode == 'float':
-            return [self.randfloat() for i in range(count)]
+            # float(s); return as string, separate by newline
+            return b'\n'.join([b'%f' % self.randfloat() for i in range(count)])
         elif mode == 'bytes':
+            # bytes, return as bytes
             ints = [self.randint() for _ in range(count // 4 + 1)]
             stream = pack('<' + 'L'*len(ints), *ints)
             return stream[:count]
@@ -676,121 +684,125 @@ class MersenneTwister32(RNG):
     """
     def __init__(self, seed):
         super().__init__('Mersenne32()')
-        # TODO make params
-        self.w = 32                  # bits for one state
-        self.n = 624                 # number of states
-        self.m = 397                 # middle word 
-        self.r = 31                  # separation point of one word
-        self.a = 0x9908b0df          # coefficients of the radional normal form twist matrix
-        self.u = 11                  # additional 
-        self.d = 0xffffffff          # additional
-        self.s = 7                   # TGFSR(R) tempering bit shift
-        self.b = 0x9D2C5680          # TGFSR(R) tempering bit mask
-        self.t = 15                  # TGFSR(R) tempering bit shift
-        self.c = 0xEFC60000          # TGFSR(R) tempering bit mask
-        self.l = 18                  # additional
-        self.f = 1812433253          # generator parameter
+        self.params = {
+            'w': 32,                  # bits for one state
+            'n': 624,                 # number of states
+            'm': 397,                 # middle word 
+            'r': 31,                  # separation point of one word
+            'a': 0x9908b0df,          # coefficients of the radional normal form twist matrix
+            'u': 11,                  # additional 
+            'd': 0xffffffff,          # additional
+            's': 7,                   # TGFSR(R) tempering bit shift
+            'b': 0x9D2C5680,          # TGFSR(R) tempering bit mask
+            't': 15,                  # TGFSR(R) tempering bit shift
+            'c': 0xEFC60000,          # TGFSR(R) tempering bit mask
+            'l': 18,                  # additional
+            'f': 1812433253,          # generator parameter
+            'seed': seed,
+        }
         
-        self.lower_mask = (1 << self.r) - 1
-        self.upper_mask = 1 << self.r
-        self.index = self.n
-        self.state = [0] * self.n    # states
+        self.lower_mask = (1 << self.params['r']) - 1
+        self.upper_mask = 1 << self.params['r']
+        self.params['index'] = self.params['n']
+        self.state = [0] * self.params['n']    # states
         
         self.state[0] = int(seed)
-        for i in range(1, self.n):
-            self.state[i] = ((self.f 
+        for i in range(1, self.params['n']):
+            self.state[i] = ((self.params['f'] 
                               * (self.state[i-1] 
-                                 ^ (self.state[i-1] >> (self.w - 2)))
+                                 ^ (self.state[i-1] >> (self.params['w'] - 2)))
                               + i)
-                             & ((1 << self.w) - 1)) # wrap to bits
+                             & ((1 << self.params['w']) - 1)) # wrap to bits
     
     def twist(self):
-        for i in range(self.n):
+        for i in range(self.params['n']):
             temp = (((self.state[i] & self.upper_mask)
-                     + (self.state[(i+1) % self.n] 
+                     + (self.state[(i+1) % self.params['n']] 
                         & self.lower_mask))
-                    & ((1 << self.w) - 1)) # wrap to bits
+                    & ((1 << self.params['w']) - 1)) # wrap to bits
             temp_shift = temp >> 1
             if temp % 2 != 0:
-                temp_shift = temp_shift ^ self.a
-            self.state[i] = self.state[(i + self.m) % self.n] ^ temp_shift
-        self.index = 0
+                temp_shift = temp_shift ^ self.params['a']
+            self.state[i] = self.state[(i + self.params['m']) % self.params['n']] ^ temp_shift
+        self.params['index'] = 0
 
     def get_random_number(self):
-        if self.index >= self.n:
+        if self.params['index'] >= self.params['n']:
             self.twist()
-        y = self.state[self.index]
-        y = y ^ (y >> self.u & self.d)
-        y = y ^ ((y << self.s) & self.b)
-        y = y ^ ((y << self.t) & self.c)
-        y = y ^ (y >> self.l)
-        self.index += 1
+        y = self.state[self.params['index']]
+        y = y ^ (y >> self.params['u'] & self.params['d'])
+        y = y ^ ((y << self.params['s']) & self.params['b'])
+        y = y ^ ((y << self.params['t']) & self.params['c'])
+        y = y ^ (y >> self.params['l'])
+        self.params['index'] += 1
         return y
 
     def randint(self):
-        return self.get_random_number() & ((1 << self.w) - 1)
+        return self.get_random_number() & ((1 << self.params['w']) - 1)
     
     def randfloat(self):
-        return self.randint() / ((1 << self.w) - 1)
+        return self.randint() / ((1 << self.params['w']) - 1)
 
 
 class MersenneTwister64(RNG):
     def __init__(self, seed):
         super().__init__('Mersenne64()')
-        # TODO make params
-        self.w = 64                  # bits for one state
-        self.n = 312                 # number of states
-        self.m = 156                 # middle word 
-        self.r = 31                  # separation point of one word
-        self.a = 0xb5026f5aa96619e9  # coefficients of the radional normal form twist matrix
-        self.u = 29                  # additional 
-        self.d = 0x5555555555555555  # additional
-        self.s = 17                  # TGFSR(R) tempering bit shift
-        self.b = 0x71D67FFFEDA60000  # TGFSR(R) tempering bit mask
-        self.t = 37                  # TGFSR(R) tempering bit shift
-        self.c = 0xFFF7EEE000000000  # TGFSR(R) tempering bit mask
-        self.l = 43                  # additional
-        self.f = 6364136223846793005 # generator parameter
+        self.params = {
+            'w': 64,                  # bits for one state
+            'n': 312,                 # number of states
+            'm': 156,                 # middle word 
+            'r': 31,                  # separation point of one word
+            'a': 0xb5026f5aa96619e9,  # coefficients of the radional normal form twist matrix
+            'u': 29,                  # additional 
+            'd': 0x5555555555555555,  # additional
+            's': 17,                  # TGFSR(R) tempering bit shift
+            'b': 0x71D67FFFEDA60000,  # TGFSR(R) tempering bit mask
+            't': 37,                  # TGFSR(R) tempering bit shift
+            'c': 0xFFF7EEE000000000,  # TGFSR(R) tempering bit mask
+            'l': 43,                  # additional
+            'f': 6364136223846793005, # generator parameter
+            'seed': seed
+        }
         
-        self.lower_mask = (1 << self.r) - 1
-        self.upper_mask = (1 << self.w) - 1 - self.lower_mask #1 << self.r
-        self.index = self.n
-        self.state = [0] * self.n    # states
+        self.lower_mask = (1 << self.params['r']) - 1
+        self.upper_mask = (1 << self.params['w']) - 1 - self.lower_mask #1 << self.r
+        self.params['index'] = self.params['n']
+        self.state = [0] * self.params['n']    # states
         
-        self.state[0] = int(seed)
-        for i in range(1, self.n):
-            self.state[i] = ((self.f 
+        self.state[0] = int(self.params['seed'])
+        for i in range(1, self.params['n']):
+            self.state[i] = ((self.params['f'] 
                               * (self.state[i-1] 
-                                 ^ (self.state[i-1] >> (self.w - 2)))
+                                 ^ (self.state[i-1] >> (self.params['w'] - 2)))
                               + i)
-                             & ((1 << self.w) - 1)) # wrap to bits
+                             & ((1 << self.params['w']) - 1)) # wrap to bits
     
     def twist(self):
-        for i in range(self.n):
+        for i in range(self.params['n']):
             temp = (((self.state[i] & self.upper_mask)
-                     + (self.state[(i+1) % self.n] 
+                     + (self.state[(i+1) % self.params['n']]
                         & self.lower_mask))
-                    & ((1 << self.w) - 1)) # wrap to bits
+                    & ((1 << self.params['w']) - 1)) # wrap to bits
             temp_shift = temp >> 1
             if temp % 2 != 0:
-                temp_shift = temp_shift ^ self.a
-            self.state[i] = self.state[(i + self.m) % self.n] ^ temp_shift
-        self.index = 0
+                temp_shift = temp_shift ^ self.params['a']
+            self.state[i] = self.state[(i + self.params['m']) % self.params['n']] ^ temp_shift
+        self.params['index'] = 0
 
     def get_random_number(self):
-        if self.index >= self.n:
+        if self.params['index'] >= self.params['n']:
             self.twist()
-        y = self.state[self.index]
-        y = y ^ (y >> self.u & self.d)
-        y = y ^ ((y << self.s) & self.b)
-        y = y ^ ((y << self.t) & self.c)
-        y = y ^ (y >> self.l)
-        self.index += 1
+        y = self.state[self.params['index']]
+        y = y ^ (y >> self.params['u'] & self.params['d'])
+        y = y ^ ((y << self.params['s']) & self.params['b'])
+        y = y ^ ((y << self.params['t']) & self.params['c'])
+        y = y ^ (y >> self.params['l'])
+        self.params['index'] += 1
         return y
 
     def randint(self):
-        return self.get_random_number() & ((1 << self.w) - 1)
+        return self.get_random_number() & ((1 << self.params['w']) - 1)
     
     def randfloat(self):
-        return self.randint() / ((1 << self.w) - 1)
+        return self.randint() / ((1 << self.params['w']) - 1)
 

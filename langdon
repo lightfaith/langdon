@@ -686,7 +686,7 @@ while True:
     # RNG
     ######################################
     elif cmd.startswith('Mersenne32'):
-        seed = 0 # TODO what default seed?
+        seed = 5489 
         for f in [
             lambda x: int(x),
             lambda x: int(x, 16),
@@ -705,7 +705,7 @@ while True:
             output.append(result)
 
     elif cmd.startswith('Mersenne64'):
-        seed = 0 # TODO what default seed?
+        seed = 5489 # TODO or different?
         for f in [
             lambda x: int(x),
             lambda x: int(x, 16),
@@ -740,11 +740,10 @@ while True:
                 continue
 
         result = mt.get(mode, count)
-        # TODO what format if 1 and if many?
         if variable_name:
             update_variable(variable_name, result)
         else:
-            output.append(result)
+            output.append(Variable(result))
 
     ######################################
     # constant value OR bad command
