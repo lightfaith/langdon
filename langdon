@@ -8,6 +8,8 @@ import sys
 import gnureadline
 import traceback
 from collections import OrderedDict
+import dateutil.parser
+from datetime import datetime
 
 from source import lib
 from source import log
@@ -508,6 +510,28 @@ while True:
         except:
             traceback.print_exc()
             log.err('Length must be specified.')
+
+    elif cmd.startswith('timestamp'):
+        _, _, date = cmd.partition(' ')
+        if date:
+            try:
+                result = max([0, datetime.timestamp(dateutil.parser.parse(date))])
+            except:
+                result = 0
+        else:
+            result = datetime.timestamp(datetime.now())
+        if variable_name:
+            update_variable(variable_name, result)
+        else:
+            output.append(Variable(result))
+
+    elif cmd.startswith('sleep '):
+        try:
+            time.sleep(float(cmd[6:].strip()))
+        except:
+            traceback.print_exc()
+            log.err('Bad sleep value.')
+
     # TODO prime command
     # TODO math operations
     # TODO help command
@@ -745,6 +769,37 @@ while True:
         else:
             output.append(Variable(result))
 
+    elif cmd.startswith('brute-timestamp-seed '):
+        parts = cmd.split()
+        value = None
+        value_offset = 0
+        reference_ts = None
+        try:
+            mt = parts[1]
+            value = all_variables[parts[2]]
+            if len(parts) >= 4:
+                # also order is given
+                for f in [
+                    lambda x: int(x),
+                    lambda x: int(x, 16),
+                    lambda x: int(all_variables[x].as_int())
+                ]:
+                    try:
+                        value_offset = f(parts[3])
+                        break
+                    except:
+                        continue
+            if len(parts) == 5:
+                # also reference timestamp is given
+                reference_ts = int(all_variables[parts[4]].as_int())
+            result = attacks.brute_timestamp_seed(mt, value, value_offset, reference_ts)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must specify RNG, optional mode and value and optional reference timestamp.')
     ######################################
     # constant value OR bad command
     ######################################

@@ -322,8 +322,8 @@ class Variable:
     def short(self):
         preferred = self.preferred_form()
         for continuation, replaces in [
-            ('...', [('\x0a', '\\n'), ('\x0d', '\\r')], ),
-            (b'...', [(b'\x0a', b'\\n'), (b'\x0d', b'\\r')], ),
+            ('...', [('\x0a', '\\n'), ('\x0d', '\\r'), ],),
+            (b'...', [(b'\x0a', b'\\n'), (b'\x0d', b'\\r'), ],),
         ]:
             try:
                 preferred = (preferred 
@@ -668,7 +668,10 @@ class RNG(Algorithm):
         elif mode == 'bytes':
             # bytes, return as bytes
             ints = [self.randint() for _ in range(count // 4 + 1)]
-            stream = pack('<' + 'L'*len(ints), *ints)
+            # USING BIG ENDIANESS
+            # so we can compare ints and bytes successfully 
+            # (e.g. for brute_timestamp_seed)
+            stream = pack('>' + 'L'*len(ints), *ints)
             return stream[:count]
         else:
             log.err('Invalid mode.')

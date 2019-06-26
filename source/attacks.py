@@ -4,6 +4,7 @@ Sophisticated attacks are here
 """
 import pdb
 import traceback
+from datetime import datetime
 
 from source.log import *
 from source.functions import *
@@ -454,5 +455,38 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
     #except:
     #    print('Final plaintext:', b''.join(final_plaintexts[::-1]))
     return b''.join(final_plaintexts[::-1])
- 
+
+def brute_timestamp_seed(rng, value, value_offset, reference_ts):
+    """
+    After a RNG is seeded, only number of calls is relevant to the new
+    values. This function, for given value, tries to decrease current
+    timestamp as seed until match.
+
+    Value is processed as bytes, first value_offset bytes from RNG are skipped.
+    """
+    rngs = {
+        'Mersenne32': MersenneTwister32,
+        'Mersenne64': MersenneTwister64,
+    }
+    if rng not in rngs.keys():
+        log.err('Unsupported RNG.')
+        return None
+
+    if not reference_ts:
+        reference_ts = datetime.timestamp(datetime.now())
+
+    # TODO make it killable
+    seed = reference_ts
+    while True:
+        #debug('Using seed', seed)
+        mt = rngs[rng](seed)
+        if value_offset:
+            #debug('  Skipping %d bytes.' % value_offset)
+            r = mt.get('bytes', value_offset)
+        r = mt.get('bytes', len(value.as_raw()))
+        #debug('  Desired:', value.as_raw())
+        #debug('  Got:    ', r)
+        if r == value.as_raw():
+            return seed
+        seed -= 1
 #####
