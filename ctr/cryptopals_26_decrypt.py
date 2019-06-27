@@ -20,12 +20,12 @@ with open(keyfile, 'wb') as f:
     f.write(b'YELLOW SUBMARINE')
 
 #sys.stderr.buffer.write(data)
-p = subprocess.Popen('./langdon --decrypt aes-ctr {0} {1} 1337; rm {0}'.format(
+p = subprocess.Popen('./langdon-cli --decrypt aes-ctr {0} {1} 1337; rm {0}'.format(
     datafile, keyfile),
                      shell=True,
                      stdout=subprocess.PIPE,
                      stderr=subprocess.PIPE)
 (out, err) = p.communicate()
-sys.stdout.buffer.write(out)
+sys.stdout.buffer.write(base64.b64encode(out))
 sys.stderr.buffer.write(err)
 

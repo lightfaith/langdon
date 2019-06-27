@@ -706,6 +706,21 @@ while True:
             traceback.print_exc()
             log.err('You must define variable, language and sample size.')
 
+    elif cmd.startswith('ctr-bitflipping '):
+        try:
+            _, e_oracle_path, d_oracle_path, target_offset, payload = cmd.split()
+            result = attacks.ctr_bitflipping(all_variables[e_oracle_path], 
+                                             all_variables[d_oracle_path], 
+                                             int(all_variables[target_offset].as_int()), 
+                                             all_variables[payload].as_raw())
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must specify encryption and decryption oracle, offset to alter and desired value.')
+
     ######################################
     # RNG
     ######################################

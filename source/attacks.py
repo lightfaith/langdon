@@ -564,6 +564,50 @@ def ctr_random_access(oracle_path, plaintext):
     return result
 '''
 
+def ctr_bitflipping(e_oracle_path, d_oracle_path, offset, desired):
+    """
+    CTR bitflipping
+
+    Similarly to CBC bitflipping, we can use XOR properties to replace
+    arbitrary data in CTR ciphertext if we know both ciphertext and
+    plaintext. Unlike CBC, offset is not block-aligned and can be arbitrary.
+    """
+    """Run one E-D cycle"""
+    debug('Trying sample payload.')
+    payload = b'thisishalloween'
+    debug('Payload:', payload)
+    encrypted = Oracle.once(payload, e_oracle_path)
+    #original_e_blocks = chunks(encrypted, blocksize)
+    #debug('Encrypted blocks:', original_e_blocks)
+    decrypted = Oracle.once(encrypted, d_oracle_path)
+    #original_d_blocks = chunks(decrypted, blocksize)
+    debug('Decrypted:', decrypted)
+    #debug('Decrypted blocks:', original_d_blocks)
+    #target_block = 3 # holding some comment...
+    """
+         C      CTR
+         |    ___|__
+        1|    | AES |
+         |    ```|```
+         |       |2
+         `-------X
+                 |3
+                 P
+        3 = 1 ^ 2
+        3' = 1' ^ 2
+        -----------
+        1' = 3' ^ 2
+        1' = 3' ^ (1 ^ 3)
+        1' = 3' (desired) ^ 1 (real encrypted block) ^ 3 (string to replace)
+    """
+
+    keystream = xor(encrypted[offset:offset + len(desired)],
+                    decrypted[offset:offset + len(desired)])
+    fake_block = xor(desired, keystream)
+
+    fake = encrypted[:offset] + fake_block + encrypted[offset + len(fake_block):]
+    decrypted = Oracle.once(fake, d_oracle_path)
+    return decrypted
 
 
 #####
