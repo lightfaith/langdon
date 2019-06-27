@@ -605,8 +605,9 @@ while True:
     elif cmd.startswith('AES '):
         try:
             params = parse_algorithm_params(cmd[4:], variables)
+            result = AESAlgorithm(**params)
             if variable_name:
-                update_variable(variable_name, AESAlgorithm(**params))
+                update_variable(variable_name, result)
             else:
                 output.append(result)
 
@@ -859,6 +860,39 @@ while True:
             traceback.print_exc()
             log.err('You must provide RNG type, ciphertext and known portion.')
             
+    ######################################
+    # Hashes
+    ######################################
+    elif cmd.startswith('SHA1 '):
+        try:
+            params = parse_algorithm_params(cmd[4:], variables)
+            result = SHA1(**params)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('Specify known parameters and variables holding the values.')
+
+    elif cmd.startswith(('hash ', 'mac ', 'hmac ')):
+        method, _, v = cmd.partition(' ')
+        try:
+            if method == 'hash':
+                result = variables[v].hash()
+            elif method == 'mac':
+                result = variables[v].mac()
+            elif method == 'hmac':
+                result = variables[v].hmac()
+            
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must specify an algorithm variable.')
+        
     ######################################
     # constant value OR bad command
     ######################################

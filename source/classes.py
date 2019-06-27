@@ -383,7 +383,6 @@ class SymmetricCipher(Algorithm):
         super().__init__(name)
 
 
-
 class AESAlgorithm(SymmetricCipher):
     def __init__(self, **kwargs):
         super().__init__('AESAlgorithm()')
@@ -822,4 +821,106 @@ class MersenneTwister64(RNG):
     
     def randfloat(self):
         return self.randint() / ((1 << self.params['w']) - 1)
+
+#############################################
+class Hash(Algorithm):
+    def __init__(self, name):
+        super().__init__(name)
+        self.params = {
+            'data': None,
+            'key': None,
+            'block_size': None,
+            'output_size': None,
+        }
+    
+    def hash(self, data_modifier):
+        raise NotImplementedError()
+
+    @staticmethod
+    def mac_modifier(hash_algorithm):
+        return hash_algorithm.params['key'].as_raw() + hash_algorithm.params['data'].as_raw()
+    
+    def mac(self):
+        return self.hash(Hash.mac_modifier)
+
+    @staticmethod
+    def hmac_modifier(hash_algorithm):
+        key = hash_algorithm.params['key'].as_raw()
+        data = hash_algorithm.params['data'].as_raw()
+        block_size = hash_algorithm.params['block_size']
+
+        if len(key) > block_size:
+            key = self.__class__.run(key)
+        if len(key) < block_size:
+            key += b'\x00' * (block_size - len(key))
+        return (xor(key, b'\x5c' * block_size)
+                    + hash_algorithm.__class__(data=Variable(xor(key, b'\x36' * block_size)+data)).hash())
+    
+    def hmac(self):
+        return self.hash(Hash.hmac_modifier)
+
+
+class SHA1(Hash):
+    def __init__(self, **kwargs):
+        super().__init__('SHA1()')
+        for k,v in kwargs.items():
+            if k in self.params.keys():
+                self.params[k] = v
+        self.params['block_size'] = 64
+        self.params['output_size'] = 20
+        self.tmp = {}
+        self.reset()
+
+    def reset(self):
+        self.tmp['h'] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0]
+    
+    def pad(self, data):
+        bits_len = len(data) * 8
+        data += b'\x80'
+        while (len(data) * 8) % 512 != 448:
+            data += b'\x00'
+        data += pack('>Q', bits_len)
+        return data
+    
+    def hash(self, data_modifier=lambda x: x.params['data'].as_raw()):
+        self.reset() # TODO or NOT?
+        data = self.pad(data_modifier(self))
+        debug('Hashing', data)
+        for chunk in chunks(data, 64):
+            w = [0] * 80
+            for i in range(16):
+                w[i] = unpack('>I', chunk[i*4:i*4 + 4])[0]
+            for i in range(16, 80):
+                w[i] = rotate_left(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16], 1)
+
+            a, b, c, d, e = tuple(self.tmp['h'])
+            for i in range(80):
+                if i < 20:
+                    k = 0x5a827999
+                    f = d ^ (b & (c ^ d))
+                elif i < 40:
+                    k = 0x6ed9eba1
+                    f = b ^ c ^ d
+                elif i < 60:
+                    k = 0x8f1bbcdc
+                    f = (b & c) | (d & (b | c))
+                else:
+                    k = 0xca62c1d6
+                    f = b ^ c ^ d
+                temp = rotate_left(a, 5) + f + e + k + w[i] & 0xffffffff
+                e = d
+                d = c
+                c = rotate_left(b, 30)
+                b = a
+                a = temp
+            self.tmp['h'] = [(hx + val) & 0xffffffff 
+                             for hx,val in zip(self.tmp['h'], (a, b, c, d, e))]
+        #print('SHA1 values:', ['%08x' % hx for hx in h], end=' ')
+        return b''.join(b'%c' % b for hx in self.tmp['h'] for b in pack('>I', hx))
+        #return b'%08x%08x%08x%08x%08x' % tuple(h)
+
+        
+        
+
+
 

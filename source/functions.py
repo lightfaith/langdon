@@ -362,6 +362,7 @@ def sha1(
     if not bits_len:
         bits_len = len(payload) * 8
     payload = hash_pad('sha1', payload, bits_len)
+    debug('Hashing', payload)
     #data_chunks = chunks(binary(payload), 32)
     #for chunk in data_chunks:
     #    print(chunk)
