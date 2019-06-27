@@ -721,6 +721,19 @@ while True:
             traceback.print_exc()
             log.err('You must specify encryption and decryption oracle, offset to alter and desired value.')
 
+    elif cmd.startswith('cbc-key-as-iv '):
+        parts = cmd.split()
+        try:
+            oracle_path = all_variables[parts[1]]
+            ciphertext = all_variables[parts[2]].as_raw()
+            result = attacks.cbc_key_as_iv(oracle_path, ciphertext)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must specify decryption oracle and ciphertext.')
     ######################################
     # RNG
     ######################################

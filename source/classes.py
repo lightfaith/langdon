@@ -395,6 +395,7 @@ class AESAlgorithm(SymmetricCipher):
             'nonce': 0,          # for CTR mode, similar to IV
             'plaintext': None,
             'ciphertext': None,
+            'ignore_padding': False,
         }
         # apply defined values
         for k, v in kwargs.items():
@@ -496,6 +497,8 @@ class AESAlgorithm(SymmetricCipher):
         
         if self.params['mode'] == 'ecb':
              padded = cipher.decrypt(ciphertext)
+             if self.params['ignore_padding']:
+                 plaintext = padded
         elif self.params['mode'] == 'cbc':
             """
                C1      C2
@@ -512,6 +515,8 @@ class AESAlgorithm(SymmetricCipher):
                 tmp = cipher.decrypt(block)
                 padded += xor(tmp, previous_block)
                 previous_block = block
+            if self.params['ignore_padding']:
+                plaintext = padded
         elif self.params['mode'] == 'ctr':
             """
               Nonce;Counter
@@ -528,9 +533,7 @@ class AESAlgorithm(SymmetricCipher):
             log.err('Unsupported mode.')
             return None
 
-        # TODO langdon-cli had ignore_padding flag...
-        #      ... maybe for CBC oracle?
-        if self.params['mode'] in ('ecb', 'cbc'):
+        if self.params['mode'] in ('ecb', 'cbc') and not self.params['ignore_padding']:
             try:
                 plaintext = pkcs7_unpad(padded)
             except:

@@ -609,5 +609,20 @@ def ctr_bitflipping(e_oracle_path, d_oracle_path, offset, desired):
     decrypted = Oracle.once(fake, d_oracle_path)
     return decrypted
 
+def cbc_key_as_iv(oracle_path, ciphertext):
+    blocksize = 16
+    encrypted_chunks = chunks(ciphertext, blocksize)
+    if len(encrypted_chunks) < 3:
+        print('[-] Message is too short.', file=sys.stderr)
+    decrypted = Oracle.once(ciphertext, oracle_path)
+    debug('Decrypted:', decrypted)
+    fake = b''.join([encrypted_chunks[0],
+                     b'\x00' * blocksize,
+                     encrypted_chunks[0]])
+    debug('Fake:', fake)
+    decrypted = Oracle.once(fake, oracle_path)
+    decrypted_chunks = chunks(decrypted, blocksize)
+    debug('Decrypted:', decrypted_chunks)
+    return xor(decrypted_chunks[0], decrypted_chunks[2])
 
 #####
