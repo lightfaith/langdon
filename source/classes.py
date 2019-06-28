@@ -931,6 +931,101 @@ class SHA1(Hash):
 
         
         
+class MD4(Hash):
+    def __init__(self, **kwargs):
+        super().__init__('MD4()')
+        for k,v in kwargs.items():
+            if k in self.params.keys():
+                self.params[k] = v
+        self.params['block_size'] = 64
+        self.params['output_size'] = 16
+        self.tmp = {}
+        self.reset()
+
+    def reset(self):
+        self.tmp['h'] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476]
+    
+    def pad(self, data, bits_len=0):
+        if not bits_len:
+            bits_len = len(data) * 8
+            # unlike SHA1, only last chunk is usually sent here, so
+            # bits_len is specified
+            # but we need this default value for length extension
+        data += b'\x80'
+        data += bytes((56 - len(data) % 64) % 64)
+        data += pack('<Q', bits_len)
+        #debug('   appending bits_len', bits_len)
+        return data
+   
+    def restore(self, digest):
+        self.tmp['h'] = unpack('<4I', digest)
+
+    def hash(self, data_modifier=lambda x: x.params['data'].as_raw(), bits_len=0):
+        data = data_modifier(self)
+        #debug('  Hashing data of len', len(data))
+        #debug('   Hashing padded:', data)
+        if not bits_len:
+            bits_len = len(data) * 8
+        F = lambda x, y, z: ((x & y) | (~x & z))
+        G = lambda x, y, z: ((x & y) | (x & z) | (y & z))
+        H = lambda x, y, z: x ^ y ^ z
+
+        #print('DEFAULT:', hexadecimal(b''.join(b'%c' % b for x in h for b in pack('<I', x))))
+
+        last_chunk_altered = False
+        order = [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15]
+        while data:
+            if len(data) < 64 and not last_chunk_altered:
+                data = self.pad(data, bits_len=bits_len)
+                last_chunk_altered = True
+            #print('after padding (len %d):' % len(payload))
+            #print(payload)
+            #print()
+
+            chunk = data[:64]
+            #debug('chunk', chunk, len(chunk))
+            X = list(unpack('<16I', chunk))
+            a, b, c, d = self.tmp['h']
+            for i in range(16):
+                k = i
+                if i % 4 == 0:
+                    a = rotate_left((a + F(b, c, d) + X[k]) & 0xffffffff, 3)
+                elif i % 4 == 1:
+                    d = rotate_left((d + F(a, b, c) + X[k]) & 0xffffffff, 7)
+                elif i % 4 == 2:
+                    c = rotate_left((c + F(d, a, b) + X[k]) & 0xffffffff, 11)
+                elif i % 4 == 3:
+                    b = rotate_left((b + F(c, d, a) + X[k]) & 0xffffffff, 19)
+            for i in range(16):
+                k = i // 4 + (i % 4) * 4
+                if i % 4 == 0:
+                    a = rotate_left((a + G(b, c, d) + X[k] + 0x5a827999) & 0xffffffff, 3)
+                elif i % 4 == 1:
+                    d = rotate_left((d + G(a, b, c) + X[k] + 0x5a827999) & 0xffffffff, 5)
+                elif i % 4 == 2:
+                    c = rotate_left((c + G(d, a, b) + X[k] + 0x5a827999) & 0xffffffff, 9)
+                elif i % 4 == 3:
+                    b = rotate_left((b + G(c, d, a) + X[k] + 0x5a827999) & 0xffffffff, 13)
+            for i in range(16):
+                k = order[i]
+                if i % 4 == 0:
+                    a = rotate_left((a + H(b, c, d) + X[k] + 0x6ed9eba1) & 0xffffffff, 3)
+                elif i % 4 == 1:
+                    d = rotate_left((d + H(a, b, c) + X[k] + 0x6ed9eba1) & 0xffffffff, 9)
+                elif i % 4 == 2:
+                    c = rotate_left((c + H(d, a, b) + X[k] + 0x6ed9eba1) & 0xffffffff, 11)
+                elif i % 4 == 3:
+                    b = rotate_left((b + H(c, d, a) + X[k] + 0x6ed9eba1) & 0xffffffff, 15)
+
+            self.tmp['h'] = [(x + y) & 0xffffffff for x,y in zip(self.tmp['h'], (a, b, c, d))]
+            data = data[64:]
+
+        result = b''.join(b'%c' % b for hx in self.tmp['h'] for b in pack('<I', hx))
+        self.params['digest'] = Variable(result)
+        return result
+
+        
+        
 
 
 

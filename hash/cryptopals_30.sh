@@ -4,13 +4,13 @@
 # $1 = base64(digest+data)
 
 #echo "$1" >&2
-echo "$1" | base64 -d | head -c 20 > /tmp/mac
-echo "$1" | base64 -d | tail -c +21 > /tmp/plaintext
+echo "$1" | base64 -d | head -c 16 > /tmp/mac
+echo "$1" | base64 -d | tail -c +17 > /tmp/plaintext
 payload="
 key = 'YELLOW SUBMARINE'
 data = file:/tmp/plaintext
-s = SHA1 data=data key=key
-h = mac s
+md = MD4 data=data key=key
+h = mac md
 export h /tmp/h
 "
 ./langdon <<< "$payload" &> /dev/null

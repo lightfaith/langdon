@@ -865,10 +865,15 @@ while True:
     ######################################
     # Hashes
     ######################################
-    elif cmd.startswith('SHA1 '):
+    elif cmd.startswith(('SHA1 ', 'MD4 ')):
         try:
+            algorithms = {
+                'SHA1': SHA1,
+                'MD4': MD4,
+            }
+            algorithm = cmd.split()[0]
             params = parse_algorithm_params(cmd[4:], variables)
-            result = SHA1(**params)
+            result = algorithms[algorithm](**params)
             if variable_name:
                 update_variable(variable_name, result)
             else:
@@ -900,7 +905,7 @@ while True:
         parts = cmd.split()
         algorithms = {
             'sha1': SHA1,
-            #'md4': MD4,
+            'md4': MD4,
         }
         try:
             algorithm = algorithms[parts[1]]
