@@ -613,7 +613,7 @@ def cbc_key_as_iv(oracle_path, ciphertext):
     blocksize = 16
     encrypted_chunks = chunks(ciphertext, blocksize)
     if len(encrypted_chunks) < 3:
-        print('[-] Message is too short.', file=sys.stderr)
+        log.err('Message is too short.')
     decrypted = Oracle.once(ciphertext, oracle_path)
     debug('Decrypted:', decrypted)
     fake = b''.join([encrypted_chunks[0],
@@ -624,5 +624,37 @@ def cbc_key_as_iv(oracle_path, ciphertext):
     decrypted_chunks = chunks(decrypted, blocksize)
     debug('Decrypted:', decrypted_chunks)
     return xor(decrypted_chunks[0], decrypted_chunks[2])
+
+
+def hash_extension(algorithm, original, original_hash, append, oracle_path):
+    """
+    We try to create MAC of new data replacing key with arbitrary characters.
+    The hash state will be restored from provided digest -> key is not needed.
+    """
+    # Create new hashing object
+    h = algorithm(data=append)
+    # New payload needs the padding automatically added...
+    debug('Preparing payloads up to key_length == 256...')
+    #for key_length in range(256):
+    for key_length in range(15, 20):  # TODO del
+        #debug('Key len:', key_length)
+        h.restore(original_hash.as_raw())
+        forged_data = h.pad(b'A' * key_length + original.as_raw())[key_length:] + append.as_raw()
+        #debug('  Forged data:', forged_data)
+        
+        forged_digest = h.hash(bits_len=((key_length + len(forged_data)) * 8))
+        #debug('   Forged digest:', forged_digest)
+
+        o = Oracle(oracle_path, {0: forged_digest+forged_data}, lambda i,r,o,e,kw: True)
+        o.start()
+        o.join()
+        
+        if o.matching[0].ret == 0:
+            debug('  Oracle approves!', forged_digest)
+            return forged_digest
+        else:
+            #debug('  oracle error:', o.matching[0].error)
+            pass
+    return None
 
 #####

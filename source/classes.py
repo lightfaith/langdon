@@ -140,9 +140,11 @@ class Oracle(threading.Thread):
         start = time.time()
         for payload_id, payload in self.payloads.items():
             #debug('Oracle testing 0x%02x' % payload_id, payload)
+            payload_based = base64.b64encode(payload).decode()
             r, o, e = run_command('%s "%s"' % (self.oracle_path, 
-                                             base64.b64encode(payload).decode()))
-            #print(r, o, e)
+                                               payload_based))
+            #print('based payload:', payload_based)
+            #print('result:', r, o, e)
             o = base64.b64decode(o)
             if self.validate(payload_id, r, o, e, self.kwargs):
                 #debug('Payload 0x%02x matches condition!' % payload_id)
@@ -874,18 +876,24 @@ class SHA1(Hash):
     def reset(self):
         self.tmp['h'] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0]
     
-    def pad(self, data):
-        bits_len = len(data) * 8
+    def pad(self, data, bits_len=None):
+        if not bits_len:
+            #debug('Setting new bits_len')
+            bits_len = len(data) * 8
         data += b'\x80'
         while (len(data) * 8) % 512 != 448:
             data += b'\x00'
         data += pack('>Q', bits_len)
+        #debug('   appending bits_len', bits_len)
         return data
-    
-    def hash(self, data_modifier=lambda x: x.params['data'].as_raw()):
-        self.reset() # TODO or NOT?
-        data = self.pad(data_modifier(self))
-        debug('Hashing', data)
+   
+    def restore(self, digest):
+        self.tmp['h'] = unpack('>5I', digest)
+
+    def hash(self, data_modifier=lambda x: x.params['data'].as_raw(), bits_len=0):
+        data = self.pad(data_modifier(self), bits_len)
+        #debug('  Hashing data of len', len(data))
+        #debug('   Hashing padded:', data)
         for chunk in chunks(data, 64):
             w = [0] * 80
             for i in range(16):
@@ -916,8 +924,10 @@ class SHA1(Hash):
             self.tmp['h'] = [(hx + val) & 0xffffffff 
                              for hx,val in zip(self.tmp['h'], (a, b, c, d, e))]
         #print('SHA1 values:', ['%08x' % hx for hx in h], end=' ')
-        return b''.join(b'%c' % b for hx in self.tmp['h'] for b in pack('>I', hx))
-        #return b'%08x%08x%08x%08x%08x' % tuple(h)
+        result = b''.join(b'%c' % b for hx in self.tmp['h'] for b in pack('>I', hx))
+        self.params['digest'] = Variable(result)
+        #debug('final state:', ['0x%x' % hh for hh in self.tmp['h']])
+        return result
 
         
         

@@ -30,6 +30,8 @@ def update_variable(name, value):
     """
     updates value, distinguishes between Variable and Algorithm parameter
     """
+    if value is None:
+        return
     if '.' in name:
         name, _, param = name.partition('.')
         try:
@@ -878,6 +880,7 @@ while True:
     elif cmd.startswith(('hash ', 'mac ', 'hmac ')):
         method, _, v = cmd.partition(' ')
         try:
+            variables[v].reset()
             if method == 'hash':
                 result = variables[v].hash()
             elif method == 'mac':
@@ -892,7 +895,29 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must specify an algorithm variable.')
-        
+    
+    elif cmd.startswith('hash-extension '):
+        parts = cmd.split()
+        algorithms = {
+            'sha1': SHA1,
+            #'md4': MD4,
+        }
+        try:
+            algorithm = algorithms[parts[1]]
+            original = all_variables[parts[2]]
+            digest = all_variables[parts[3]]
+            append = all_variables[parts[4]]
+            oracle_path = variables[parts[5]]
+            
+            result = attacks.hash_extension(algorithm, original, digest, append, oracle_path)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+
+        except:
+            traceback.print_exc()
+            log.err('You must provide algorithm, original data, data to append and hashing oracle.')
     ######################################
     # constant value OR bad command
     ######################################

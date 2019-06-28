@@ -166,6 +166,7 @@ def oracle_send(payload, oracle_path):
     result = oracle.matching[0].output
     return result
     '''
+    from source.classes import Oracle
     return Oracle.once(payload, oracle_path)
 
 def pkcs7_pad(data, blocksize=16):
@@ -396,6 +397,7 @@ def sha1(
             a = temp
         h = [(hx + val) & 0xffffffff for hx,val in zip(h, (a, b, c, d, e))]
     #print('SHA1 values:', ['%08x' % hx for hx in h], end=' ')
+    debug('final state:', ['0x%x' % hh for hh in h])
     return b''.join(b'%c' % b for hx in h for b in pack('>I', hx))
     #return b'%08x%08x%08x%08x%08x' % tuple(h)
 
@@ -479,13 +481,14 @@ def hash_extension(algorithm, data, digest, append, oracle_path):
         print('Key len:', key_length)
         if algorithm == 'sha1':
             h = unpack('>5I', digest)
+            print('restoring h:', ['0x%x' % hh for hh in h])
             forged_data = hash_pad('sha1', 
                                    b'A' * key_length + data)[key_length:] + append
-            #print('Forged data:', forged_data)
+            print('Forged data:', forged_data)
             forged_digest = sha1(append, 
                                  bits_len=(key_length + len(forged_data)) * 8, 
                                  h=h)
-            #print('Forged digest:', forged_digest)
+            print('Forged digest:', forged_digest)
         elif algorithm == 'md4':
             # TODO not working properly
             h = unpack('<4I', digest)
