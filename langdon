@@ -586,7 +586,7 @@ while True:
             traceback.print_exc()
             log.err('You must provide base, exponent and modulus.')
 
-    elif cmd.startswith(('gcd', 'lcm', 'invmod', 'modinv')):
+    elif cmd.startswith(('gcd', 'lcm', 'totient', 'invmod', 'modinv')):
         parts = cmd.split()
         args = {}
         try:
@@ -605,6 +605,7 @@ while True:
             fs = {
                 'gcd': gcd,
                 'lcm': lcm,
+                'totient': lambda a, b: lcm(a-1, b-1),
                 'invmod': invmod,
                 'modinv': invmod,
             }
@@ -616,7 +617,25 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must provide base, exponent and modulus.')
-        
+    
+    elif cmd.startswith('substring '):
+        parts = cmd.split()
+        try:
+            variable = all_variables[parts[1]]
+            start = parse_int(parts[2], all_variables)
+            try:
+                length = parse_int(parts[3], all_variables)
+            except:
+                length = 1
+            result = variable.as_raw()[start:start+length]
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must provide variable, start and optional length.')
+
     # TODO prime command
     # TODO math operations
     # TODO help command
@@ -1031,6 +1050,9 @@ while True:
                 second_pub = None
                 try:
                     second = variables[parts[2]]
+                    if not isinstance(second, DH):
+                        second = None
+                        raise AttributeError
                     second_pub = int(second.params['pub'].as_int())
                 except:
                     second_pub = parse_int(parts[2], all_variables)
