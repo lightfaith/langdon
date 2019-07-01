@@ -6,6 +6,7 @@
 #import sys
 import base64
 import pdb
+import random
 import string
 import threading
 import time
@@ -409,7 +410,7 @@ class AESAlgorithm(SymmetricCipher):
         except:
             pass
         try:
-            print('Block size: %s B', self.params['blocksize'])
+            print('Block size: %s B' % self.params['blocksize'])
         except:
             pass
         try:
@@ -1024,7 +1025,39 @@ class MD4(Hash):
         self.params['digest'] = Variable(result)
         return result
 
-        
+######################################################
+
+class AsymmetricCipher(Algorithm):
+    def __init__(self, name):
+        super().__init__(name)
+
+class DH(AsymmetricCipher):
+    def __init__(self, **kwargs):
+        super().__init__('DH()')
+        self.params = {
+            'g': None,      # the base
+            'p': None,      # the modulus
+            'priv': None,   # private key
+            'pub': None,    # public key
+            'shared': None, # shared key
+        }
+        # apply defined values
+        for k, v in kwargs.items():
+            if k in self.params.keys():
+                self.params[k] = Variable(v)
+
+        if not self.params['g']:
+            log.warn('The \'g\' parameter (base) is not specified.')
+        if not self.params['p']:
+            log.warn('The \'p\' parameter (exponent) is not specified.')
+        # generate unspecified values
+        if not self.params['priv']:
+            self.params['priv'] = Variable(random.randint(0, 2**16)) # TODO what value?
+        if not self.params['pub']:
+            self.params['pub'] = Variable(pow(int(self.params['g'].as_int()), 
+                                              int(self.params['priv'].as_int()), 
+                                              int(self.params['p'].as_int())))
+    
         
 
 

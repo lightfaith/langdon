@@ -153,6 +153,20 @@ def debruijn(length, unique_length=3, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef
     g = gen(*params)
     return ''.join([alphabet[next(g) % len(alphabet)] for _ in range(length)])
 
+def parse_int(value, variable_pool):
+    result = None
+    for f in [
+        lambda x: int(x),
+        lambda x: int(x, 16),
+        lambda x: int(variable_pool[x].as_int())
+    ]:
+        try:
+            result = f(value)
+            break
+        except:
+            continue
+    return result
+
 
 def oracle_send(payload, oracle_path):
     '''"""

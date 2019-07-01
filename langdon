@@ -561,6 +561,62 @@ while True:
             traceback.print_exc()
             log.err('You must provide oracle path, optional slowest/fastest flag and optional alphabet.')
         
+    elif cmd.startswith('modexp '):
+        parts = cmd.split()
+        args = {}
+        try:
+            # parse arguments
+            for arg, index in [('base', 1), ('exponent', 2), ('modulus', 3)]:
+                for f in [
+                    lambda x: int(x),
+                    lambda x: int(x, 16),
+                    lambda x: int(all_variables[x].as_int())
+                ]:
+                    try:
+                        args[arg] = f(parts[index])
+                        break
+                    except:
+                        continue
+            result = pow(args['base'], args['exponent'], args['modulus'])
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must provide base, exponent and modulus.')
+
+    elif cmd.startswith(('gcd', 'lcm', 'invmod', 'modinv')):
+        parts = cmd.split()
+        args = {}
+        try:
+            # parse arguments
+            for arg, index in [('a', 1), ('b', 2)]:
+                for f in [
+                    lambda x: int(x),
+                    lambda x: int(x, 16),
+                    lambda x: int(all_variables[x].as_int())
+                ]:
+                    try:
+                        args[arg] = f(parts[index])
+                        break
+                    except:
+                        continue
+            fs = {
+                'gcd': gcd,
+                'lcm': lcm,
+                'invmod': invmod,
+                'modinv': invmod,
+            }
+            result = fs[parts[0]](a, b)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must provide base, exponent and modulus.')
+        
     # TODO prime command
     # TODO math operations
     # TODO help command
@@ -950,6 +1006,57 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must provide algorithm, original data, data to append and hashing oracle.')
+    ######################################
+    # Asymmetric algorithms
+    ######################################
+    elif cmd.startswith('DH '):
+        try:
+            params = parse_algorithm_params(cmd[3:], variables)
+            result = DH(**params)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+
+        except:
+            traceback.print_exc()
+            log.err('Specify known parameters and variables holding the values.')
+        
+    elif cmd.startswith('dh-shared-key '):
+        parts = cmd.split()
+        try:
+            if len(parts) == 3: # (DH, DH) or (DH, pubkey)
+                first = variables[parts[1]]
+                second = None
+                second_pub = None
+                try:
+                    second = variables[parts[2]]
+                    second_pub = int(second.params['pub'].as_int())
+                except:
+                    second_pub = parse_int(parts[2], all_variables)
+                # compute shared key
+                result = Variable(pow(second_pub,
+                             int(first.params['priv'].as_int()),
+                             int(first.params['p'].as_int())
+                             ))
+                first.params['shared'] = result
+                if second:
+                    second.params['shared'] = result
+            elif len(parts) == 4:
+                public = parse_int(parts[1], all_variables)
+                private = parse_int(parts[2], all_variables)
+                modulus = parse_int(parts[3], all_variables)
+                result = Variable(pow(public, private, modulus))
+            else:
+                raise AttributeError
+            
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+        except:
+            traceback.print_exc()
+            log.err('You must provide 2 DH objects, DH object and public key or public key, private key and modulus.')
     ######################################
     # constant value OR bad command
     ######################################
