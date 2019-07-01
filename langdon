@@ -534,6 +534,33 @@ while True:
             traceback.print_exc()
             log.err('Bad sleep value.')
 
+    elif cmd.startswith('timing-leak '):
+        parts = cmd.split()
+        try:
+            oracle_path = all_variables[parts[1]]
+            threshold = float(parts[2])
+            try:
+                slowest = (parts[3] == 'slowest')
+            except:
+                slowest = True
+            try:
+                alphabet = set(all_variables[parts[4]].as_raw())
+            except KeyError:
+                log.warn('Alphabet not defined, using all possible byte values.')
+                alphabet = range(256)
+            except:
+                traceback.print_exc()
+                alphabet = range(256)
+
+            result = attacks.timing_leak(oracle_path, threshold, slowest, alphabet)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must provide oracle path, optional slowest/fastest flag and optional alphabet.')
+        
     # TODO prime command
     # TODO math operations
     # TODO help command

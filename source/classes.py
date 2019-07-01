@@ -141,9 +141,9 @@ class Oracle(threading.Thread):
         for payload_id, payload in self.payloads.items():
             #debug('Oracle testing 0x%02x' % payload_id, payload)
             payload_based = base64.b64encode(payload).decode()
+            #print('based payload:', payload_based)
             r, o, e = run_command('%s "%s"' % (self.oracle_path, 
                                                payload_based))
-            #print('based payload:', payload_based)
             #print('result:', r, o, e)
             o = base64.b64decode(o)
             if self.validate(payload_id, r, o, e, self.kwargs):

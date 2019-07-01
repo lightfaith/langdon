@@ -657,4 +657,47 @@ def hash_extension(algorithm, original, original_hash, append, oracle_path):
             pass
     return None
 
+
+def timing_leak(oracle_path, threshold, slowest, alphabet):
+    """
+    Often the code is written in such manner that when problem occurs,
+    the function is terminated prematurely. With time measuring it may be 
+    possible to bruteforce secret values.
+
+    The function prepares the payload by testing all possible byte values,
+    then using the one with slowest/fastest response and continuing.
+
+    Payload is sent to oracle. When return code is 0, the attack is 
+    considered complete.
+    """
+    secret = b''
+    #debug('Timing leak alphabet:', alphabet)
+    while True:
+        debug('Actual secret:', secret)
+        # try each byte
+        oracles = [Oracle(oracle_path, 
+                          {i: secret + bytes([i])}, 
+                          lambda i,r,o,e,kw: True) 
+                   for i in alphabet]
+        for oracle in oracles:
+            oracle.start()
+            oracle.join()
+            #debug('key:', oracle.payloads.keys())
+            #debug('error:', oracle.matching[0].error)
+        # found correct value? return
+        finished = [o for o in oracles if o.matching[0].ret == 0]
+        if finished:
+            secret = list(finished[0].payloads.values())[0]
+            debug('Oracle succeeded with', secret)
+            return secret
+        # use slowest/fastest payload
+        timed = sorted(oracles, key=lambda x: x.time, reverse=slowest)
+        best_diff = abs(timed[1].time - timed[0].time)
+        debug('  Time difference between 2 best is', best_diff)
+        if best_diff >= threshold:
+            secret = list(timed[0].payloads.values())[0]
+        else:
+            debug('  Threshold not met, trying again...')
+
+
 #####
