@@ -22,8 +22,9 @@ tmp_file = '/tmp/h'
 # get correct SHA1 for file
 payload = b"""
 f = file:%s
-s = SHA1 data=f
-h = hash s
+key = 'YELLOW SUBMARINE'
+s = SHA1 data=f key=key
+h = hmac s
 export h %s hex
 """ % (target_file.encode(), tmp_file.encode())
 p = subprocess.Popen('./langdon',

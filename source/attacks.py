@@ -693,7 +693,10 @@ def timing_leak(oracle_path, threshold, slowest, alphabet):
         # use slowest/fastest payload
         timed = sorted(oracles, key=lambda x: x.time, reverse=slowest)
         best_diff = abs(timed[1].time - timed[0].time)
-        debug('  Time difference between 2 best is', best_diff)
+        debug('  Time difference between 2 best (0x%02x, 0x%02x) is %f'
+              % (list(timed[0].payloads.keys())[0], 
+                 list(timed[1].payloads.keys())[0],
+                 best_diff))
         if best_diff >= threshold:
             secret = list(timed[0].payloads.values())[0]
         else:
