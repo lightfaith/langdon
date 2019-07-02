@@ -8,6 +8,8 @@ import traceback
 import time
 from struct import pack, unpack
 
+from Crypto.Util import number
+
 from source import lib
 from source.lib import *
 #from source.classes import Variable
@@ -165,8 +167,12 @@ def parse_int(value, variable_pool):
             break
         except:
             continue
+    if result is None:
+        raise ValueError
     return result
 
+def prime(bits=1024):
+    return number.getPrime(bits)
 
 def oracle_send(payload, oracle_path):
     '''"""

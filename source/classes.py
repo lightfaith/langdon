@@ -164,7 +164,9 @@ class Oracle(threading.Thread):
         #for line in hexdump(payload):
         #    print(line)
         oracle = Oracle(oracle_path,
-                        {0: payload},
+                        {0: (payload.as_raw() 
+                             if isinstance(payload, Variable) 
+                             else payload)},
                         lambda i,r,o,e,kw: True)
         oracle.start()
         oracle.join()
@@ -301,7 +303,7 @@ class Variable:
     representation methods
     """
     def as_int(self):
-        return str(bytes_to_int(self.value))
+        return bytes_to_int(self.value)
 
     def as_hex(self):
         return '0x' + ''.join('%02x' % c for c in self.value)
@@ -346,6 +348,8 @@ class Variable:
         preferred = self.preferred_form()
         if type(preferred) == bytes:
             return preferred.decode()
+        if type(preferred) == int:
+            return str(preferred)
         return preferred
 
 
@@ -687,7 +691,7 @@ class RNG(Algorithm):
             # USING BIG ENDIANESS
             # so we can compare ints and bytes successfully 
             # (e.g. for brute_timestamp_seed)
-            stream = pack('>' + 'L'*len(ints), *ints)
+            stream = pack('>' + self.params['packer']*len(ints), *ints)
             return stream[:count]
         else:
             log.err('Invalid mode.')
@@ -718,6 +722,7 @@ class MersenneTwister32(RNG):
             'l': 18,                  # additional
             'f': 1812433253,          # generator parameter
             'seed': seed,
+            'packer': 'L',
         }
         
         self.lower_mask = (1 << self.params['r']) - 1
@@ -780,7 +785,8 @@ class MersenneTwister64(RNG):
             'c': 0xFFF7EEE000000000,  # TGFSR(R) tempering bit mask
             'l': 43,                  # additional
             'f': 6364136223846793005, # generator parameter
-            'seed': seed
+            'seed': seed,
+            'packer': 'Q',
         }
         
         self.lower_mask = (1 << self.params['r']) - 1
@@ -1047,7 +1053,7 @@ class DH(AsymmetricCipher):
                 self.params[k] = Variable(v)
 
         if not self.params['g']:
-            log.warn('The \'g\' parameter (base) is not specified.')
+            log.warn('The \'g\' parameter (generator; base) is not specified.')
         if not self.params['p']:
             log.warn('The \'p\' parameter (exponent) is not specified.')
         # generate unspecified values
@@ -1059,6 +1065,111 @@ class DH(AsymmetricCipher):
                                               int(self.params['p'].as_int())))
     
         
+# TODO fail checks
+class SRPClient(AsymmetricCipher):
+    def __init__(self, **kwargs):
+        super().__init__('SRPClient()')
+        self.params = {
+            'N': None,
+            'g': None,
+            'k': None,
+            'a': None,
+            'username': None,
+            'password': None,
+        }
+        # apply defined values
+        for k, v in kwargs.items():
+            if k in self.params.keys():
+                self.params[k] = Variable(v)
+        # generate keypair
+        self.params['a'] = Variable(random.randint(0, 65536))
+        self.params['A'] = Variable(pow(self.params['g'].as_int(),
+                                        self.params['a'].as_int(),
+                                        self.params['N'].as_int()))
+
+    def get_auth_hash(self):
+        try:
+            return Variable(SHA1(self.params['S'].as_raw()).hash())
+        except:
+            return None
+
+    def compute_session_key(self, salt, pubkey):
+        salt = salt.as_raw()
+        hashed = Variable(SHA1(data=Variable(salt + self.params['password'].as_raw())).hash())
+
+        # compute random scrambling parameter
+        self.params['u'] = Variable(SHA1(data=self.params['A'].as_raw() + pubkey.as_raw()).hash())
+
+        # compute session key
+        self.params['S'] = Variable(pow(pubkey.as_int(),
+                                        (), # TODO
+                                        self.params['N'].as_int()))
+        debug('Client computed session key:', self.params['S'])
+    
+
+# TODO fail checks
+class SRPServer(AsymmetricCipher):
+    def __init__(self, **kwargs):
+        super().__init__('SRPServer()')
+        self.params = {
+            'N': None,
+            'g': None,
+            'k': None,
+            'b': None,
+        }
+        # apply defined values
+        for k, v in kwargs.items():
+            if k in self.params.keys():
+                self.params[k] = Variable(v)
+        self.tmp = {
+            'accounts': {},
+        }
+        # generate private key
+        self.params['b'] = Variable(random.randint(0, 65536)) # TODO maybe new for each client?
+    
+    def register(self, username, password):
+        username = username.as_raw()
+        password = password.as_raw()
+        # generate salt
+        salt = bytes([random.getrandbits(8) for _ in range(16)])
+        # store username, salt and password verifier
+        hashed = Variable(SHA1(data=Variable(salt + password)).hash())
+        verifier = pow(self.params['g'].as_int(),
+                       hashed.as_int(),
+                       self.params['N'].as_int())
+        self.tmp['accounts'][username] = (salt, verifier)
+        debug('User %s registered:' % username, self.tmp['accounts'][username])
+
+    def compute_session_key(self, username, pubkey):
+        username = username.as_raw()
+        # get verifier for user
+        if username not in self.tmp['accounts'].keys():
+            return (None, None)
+        salt, verifier = self.tmp['accounts'][username]
+        # generate own pubkey # UNIQUE for each client!
+        self.params['B'] = Variable(self.params['k'].as_int() 
+                                    * verifier
+                                    + pow(self.parameters['g'].as_int(),
+                                          self.parameters['b'].as_int(),
+                                          self.parameters['N'].as_int()))
+
+        # compute random scrambling parameter
+        self.params['u'] = Variable(SHA1(data=Variable(pubkey + self.params['B'])).hash())
+
+        # compute session key
+        self.params['S'] = Variable(pow(pubkey * pow(verifier,
+                                                     self.params['u'].as_int(),
+                                                     self.params['N'].as_int()),
+                                        self.params['b'].as_int(),
+                                        self.params['N'].as_int()))
+        debug('Server computed session key:', self.params['S'])
+        return (Variable(salt), self.params['B'])
+
+    def auth(self, key_hash):
+        if key_hash.as_raw() == SHA1(data=self.params['S'].as_raw()).hash():
+            return True
+        return False
+
 
 
 

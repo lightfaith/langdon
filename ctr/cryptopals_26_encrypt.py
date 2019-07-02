@@ -31,4 +31,4 @@ p = subprocess.Popen('./langdon-cli --encrypt aes-ctr {0} {1} 1337; rm {0}'.form
                      stderr=subprocess.PIPE)
 (out, err) = p.communicate()
 sys.stdout.buffer.write(base64.b64encode(out))
-sys.stderr.buffer.write(data)
+#sys.stderr.buffer.write(data)

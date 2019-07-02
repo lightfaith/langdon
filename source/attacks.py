@@ -15,6 +15,7 @@ def fixed_nonce(texts, language):
     If CTR mode is used with fixed nonce for multiple cases, it can be
     broken as XOR.
     """
+    texts = [t.as_raw() for t in texts]
     #print('num of texts:', len(texts)) #TODO del
     min_length = min([len(l) for l in texts])
     aligned_lines = [l[:min_length] for l in texts]
@@ -230,7 +231,6 @@ def ecb_injection(e_oracle_path, d_oracle_path, expected, desired, payload=None)
     The final payload kept in the ciphertext must be fixed length, which
     is computed here.
     """
-
     # find blocksize
     blocksize_payload = b'A' * 129
     encrypted = Oracle.once(blocksize_payload, e_oracle_path)
@@ -249,12 +249,14 @@ def ecb_injection(e_oracle_path, d_oracle_path, expected, desired, payload=None)
     
         debug('Determining size of data between payload and expected...')
         # find length of data between the 'A' payload and the expected value
-        payload_to_expected = decrypted.index(expected) - payload_offset - len(blocksize_payload)
+        payload_to_expected = decrypted.index(expected.as_raw()) - payload_offset - len(blocksize_payload)
         debug('Found difference: %d.' % payload_to_expected)
         real_payload_size = (blocksize - payload_offset - payload_to_expected) % 16
         debug('You must use payload of length %d (or + n * %d)' % (real_payload_size, blocksize))
 
-        if not payload:
+        if payload:
+            payload = payload.as_raw()
+        else:
             payload = b'X' * real_payload_size
 
         # find expected value offset
@@ -272,7 +274,7 @@ def ecb_injection(e_oracle_path, d_oracle_path, expected, desired, payload=None)
         start_payload_padding = blocksize - payload_offset
         end_payload_padding = len(payload) - start_payload_padding
         
-        fake_block = pkcs7_pad(desired, blocksize)
+        fake_block = pkcs7_pad(desired.as_raw(), blocksize)
         payload = (payload[:start_payload_padding]
                    + fake_block
                    + payload[start_payload_padding:])
@@ -306,6 +308,8 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
     with next decoded chunk, will create desired payload. In total,
     2 blocks are destroyed. In CP 16, authorization is bypassed.
     """
+    target_block = target_block.as_int()
+
     # determine blocksize
     blocksize = None
     common_match = 0
@@ -356,7 +360,7 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
         1' = 3' ^ (1 ^ 3)
         1' = 3' (desired) ^ 1 (previous encrypted block) ^ 3 (string to replace)
     """
-    fake_block = xor(xor(desired,
+    fake_block = xor(xor(desired.as_raw(),
                          original_e_blocks[target_block - 1]),
                      original_d_blocks[target_block])
 
@@ -375,6 +379,9 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
     We can use CBC principles to test faked PKCS#7 padding. This
     leads to plaintext revelation.
     """
+    ciphertext = ciphertext.as_raw()
+    if iv:
+        iv = iv.as_raw()
     # create blocks of blocksize
     blocks = [ciphertext[i:i+blocksize]
               for i in range(0, len(ciphertext), blocksize)]
@@ -478,14 +485,14 @@ def brute_timestamp_seed(rng, value, value_offset, reference_ts):
     # TODO make it killable
     seed = reference_ts
     while True:
-        #debug('Using seed', seed)
+        debug('Using seed', seed)
         mt = rngs[rng](seed)
         if value_offset:
             #debug('  Skipping %d bytes.' % value_offset)
             r = mt.get('bytes', value_offset)
         r = mt.get('bytes', len(value.as_raw()))
-        #debug('  Desired:', value.as_raw())
-        #debug('  Got:    ', r)
+        debug('  Desired:', value.as_raw())
+        debug('  Got:    ', r)
         if r == value.as_raw():
             return seed
         seed -= 1
@@ -530,6 +537,7 @@ def brute_rng_xor(rng, ciphertext, known):
     Using RNG to generate XOR key is cool, but the secret is only seed.
     We can brute it easily if we know portion of plaintext.
     """
+    known = known.as_raw()
     rngs = {
         'Mersenne32': MersenneTwister32,
         'Mersenne64': MersenneTwister64,
@@ -572,7 +580,9 @@ def ctr_bitflipping(e_oracle_path, d_oracle_path, offset, desired):
     arbitrary data in CTR ciphertext if we know both ciphertext and
     plaintext. Unlike CBC, offset is not block-aligned and can be arbitrary.
     """
-    """Run one E-D cycle"""
+    offset = offset.as_int()
+    desired = desired.as_raw()
+    # Run one E-D cycle
     debug('Trying sample payload.')
     payload = b'thisishalloween'
     debug('Payload:', payload)
@@ -611,6 +621,7 @@ def ctr_bitflipping(e_oracle_path, d_oracle_path, offset, desired):
 
 def cbc_key_as_iv(oracle_path, ciphertext):
     blocksize = 16
+    ciphertext = ciphertext.as_raw()
     encrypted_chunks = chunks(ciphertext, blocksize)
     if len(encrypted_chunks) < 3:
         log.err('Message is too short.')

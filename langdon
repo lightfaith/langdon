@@ -133,7 +133,7 @@ while True:
                 if length < 256:
                     output.append('Bin:    ' + v.as_binary())
                 if length < 4096:
-                    output.append('Int:    ' + v.as_int())
+                    output.append('Int:    ' + str(v.as_int()))
                 if length < 4096:
                     output.append('Hex:    ' + v.as_hex())
                 output.append('Raw:    ' + str(v.as_raw()))
@@ -426,7 +426,7 @@ while True:
         v = cmd[8:].strip()
         try:
             for line in hexdump(all_variables[v].as_raw()):
-                print(line)
+                output.append(line)
         except:
             log.err('You must specify a variable.')
 
@@ -436,16 +436,10 @@ while True:
         try:
             # parse arguments
             for arg, index in [('start', 1), ('end', 2), ('count', 3)]:
-                for f in [
-                    lambda x: int(x),
-                    lambda x: int(x, 16),
-                    lambda x: int(all_variables[x].as_int())
-                ]:
-                    try:
-                        args[arg] = f(parts[index])
-                        break
-                    except:
-                        continue
+                try:
+                    args[arg] = parse_int(parts[index], all_variables)
+                except:
+                    pass
             # generate number/bytes
             if args.get('count'):
                 result = b''.join(int_to_bytes(random.randint(args['start'], args['end'])) or b'\x00' 
@@ -491,7 +485,7 @@ while True:
     elif cmd.startswith('oracle '):
         try:
             _, oracle_path, payload = cmd.split()
-            result = Oracle.once(all_variables[payload].as_raw(), 
+            result = Oracle.once(all_variables[payload], 
                                  all_variables[oracle_path])
             if variable_name:
                 update_variable(variable_name, result)
@@ -567,16 +561,7 @@ while True:
         try:
             # parse arguments
             for arg, index in [('base', 1), ('exponent', 2), ('modulus', 3)]:
-                for f in [
-                    lambda x: int(x),
-                    lambda x: int(x, 16),
-                    lambda x: int(all_variables[x].as_int())
-                ]:
-                    try:
-                        args[arg] = f(parts[index])
-                        break
-                    except:
-                        continue
+                args[arg] = parse_int(parts[index], all_variables)
             result = pow(args['base'], args['exponent'], args['modulus'])
             if variable_name:
                 update_variable(variable_name, result)
@@ -592,16 +577,7 @@ while True:
         try:
             # parse arguments
             for arg, index in [('a', 1), ('b', 2)]:
-                for f in [
-                    lambda x: int(x),
-                    lambda x: int(x, 16),
-                    lambda x: int(all_variables[x].as_int())
-                ]:
-                    try:
-                        args[arg] = f(parts[index])
-                        break
-                    except:
-                        continue
+                args[arg] = parse_int(parts[index], all_variables)
             fs = {
                 'gcd': gcd,
                 'lcm': lcm,
@@ -636,7 +612,16 @@ while True:
             traceback.print_exc()
             log.err('You must provide variable, start and optional length.')
 
-    # TODO prime command
+    
+    elif cmd.startswith('prime'):
+        parts = cmd.split()
+        bits = parse_int(parts[1], all_variables) if len(parts) == 2 else None
+        result = prime(bits) if bits else prime()
+        if variable_name:
+            update_variable(variable_name, result)
+        else:
+            output.append(Variable(result))
+            
     # TODO math operations
     # TODO help command
     ######################################
@@ -673,13 +658,13 @@ while True:
     elif cmd.startswith('break-xor '):
         try:
             parts = cmd.split()
-            data = variables[parts[1]].as_raw()
+            data = variables[parts[1]]
             language = parts[2]
             try:
                 keysize = int(parts[3])
             except:
                 keysize = None
-            result = attacks.break_xor(data, language, keysize)
+            result = attacks.break_xor(data.as_raw(), language, keysize)
             if variable_name:
                 update_variable(variable_name, result)
             else:
@@ -736,15 +721,15 @@ while True:
                 _, e_oracle_path, d_oracle_path, expected, desired, payload = cmd.split()
                 result = attacks.ecb_injection(all_variables[e_oracle_path],
                                                all_variables[d_oracle_path],
-                                               all_variables[expected].as_raw(),
-                                               all_variables[desired].as_raw(),
-                                               all_variables[payload].as_raw())
+                                               all_variables[expected],
+                                               all_variables[desired],
+                                               all_variables[payload])
             except:
                 _, e_oracle_path, d_oracle_path, expected, desired = cmd.split()
                 result = attacks.ecb_injection(all_variables[e_oracle_path],
                                                all_variables[d_oracle_path],
-                                               all_variables[expected].as_raw(),
-                                               all_variables[desired].as_raw())
+                                               all_variables[expected],
+                                               all_variables[desired])
                 
             if variable_name:
                 update_variable(variable_name, result)
@@ -759,8 +744,8 @@ while True:
             _, e_oracle_path, d_oracle_path, target_block, payload = cmd.split()
             result = attacks.cbc_bitflipping(all_variables[e_oracle_path], 
                                              all_variables[d_oracle_path], 
-                                             int(all_variables[target_block].as_int()), 
-                                             all_variables[payload].as_raw())
+                                             all_variables[target_block], 
+                                             all_variables[payload])
             if variable_name:
                 update_variable(variable_name, result)
             else:
@@ -784,10 +769,10 @@ while True:
                 iv = None
                 blocksize = 16
             
-            result = attacks.cbc_padding(all_variables[ciphertext].as_raw(), 
+            result = attacks.cbc_padding(all_variables[ciphertext], 
                                          all_variables[oracle_path], 
                                          blocksize,
-                                         all_variables[iv].as_raw())
+                                         all_variables.get(iv))
             if variable_name:
                 update_variable(variable_name, result)
             else:
@@ -799,7 +784,7 @@ while True:
     elif cmd.startswith('fixed-nonce '):
         try:
             parts = cmd.split()
-            texts = [all_variables[p].as_raw() for p in parts[1:-1]]
+            texts = [all_variables[p] for p in parts[1:-1]]
             language = parts[-1]
             #sample_size = int(parts[3])
             result = attacks.fixed_nonce(texts, language)
@@ -816,8 +801,8 @@ while True:
             _, e_oracle_path, d_oracle_path, target_offset, payload = cmd.split()
             result = attacks.ctr_bitflipping(all_variables[e_oracle_path], 
                                              all_variables[d_oracle_path], 
-                                             int(all_variables[target_offset].as_int()), 
-                                             all_variables[payload].as_raw())
+                                             all_variables[target_offset],
+                                             all_variables[payload])
             if variable_name:
                 update_variable(variable_name, result)
             else:
@@ -830,7 +815,7 @@ while True:
         parts = cmd.split()
         try:
             oracle_path = all_variables[parts[1]]
-            ciphertext = all_variables[parts[2]].as_raw()
+            ciphertext = all_variables[parts[2]]
             result = attacks.cbc_key_as_iv(oracle_path, ciphertext)
             if variable_name:
                 update_variable(variable_name, result)
@@ -843,17 +828,10 @@ while True:
     # RNG
     ######################################
     elif cmd.startswith('Mersenne32'):
-        seed = 5489 
-        for f in [
-            lambda x: int(x),
-            lambda x: int(x, 16),
-            lambda x: int(all_variables[x].as_int())
-        ]:
-            try:
-                seed = f(cmd.split()[-1])
-                break
-            except:
-                continue
+        try:
+            seed = parse_int(cmd.split()[-1], all_variables)
+        except:
+            seed = 5489 
         
         result = MersenneTwister32(seed)
         if variable_name:
@@ -862,17 +840,10 @@ while True:
             output.append(result)
 
     elif cmd.startswith('Mersenne64'):
-        seed = 5489 # TODO or different?
-        for f in [
-            lambda x: int(x),
-            lambda x: int(x, 16),
-            lambda x: int(all_variables[x].as_int())
-        ]:
-            try:
-                seed = f(cmd.split()[-1])
-                break
-            except:
-                continue
+        try:
+            seed = parse_int(cmd.split()[-1], all_variables)
+        except:
+            seed = 5489 
         
         result = MersenneTwister64(seed)
         if variable_name:
@@ -884,17 +855,10 @@ while True:
         parts = cmd.split()
         mt = variables[parts[1]]
         mode = parts[2]
-        count = 1
-        for f in [
-            lambda x: int(x),
-            lambda x: int(x, 16),
-            lambda x: int(all_variables[x].as_int())
-        ]:
-            try:
-                count = f(parts[3])
-                break
-            except:
-                continue
+        try:
+            count = parse_int(parts[3], all_variables)
+        except:
+            count = 1
 
         result = mt.get(mode, count)
         if variable_name:
@@ -912,20 +876,14 @@ while True:
             value = all_variables[parts[2]]
             if len(parts) >= 4:
                 # also order is given
-                for f in [
-                    lambda x: int(x),
-                    lambda x: int(x, 16),
-                    lambda x: int(all_variables[x].as_int())
-                ]:
-                    try:
-                        value_offset = f(parts[3])
-                        break
-                    except:
-                        continue
+                try:
+                    value_offset = parse_int(parts[3], all_variables)
+                except:
+                    pass
             if len(parts) == 5:
                 # also reference timestamp is given
-                reference_ts = int(all_variables[parts[4]].as_int())
-            result = attacks.brute_timestamp_seed(mt, value, value_offset, reference_ts)
+                reference_ts = all_variables[parts[4]]
+            result = attacks.brute_timestamp_seed(mt, value, value_offset, reference_ts.as_int())
             if variable_name:
                 update_variable(variable_name, result)
             else:
@@ -953,7 +911,7 @@ while True:
             parts = cmd.split()
             rng = parts[1]
             ciphertext = all_variables[parts[2]]
-            known = all_variables[parts[3]].as_raw()
+            known = all_variables[parts[3]]
             
             result = attacks.brute_rng_xor(rng, ciphertext, known)
             if variable_name:
@@ -1053,14 +1011,14 @@ while True:
                     if not isinstance(second, DH):
                         second = None
                         raise AttributeError
-                    second_pub = int(second.params['pub'].as_int())
+                    second_pub = second.params['pub']
                 except:
-                    second_pub = parse_int(parts[2], all_variables)
+                    second_pub = Variable(parse_int(parts[2], all_variables))
                 # compute shared key
-                result = Variable(pow(second_pub,
-                             int(first.params['priv'].as_int()),
-                             int(first.params['p'].as_int())
-                             ))
+                result = Variable(pow(second_pub.as_int(),
+                                      first.params['priv'].as_int(),
+                                      first.params['p'].as_int()
+                                     ))
                 first.params['shared'] = result
                 if second:
                     second.params['shared'] = result
@@ -1079,6 +1037,57 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must provide 2 DH objects, DH object and public key or public key, private key and modulus.')
+
+    elif cmd.startswith('SRPClient '):
+        try:
+            params = parse_algorithm_params(cmd[3:], variables)
+            result = SRPClient(**params)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+
+        except:
+            traceback.print_exc()
+            log.err('Specify known parameters and variables holding the values.')
+
+    elif cmd.startswith('SRPServer '):
+        try:
+            params = parse_algorithm_params(cmd[3:], variables)
+            result = SRPServer(**params)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+
+        except:
+            traceback.print_exc()
+            log.err('Specify known parameters and variables holding the values.')
+
+    elif cmd.startswith('srp-register '):
+        parts = cmd.split()
+        try:
+            server = variables[parts[1]]
+            client = variables[parts[2]]
+            server.register(client.params['username'], 
+                            client.params['password'])
+        except:
+            traceback.print_exc()
+            log.err('You must specify SRP server and SRP client.')
+
+    elif cmd.startswith('srp-auth '):
+        parts = cmd.split()
+        try:
+            server = variables[parts[1]]
+            client = variables[parts[2]]
+            salt, s_pubkey = server.compute_session_key(client.params['username'],
+                                                        client.params['A'])
+            client.compute_session_key(salt, s_pubkey)
+            server.auth(client.get_auth_hash())
+        except:
+            traceback.print_exc()
+            log.err('You must specify SRP server and SRP client.')
+
     ######################################
     # constant value OR bad command
     ######################################
