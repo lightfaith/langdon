@@ -1089,7 +1089,7 @@ class SRPClient(AsymmetricCipher):
 
     def get_auth_hash(self):
         try:
-            return Variable(SHA1(self.params['S'].as_raw()).hash())
+            return Variable(SHA1(data=self.params['S']).hash())
         except:
             return None
 
@@ -1098,11 +1098,17 @@ class SRPClient(AsymmetricCipher):
         hashed = Variable(SHA1(data=Variable(salt + self.params['password'].as_raw())).hash())
 
         # compute random scrambling parameter
-        self.params['u'] = Variable(SHA1(data=self.params['A'].as_raw() + pubkey.as_raw()).hash())
+        self.params['u'] = Variable(SHA1(data=Variable(self.params['A'].as_raw() + pubkey.as_raw())).hash())
 
         # compute session key
-        self.params['S'] = Variable(pow(pubkey.as_int(),
-                                        (), # TODO
+        self.params['S'] = Variable(pow((pubkey.as_int() 
+                                         - self.params['k'].as_int()
+                                         * pow(self.params['g'].as_int(),
+                                               hashed.as_int(),
+                                               self.params['N'].as_int())),
+                                        (self.params['a'].as_int() 
+                                         + self.params['u'].as_int()
+                                         * hashed.as_int()),
                                         self.params['N'].as_int()))
         debug('Client computed session key:', self.params['S'])
     
@@ -1149,24 +1155,24 @@ class SRPServer(AsymmetricCipher):
         # generate own pubkey # UNIQUE for each client!
         self.params['B'] = Variable(self.params['k'].as_int() 
                                     * verifier
-                                    + pow(self.parameters['g'].as_int(),
-                                          self.parameters['b'].as_int(),
-                                          self.parameters['N'].as_int()))
+                                    + pow(self.params['g'].as_int(),
+                                          self.params['b'].as_int(),
+                                          self.params['N'].as_int()))
 
         # compute random scrambling parameter
-        self.params['u'] = Variable(SHA1(data=Variable(pubkey + self.params['B'])).hash())
+        self.params['u'] = Variable(SHA1(data=Variable(pubkey.as_raw() + self.params['B'].as_raw())).hash())
 
         # compute session key
-        self.params['S'] = Variable(pow(pubkey * pow(verifier,
-                                                     self.params['u'].as_int(),
-                                                     self.params['N'].as_int()),
+        self.params['S'] = Variable(pow(pubkey.as_int() * pow(verifier,
+                                                              self.params['u'].as_int(),
+                                                              self.params['N'].as_int()),
                                         self.params['b'].as_int(),
                                         self.params['N'].as_int()))
         debug('Server computed session key:', self.params['S'])
         return (Variable(salt), self.params['B'])
 
     def auth(self, key_hash):
-        if key_hash.as_raw() == SHA1(data=self.params['S'].as_raw()).hash():
+        if key_hash.as_raw() == SHA1(data=self.params['S']).hash():
             return True
         return False
 

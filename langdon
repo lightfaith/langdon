@@ -156,15 +156,21 @@ while True:
         continue
 
     # test
-    if cmd.startswith('test'):
+    if cmd == 'test':
         #venn(events, 'category == auth', 'severity == critical')
         #for x in range(4):
         #    for y in range(4):
         #        print(x, y, debruijn(190, params=(x, y))[-10:])
-        
         pass
    
-    if cmd.startswith('pdb'):
+    if cmd.startswith('python '):
+        try:
+            output.append(eval(cmd[7:]))
+        except Exception as e:
+            log.err(e)
+        continue
+
+    if cmd == 'pdb':
         pdb.set_trace()
         continue
 
@@ -1078,12 +1084,16 @@ while True:
     elif cmd.startswith('srp-auth '):
         parts = cmd.split()
         try:
-            server = variables[parts[1]]
-            client = variables[parts[2]]
+            client = variables[parts[1]]
+            server = variables[parts[2]]
             salt, s_pubkey = server.compute_session_key(client.params['username'],
                                                         client.params['A'])
             client.compute_session_key(salt, s_pubkey)
-            server.auth(client.get_auth_hash())
+            if server.auth(client.get_auth_hash()):
+                log.ok('Client successfully authenticated.')
+            else:
+                log.err('Authentication failed.')
+                
         except:
             traceback.print_exc()
             log.err('You must specify SRP server and SRP client.')
