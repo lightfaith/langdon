@@ -714,4 +714,18 @@ def timing_leak(oracle_path, threshold, slowest, alphabet):
             debug('  Threshold not met, trying again...')
 
 
+def rsa_broadcast(modulis, ciphertexts):
+    product = 1
+    for m in modulis:
+        product *= m.as_int()
+    x = 0
+    for m, c in zip(modulis, ciphertexts):
+        product_part = product // m.as_int()
+        inverse = invmod(product_part, m.as_int())
+        x += c.as_int() * product_part * inverse
+    x = x % product
+    result = root(x, len(ciphertexts))
+    return result
+
+
 #####

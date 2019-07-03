@@ -12,7 +12,6 @@ from Crypto.Util import number
 
 from source import lib
 from source.lib import *
-#from source.classes import Variable
 
 """
 Crypto functions
@@ -155,6 +154,7 @@ def debruijn(length, unique_length=3, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef
     g = gen(*params)
     return ''.join([alphabet[next(g) % len(alphabet)] for _ in range(length)])
 
+
 def parse_int(value, variable_pool):
     result = None
     for f in [
@@ -170,6 +170,34 @@ def parse_int(value, variable_pool):
     if result is None:
         raise ValueError
     return result
+
+def parse_algorithm_params(command, variables):
+    kvs = {}
+    for kv in command.split():
+        k, _, v = kv.partition('=')
+        if v:
+            # standard key=value format
+            kvs[k] = v
+        else:
+            # only key (flag) -> key=True
+            kvs[k] = True
+    result = {}
+    for k, v in kvs.items():
+        if v in variables.keys():
+            result[k] = variables[v]
+        elif isinstance(v, str) and '.' in v:
+            algo, _, param = v.partition('.')
+            if algo in variables.keys() and param in variables[algo].params.keys():
+                result[k] = variables[algo].params[param]
+        else:
+            try: # as int
+                from source.classes import Variable
+                result[k] = Variable(parse_int(v, variables))
+            except:
+                traceback.print_exc()
+                result[k] = v
+    return result
+
 
 def prime(bits=1024):
     return number.getPrime(bits)

@@ -196,6 +196,24 @@ def hexdump(data):
         line_count += 1
     return result
 
+'''
+def parse_int(value, variables):
+    result = None
+    for f in [
+        lambda x: variables[x].as_int(),
+        lambda x: int(x),
+        lambda x: int(x, 16),
+    ]:
+        try:
+            result = f(value)
+            break
+        except:
+            continue
+    if result is None:
+        raise ValueError
+    return result
+
+
 def parse_algorithm_params(command, variables):
     kvs = {}
     for kv in command.split():
@@ -215,6 +233,10 @@ def parse_algorithm_params(command, variables):
             if algo in variables.keys() and param in variables[algo].params.keys():
                 result[k] = variables[algo].params[param]
         else:
-            result[k] = v
+            try: # as int
+                result[k] = Variable(parse_int(v, variables))
+            except:
+                traceback.print_exc()
+                result[k] = v
     return result
-
+'''

@@ -1245,22 +1245,30 @@ class RSA(AsymmetricCipher):
             'plaintext': None,
             'ciphertext': None,
         }
+        #pdb.set_trace()
         # apply defined values
         for k, v in kwargs.items():
             if k in self.params.keys():
                 self.params[k] = Variable(v)
 
         debug('Filling undefined values...')
-        if not any(self.params[x] for x in ('p', 'q', 'n', 'et')):
-            self.params['p'] = Variable(prime(self.params['bits'].as_int()))
-            self.params['q'] = Variable(prime(self.params['bits'].as_int()))
-            self.params['n'] = Variable(self.params['p'].as_int() * self.params['q'].as_int())
-            self.params['et'] = Variable((self.params['p'].as_int() - 1) 
-                                          * (self.params['q'].as_int() - 1))
-        # try to compute private key
-        if self.params['e'] and self.params['et']:
-            self.params['d'] = Variable(invmod(self.params['e'].as_int(), 
-                                               self.params['et'].as_int()))
+        failed = False
+        while True: # in loop cause e and et might not yield d
+            if not any(self.params[x] for x in ('p', 'q', 'n', 'et')) or failed:
+                self.params['p'] = Variable(prime(self.params['bits'].as_int()))
+                self.params['q'] = Variable(prime(self.params['bits'].as_int()))
+                self.params['n'] = Variable(self.params['p'].as_int() * self.params['q'].as_int())
+                self.params['et'] = Variable((self.params['p'].as_int() - 1) 
+                                              * (self.params['q'].as_int() - 1))
+            # try to compute private key
+            if self.params['e'] and self.params['et']:
+                d = invmod(self.params['e'].as_int(), self.params['et'].as_int())
+                if d:
+                    self.params['d'] = Variable(d)
+                    break
+                failed = True
+            else:
+                break
 
     def encrypt(self):
         try:
