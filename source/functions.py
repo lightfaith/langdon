@@ -158,9 +158,9 @@ def debruijn(length, unique_length=3, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef
 def parse_int(value, variable_pool):
     result = None
     for f in [
+        lambda x: int(variable_pool[x].as_int()),
         lambda x: int(x),
         lambda x: int(x, 16),
-        lambda x: int(variable_pool[x].as_int())
     ]:
         try:
             result = f(value)

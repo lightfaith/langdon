@@ -513,6 +513,18 @@ while True:
             traceback.print_exc()
             log.err('Length must be specified.')
 
+    elif cmd.startswith('zeros '):
+        try:
+            count = parse_int(cmd[5:].strip(), all_variables)
+            result = bytes([0] * count)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must define count.')
+    
     elif cmd.startswith('timestamp'):
         _, _, date = cmd.partition(' ')
         if date:
@@ -1081,7 +1093,7 @@ while True:
             traceback.print_exc()
             log.err('You must specify SRP server and SRP client.')
 
-    elif cmd.startswith('srp-auth '):
+    elif cmd.startswith('srp-session-keys '):
         parts = cmd.split()
         try:
             client = variables[parts[1]]
@@ -1089,6 +1101,15 @@ while True:
             salt, s_pubkey = server.compute_session_key(client.params['username'],
                                                         client.params['A'])
             client.compute_session_key(salt, s_pubkey)
+        except:
+            traceback.print_exc()
+            log.err('You must specify SRP server and SRP client.')
+
+    elif cmd.startswith('srp-auth '):
+        parts = cmd.split()
+        try:
+            client = variables[parts[1]]
+            server = variables[parts[2]]
             if server.auth(client.get_auth_hash()):
                 log.ok('Client successfully authenticated.')
             else:
