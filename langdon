@@ -1150,6 +1150,20 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must provide 3 pairs of (RSA public key, ciphertext).')
+
+    elif cmd.startswith('rsa-unpadded-recovery '):
+        parts = cmd.split()
+        try:
+            pubkey = variables[parts[1]]
+            oracle_path = all_variables[parts[2]]
+            result = attacks.rsa_unpadded_recovery(pubkey, oracle_path)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must provide RSA object (with public key and ciphertext included) and path to decryption oracle.')
     ######################################
     # constant value OR bad command
     ######################################

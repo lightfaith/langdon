@@ -715,6 +715,9 @@ def timing_leak(oracle_path, threshold, slowest, alphabet):
 
 
 def rsa_broadcast(modulis, ciphertexts):
+    """
+    Best explanation: https://www.youtube.com/watch?v=nrgGU2mUum4
+    """ # TODO more thorough description
     product = 1
     for m in modulis:
         product *= m.as_int()
@@ -727,5 +730,25 @@ def rsa_broadcast(modulis, ciphertexts):
     result = root(x, len(ciphertexts))
     return result
 
+def rsa_unpadded_recovery(pubkey, oracle_path):
+    """
+    Oracle is expected to successfuly decrypt the given ciphertext, but
+    only once (imagine some replay protection).
+
+    If the plaintext is not padded before encryption, we can take advantage
+    of the modulation to provide completely different ciphertext that
+    can be easily transformed into original plaintext.
+    """
+    ciphertext = pubkey.params['ciphertext'].as_int()
+    e = pubkey.params['e'].as_int()
+    n = pubkey.params['n'].as_int()
+
+    s = random.randint(2, n - 1)
+    fake_ciphertext = Variable((ciphertext * pow(s, e, n)) % n)
+    fake_plaintext = Variable(Oracle.once(fake_ciphertext.as_raw(), oracle_path)).as_int()
+    result = Variable((fake_plaintext * invmod(s, n)) % n)
+    # TODO test with padded...
+    pubkey.params['plaintext'] = result
+    return result
 
 #####
