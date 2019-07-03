@@ -892,6 +892,7 @@ class SHA1(Hash):
                 self.params[k] = v
         self.params['block_size'] = 64
         self.params['output_size'] = 20
+        self.params['digest_info'] = Variable(b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14')
         self.tmp = {}
         self.reset()
 
@@ -946,7 +947,7 @@ class SHA1(Hash):
             self.tmp['h'] = [(hx + val) & 0xffffffff 
                              for hx,val in zip(self.tmp['h'], (a, b, c, d, e))]
         #print('SHA1 values:', ['%08x' % hx for hx in h], end=' ')
-        result = b''.join(b'%c' % b for hx in self.tmp['h'] for b in pack('>I', hx))
+        result = b''.join(b'%c' % b for hx in self.tmp['h'] for b in pack('>I', hx)) # TODO immediately as Variable?
         self.params['digest'] = Variable(result)
         #debug('final state:', ['0x%x' % hh for hh in self.tmp['h']])
         return result
@@ -1290,6 +1291,56 @@ class RSA(AsymmetricCipher):
         except:
             traceback.print_exc()
 
+    def sign(self, hash_algorithm):
+        hash_instance = hash_algorithm(data=self.params['plaintext'])
+        try:
+            digest_info = hash_instance.params['digest_info'].as_raw() # constant value
+        except:
+            log.err('Hashing algorithm is not supported (unknown digest_info).')
+            return None
+        h = Variable(hash_instance.hash())
+        block = Variable(b'\x00\x01'
+                         + b'\xff' * (len(self.params['plaintext'].as_raw()) - len(digest_info) - 3)
+                         + b'\x00'
+                         + digest_info
+                         + h.as_raw())
+        result = pow(block.as_int(),
+                     self.params['d'].as_int(),
+                     self.params['n'].as_int())
+        return result
+
+
+    def verify(self, signature, hash_algorithm):
+        hash_instance = hash_algorithm(data=self.params['plaintext'])
+        try:
+            digest_info = hash_instance.params['digest_info'].as_raw() # constant value
+        except:
+            log.err('Hashing algorithm is not supported (unknown digest_info).')
+            return None
+            
+        h = Variable(hash_instance.hash())
+        decrypted = Variable(pow(signature.as_int(),
+                                 self.params['e'].as_int(),
+                                 self.params['n'].as_int()))
+        expected = Variable(b'\x01'
+                            + b'\xff' * (len(self.params['plaintext'].as_raw()) - len(digest_info) - 3)
+                            + b'\x00'
+                            + digest_info
+                            + h.as_raw())
+        #debug('decrypted:', decrypted.as_raw())
+        #debug('expected: ', expected.as_raw())
+        if decrypted.as_raw().startswith(expected.as_raw()[:-len(h.as_raw())]):
+            if decrypted.as_raw() == expected.as_raw():
+                debug('Signature is OK.')
+                return True
+            else:
+                debug('Signature is invalid.')
+        else:
+            debug('PKCS1.5 structure is invalid.')
+        return False
+
+
+        
     def analyze(self, output_offset=0, interactive=False): # AES analysis
         # TODO
         output = []

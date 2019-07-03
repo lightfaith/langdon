@@ -428,6 +428,42 @@ while True:
             traceback.print_exc()
             log.err('You must specify an algorithm variable.')
 
+    elif cmd.startswith('sign '):
+        parts = cmd.split()
+        hashes = {
+            'sha1': SHA1, 
+            'md4': MD4
+        }
+        try:
+            privkey = variables[parts[1]]
+            hash_algorithm = hashes[parts[2].lower()]
+            result = privkey.sign(hash_algorithm)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must provide asymmetrical algorithm object and hash function name.')
+
+    elif cmd.startswith('verify '):
+        parts = cmd.split()
+        hashes = {
+            'sha1': SHA1, 
+            'md4': MD4
+        }
+        try:
+            privkey = variables[parts[1]]
+            signature = all_variables[parts[2]]
+            hash_algorithm = hashes[parts[3].lower()]
+            if privkey.verify(signature, hash_algorithm):
+                log.ok('Signature is valid.')
+            else:
+                log.warn('Signature is invalid.')
+        except:
+            traceback.print_exc()
+            log.err('You must provide asymmetrical algorithm object and hash function name.')
+
     elif cmd.startswith('hexdump '):
         v = cmd[8:].strip()
         try:
