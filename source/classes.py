@@ -288,6 +288,7 @@ class Variable:
             64: '(base64?)',
             65: '(base64 with separators?)',
         }
+        output.append(log.info('Value:            ', self.short(), offset=output_offset, stdout=False))
         output.append(log.info('Length (B):       ', len(self.as_raw()), offset=output_offset, stdout=False))
         output.append(log.info('Unique byte count:', ubc, ubc_hints.get(ubc) or '', offset=output_offset, stdout=False))
         output.append(log.info('Entropy:          ', ent, entropy_hint, offset=output_offset, stdout=False))
@@ -766,6 +767,13 @@ class MersenneTwister32(RNG):
     
     def randfloat(self):
         return self.randint() / ((1 << self.params['w']) - 1)
+    
+    def analyze(self, output_offset=0, interactive=False): # AES analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        output += self.analyze_params(output_offset, interactive)
+        return output
 
 
 class MersenneTwister64(RNG):
@@ -830,6 +838,13 @@ class MersenneTwister64(RNG):
     
     def randfloat(self):
         return self.randint() / ((1 << self.params['w']) - 1)
+
+    def analyze(self, output_offset=0, interactive=False): # AES analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        output += self.analyze_params(output_offset, interactive)
+        return output
 
 #############################################
 class Hash(Algorithm):
@@ -936,6 +951,13 @@ class SHA1(Hash):
         #debug('final state:', ['0x%x' % hh for hh in self.tmp['h']])
         return result
 
+    def analyze(self, output_offset=0, interactive=False): # AES analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        output += self.analyze_params(output_offset, interactive)
+        return output
+
         
         
 class MD4(Hash):
@@ -1031,6 +1053,13 @@ class MD4(Hash):
         self.params['digest'] = Variable(result)
         return result
 
+    def analyze(self, output_offset=0, interactive=False): # AES analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        output += self.analyze_params(output_offset, interactive)
+        return output
+
 ######################################################
 
 class AsymmetricCipher(Algorithm):
@@ -1064,8 +1093,14 @@ class DH(AsymmetricCipher):
                                               int(self.params['priv'].as_int()), 
                                               int(self.params['p'].as_int())))
     
-        
-# TODO fail checks
+    def analyze(self, output_offset=0, interactive=False): # AES analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        output += self.analyze_params(output_offset, interactive)
+        return output
+
+
 class SRPClient(AsymmetricCipher):
     def __init__(self, **kwargs):
         super().__init__('SRPClient()')
@@ -1095,10 +1130,14 @@ class SRPClient(AsymmetricCipher):
 
     def compute_session_key(self, salt, pubkey):
         salt = salt.as_raw()
+        if pubkey.as_int() % self.params['N'].as_int() == 0:
+            log.warn('Client received zero public key (mod N), it is insecure now.')
         hashed = Variable(SHA1(data=Variable(salt + self.params['password'].as_raw())).hash())
 
         # compute random scrambling parameter
         self.params['u'] = Variable(SHA1(data=Variable(self.params['A'].as_raw() + pubkey.as_raw())).hash())
+        if self.params['u'].as_int() == 0:
+            log.warn('Client computed zero scrambler, it is insecure now.')
 
         # compute session key
         self.params['S'] = Variable(pow((pubkey.as_int() 
@@ -1112,8 +1151,14 @@ class SRPClient(AsymmetricCipher):
                                         self.params['N'].as_int()))
         debug('Client computed session key:', self.params['S'])
     
+    def analyze(self, output_offset=0, interactive=False): # AES analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        output += self.analyze_params(output_offset, interactive)
+        return output
 
-# TODO fail checks
+
 class SRPServer(AsymmetricCipher):
     def __init__(self, **kwargs):
         super().__init__('SRPServer()')
@@ -1148,6 +1193,8 @@ class SRPServer(AsymmetricCipher):
 
     def compute_session_key(self, username, pubkey):
         username = username.as_raw()
+        if pubkey.as_int() % self.params['N'].as_int() == 0:
+            log.warn('Server received zero public key (mod N), it is insecure now.')
         # get verifier for user
         if username not in self.tmp['accounts'].keys():
             return (None, None)
@@ -1176,6 +1223,70 @@ class SRPServer(AsymmetricCipher):
             return True
         return False
 
+    def analyze(self, output_offset=0, interactive=False): # AES analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        output += self.analyze_params(output_offset, interactive)
+        return output
 
+
+class RSA(AsymmetricCipher):
+    def __init__(self, **kwargs):
+        super().__init__('RSA()')
+        self.params = {
+            'p': None,              # prime number
+            'q': None,              # prime number
+            'n': None,              # p*q
+            'et': None,             # totient(p, q)
+            'e': Variable(65537),   # public key
+            'd': None,              # private key
+            'bits': Variable(1024), # p,q bits length
+            'plaintext': None,
+            'ciphertext': None,
+        }
+        # apply defined values
+        for k, v in kwargs.items():
+            if k in self.params.keys():
+                self.params[k] = Variable(v)
+
+        debug('Filling undefined values...')
+        if not any(self.params[x] for x in ('p', 'q', 'n', 'et')):
+            self.params['p'] = Variable(prime(self.params['bits'].as_int()))
+            self.params['q'] = Variable(prime(self.params['bits'].as_int()))
+            self.params['n'] = Variable(self.params['p'].as_int() * self.params['q'].as_int())
+            self.params['et'] = Variable((self.params['p'].as_int() - 1) 
+                                          * (self.params['q'].as_int() - 1))
+        # try to compute private key
+        if self.params['e'] and self.params['et']:
+            self.params['d'] = Variable(invmod(self.params['e'].as_int(), 
+                                               self.params['et'].as_int()))
+
+    def encrypt(self):
+        try:
+            result = pow(self.params['plaintext'].as_int(),
+                         self.params['e'].as_int(),
+                         self.params['n'].as_int())
+            self.params['ciphertext'] = Variable(result)
+            return result
+        except:
+            traceback.print_exc()
+    
+    def decrypt(self):
+        try:
+            result = pow(self.params['ciphertext'].as_int(),
+                         self.params['d'].as_int(),
+                         self.params['n'].as_int())
+            self.params['plaintext'] = Variable(result)
+            return result
+        except:
+            traceback.print_exc()
+
+    def analyze(self, output_offset=0, interactive=False): # AES analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        output += self.analyze_params(output_offset, interactive)
+        return output
 
 

@@ -603,7 +603,7 @@ while True:
                 'invmod': invmod,
                 'modinv': invmod,
             }
-            result = fs[parts[0]](a, b)
+            result = fs[parts[0]](*args.values())
             if variable_name:
                 update_variable(variable_name, result)
             else:
@@ -1119,6 +1119,19 @@ while True:
             traceback.print_exc()
             log.err('You must specify SRP server and SRP client.')
 
+    elif cmd.startswith('RSA'):
+        try:
+            params = parse_algorithm_params(cmd[3:], variables)
+            result = RSA(**params)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(result)
+
+        except:
+            traceback.print_exc()
+            log.err('Specify known parameters and variables holding the values.')
+        
     ######################################
     # constant value OR bad command
     ######################################
