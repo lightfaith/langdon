@@ -714,7 +714,7 @@ def timing_leak(oracle_path, threshold, slowest, alphabet):
             debug('  Threshold not met, trying again...')
 
 
-def rsa_broadcast(modulis, ciphertexts):
+def rsa_e3_broadcast(modulis, ciphertexts):
     """
     Best explanation: https://www.youtube.com/watch?v=nrgGU2mUum4
     """ # TODO more thorough description
@@ -751,4 +751,8 @@ def rsa_unpadded_recovery(pubkey, oracle_path):
     pubkey.params['plaintext'] = result
     return result
 
+
+def rsa_e3_forge_signature():
+    # TODO
+    pass
 #####

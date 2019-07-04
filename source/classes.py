@@ -883,6 +883,35 @@ class Hash(Algorithm):
     def hmac(self):
         return self.hash(Hash.hmac_modifier)
 
+    @staticmethod
+    def get_algorithm_from_digest_info(digest_info):
+        """
+        Return subclass whose digest_info is at the beginning of 
+        provided value.
+        """
+        # first get all implemented hashes recursively
+        hashes = set([Hash])
+        while True:
+            new_hashes = set(hashes)
+            for h in hashes:
+                for sub in h.__subclasses__():
+                    new_hashes.add(sub)
+            if not new_hashes.difference(hashes): # no change, we have everything
+                break
+            hashes = new_hashes
+        hashes.remove(Hash)
+        #print('Got all implemented hashes:', hashes)
+        for h in hashes:
+            try:
+                if digest_info.startswith(h().params['digest_info'].as_raw()):
+                    #print('Winner is', h)
+                    return h
+            except:
+                pass
+        return None
+
+        
+
 
 class SHA1(Hash):
     def __init__(self, **kwargs):
@@ -1310,33 +1339,50 @@ class RSA(AsymmetricCipher):
         return result
 
 
-    def verify(self, signature, hash_algorithm):
-        hash_instance = hash_algorithm(data=self.params['plaintext'])
-        try:
-            digest_info = hash_instance.params['digest_info'].as_raw() # constant value
-        except:
-            log.err('Hashing algorithm is not supported (unknown digest_info).')
-            return None
-            
-        h = Variable(hash_instance.hash())
+    def verify(self, signature, bleichenbacher=False):
         decrypted = Variable(pow(signature.as_int(),
                                  self.params['e'].as_int(),
                                  self.params['n'].as_int()))
-        expected = Variable(b'\x01'
-                            + b'\xff' * (len(self.params['plaintext'].as_raw()) - len(digest_info) - 3)
-                            + b'\x00'
-                            + digest_info
-                            + h.as_raw())
-        #debug('decrypted:', decrypted.as_raw())
-        #debug('expected: ', expected.as_raw())
-        if decrypted.as_raw().startswith(expected.as_raw()[:-len(h.as_raw())]):
-            if decrypted.as_raw() == expected.as_raw():
-                debug('Signature is OK.')
-                return True
-            else:
-                debug('Signature is invalid.')
+        debug('decrypted:', decrypted.as_raw())
+        # remove the padding
+        padding_match = re.match(b'\x01(\xff+)\x00', decrypted.as_raw())
+        if not padding_match:
+            debug('Incorrect padding.')
+            return False
+
+        fs = padding_match.groups(1)[0]
+        #debug('Fs:', fs)
+        asn_and_hash = decrypted.as_raw()[len(fs) + 2:]
+        #debug('asn and hash:', asn_and_hash)
+        
+        # get hash type from DigestInfo
+        try:
+            hash_algorithm = Hash.get_algorithm_from_digest_info(asn_and_hash)(data=self.params['plaintext'])
+        except:
+            debug('Unknown ASN.1 DigestInfo.')
+            return False
+
+        # get correct hash, verify given hash has no garbage after it
+        given_hash = decrypted.as_raw()[len(fs) + 2 + len(hash_algorithm.params['digest_info'].as_raw()):]
+        if not bleichenbacher and len(given_hash) != hash_algorithm.params['output_size']:
+            debug('Hash not at the end of the signature. Hello, Mr. Bleichenbacher.')
+            return False
+        
+        # check plaintext length vs padding
+        if not bleichenbacher and len(fs) != len(self.params['plaintext'].as_raw()) - len(hash_algorithm.params['digest_info'].as_raw()) - 3:
+            debug('Incorrect padding length.')
+            return False
+
+        # compare hashes
+        correct_hash = hash_algorithm.hash()
+        debug('given hash:  ', given_hash)
+        debug('correct hash:', correct_hash)
+        if correct_hash == given_hash:
+            debug('Signature is OK.')
+            return True
         else:
-            debug('PKCS1.5 structure is invalid.')
+            debug('Hash is different.')
+            return False
         return False
 
 

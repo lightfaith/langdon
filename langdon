@@ -161,6 +161,8 @@ while True:
         #for x in range(4):
         #    for y in range(4):
         #        print(x, y, debruijn(190, params=(x, y))[-10:])
+        #print(Hash.__subclasses__())
+        Hash.get_algorithm_from_digest_info(b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x11')
         pass
    
     if cmd.startswith('python '):
@@ -444,25 +446,20 @@ while True:
                 output.append(Variable(result))
         except:
             traceback.print_exc()
-            log.err('You must provide asymmetrical algorithm object and hash function name.')
+            log.err('You must provide asymmetrical algorithm object (with private key and plaintext included) and hash function name.')
 
     elif cmd.startswith('verify '):
         parts = cmd.split()
-        hashes = {
-            'sha1': SHA1, 
-            'md4': MD4
-        }
         try:
             privkey = variables[parts[1]]
             signature = all_variables[parts[2]]
-            hash_algorithm = hashes[parts[3].lower()]
-            if privkey.verify(signature, hash_algorithm):
+            if privkey.verify(signature):
                 log.ok('Signature is valid.')
             else:
                 log.warn('Signature is invalid.')
         except:
             traceback.print_exc()
-            log.err('You must provide asymmetrical algorithm object and hash function name.')
+            log.err('You must provide asymmetrical algorithm object (with public key and plaintext included) and signature to verify.')
 
     elif cmd.startswith('hexdump '):
         v = cmd[8:].strip()
@@ -1168,7 +1165,7 @@ while True:
             traceback.print_exc()
             log.err('Specify known parameters and variables holding the values.')
     
-    elif cmd.startswith('rsa-broadcast'):
+    elif cmd.startswith('rsa-e3-broadcast '):
         """
         Best explanation: https://www.youtube.com/watch?v=nrgGU2mUum4
         """
@@ -1178,7 +1175,7 @@ while True:
             modulis = [all_variables.get(parts[i]) or variables[parts[i]].params['n'] 
                        for i in range(1, 7, 2)]
             ciphertexts = [all_variables[parts[i]] for i in range(2, 7, 2)]
-            result = attacks.rsa_broadcast(modulis, ciphertexts)
+            result = attacks.rsa_e3_broadcast(modulis, ciphertexts)
             if variable_name:
                 update_variable(variable_name, result)
             else:
@@ -1200,6 +1197,36 @@ while True:
         except:
             traceback.print_exc()
             log.err('You must provide RSA object (with public key and ciphertext included) and path to decryption oracle.')
+    
+    elif cmd.startswith('rsa-e3-forge-signature '):
+        parts = cmd.split()
+        hashes = {
+            'sha1': SHA1,
+            'md4': MD4,
+        }
+        try:
+            algo = variables[parts[1]]
+            hash_algorithm = hashes[parts[2]]
+
+        except:
+            traceback.print_exc()
+            log.err('You must provide RSA object (with private key and plaintext included) and hash function name.')
+    ####################################
+    # Special cryptopals commands
+    ####################################
+    elif cmd.startswith('cp-42 '):
+        parts = cmd.split()
+        try:
+            privkey = variables[parts[1]]
+            signature = all_variables[parts[2]]
+            if privkey.verify(signature, bleichenbacher=True):
+                log.ok('Signature is valid.')
+            else:
+                log.warn('Signature is invalid.')
+        except:
+            traceback.print_exc()
+            log.err('You must provide asymmetrical algorithm object and signature to verify.')
+
     ######################################
     # constant value OR bad command
     ######################################
