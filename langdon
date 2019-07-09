@@ -1207,10 +1207,15 @@ while True:
         try:
             algo = variables[parts[1]]
             hash_algorithm = hashes[parts[2]]
-
+            result = attacks.rsa_e3_forge_signature(algo, hash_algorithm, variant=1)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+            
         except:
             traceback.print_exc()
-            log.err('You must provide RSA object (with private key and plaintext included) and hash function name.')
+            log.err('You must provide RSA object (with public key and plaintext included) and hash function name.')
     ####################################
     # Special cryptopals commands
     ####################################
