@@ -44,6 +44,88 @@ def update_variable(name, value):
                                or isinstance(value, Algorithm)
                            else Variable(value))
 
+############
+# oneliners
+############
+def get_data_from_argv_or_stdin(args):
+    if args:
+        # argv
+        result = []
+        for arg in args:
+            with open(arg, 'rb') as f:
+                result.append(f.read())
+        return result
+    else:
+        # stdin
+        result = [sys.stdin.read().encode()]
+        return result
+
+try:
+    if sys.argv[1] in ('-h', '--help'):
+        # TODO show help
+        sys.exit(0)
+
+    if sys.argv[1] in ('bin', '--bin'):
+        data, = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(binary(data))
+    elif sys.argv[1] in ('unbin', '--unbin'):
+        data, = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(unbinary(data))
+    if sys.argv[1] in ('hex', '--hex'):
+        data, = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(hexadecimal(data))
+    elif sys.argv[1] in ('unhex', '--unhex'):
+        data, = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(unhexadecimal(data))
+    elif sys.argv[1] in ('entropy', '--entropy'):
+        data, = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(entropy(data))
+    elif sys.argv[1] in ('histogram', '--histogram'):
+        data, = get_data_from_argv_or_stdin(sys.argv[2:])
+        plt_histogram(data, 
+                      range(256),
+                      'Byte histogram',
+                      (10, 5),
+                      ['#005073', '#107dac', '#189ad3', '#71c7ec'],)
+        plt.show() # TODO or save option?
+
+    elif sys.argv[1] in ('random', '--random'):
+        count = int(sys.argv[2])
+        prynt(b''.join(int_to_bytes(random.randint(0, 255)) for _ in range(count)))
+    elif sys.argv[1] in ('debruijn', '--debruijn'):
+        count = int(sys.argv[2])
+        prynt(debruijn(count))
+    elif sys.argv[1] in ('zeros', '--zeros'):
+        count = int(sys.argv[2])
+        prynt(bytes(count))
+    elif sys.argv[1] in ('timestamp', '--timestamp'):
+        try:
+            date = sys.argv[2]
+            prynt(int(datetime.timestamp(dateutil.parser.parse(date))))
+        except IndexError:
+            prynt(int(datetime.timestamp(datetime.now())))
+        except:
+            log.err('Invalid date.')
+    elif sys.argv[1] in ('prime', '--prime'):
+        try:
+            bits = int(sys.argv[2])
+        except:
+            bits = 1024
+        prynt(prime(bits))
+    # oneliner complete, exit
+    sys.exit(0)
+except SystemExit as e:
+    sys.exit(e)
+except IndexError:
+    # run interactively
+    pass
+except:
+    traceback.print_exc()
+    sys.exit(1)
+
+################
+# run main loop
+################
 while True:
     # print something from previous command if needed
     if output:
@@ -357,6 +439,19 @@ while True:
                 comment = ' (probably compressed)'
             log.info('  %*s  %0.5f%s' % (variable_max_length, k, ent, comment))
     
+    elif cmd.startswith('histogram'):
+        try:
+            data = all_variables[cmd.split()[1]]
+            plt_histogram(data.as_raw(), 
+                          range(256),
+                          'Byte histogram',
+                          (10, 5),
+                          ['#005073', '#107dac', '#189ad3', '#71c7ec'],)
+            plt.show() # TODO or save option?
+        except:
+            traceback.print_exc()
+            log.err('You must provide data variable.')
+
     # compute hamming distance of 2 given variables / 1-N / M-N
     elif cmd.startswith('hamming'):
         parts = cmd.split()
