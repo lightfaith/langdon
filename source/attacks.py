@@ -400,7 +400,9 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
         except:
             previous_block = iv # even None
             debug('Previous block:',
-                  ' '.join('%02x' % c for c in previous_block))
+                  (' '.join('%02x' % c for c in previous_block)
+                   if iv
+                   else 'None'))
 
         debug('Actual block:  ', ' '.join('%02x' % c for c in block))
 
