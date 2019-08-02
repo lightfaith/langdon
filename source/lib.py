@@ -12,10 +12,10 @@ import tempfile
 #import re
 #import math
 #import traceback
-#import matplotlib.pyplot as plt
-#import matplotlib.ticker as ticker
 #import random
 from source import log
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 """
 Constants
@@ -196,47 +196,19 @@ def hexdump(data):
         line_count += 1
     return result
 
-'''
-def parse_int(value, variables):
-    result = None
-    for f in [
-        lambda x: variables[x].as_int(),
-        lambda x: int(x),
-        lambda x: int(x, 16),
-    ]:
-        try:
-            result = f(value)
-            break
-        except:
-            continue
-    if result is None:
-        raise ValueError
-    return result
+def plt_histogram(data, ticks, title='', figsize=(10, 5), colors=None):
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(1, 1, 1)
+    ax.set_title(title)
+    ax.margins(x=0)
+    # plot hist
+    _, __, patches = plt.hist(bytearray(data), ticks)
+    # set hexadecimal ticks
+    ax.get_xaxis().set_major_locator(ticker.MultipleLocator(16))
+    ax.get_xaxis().set_major_formatter(plt.FuncFormatter(
+        lambda value,tick_number: '0x%x' % int(value)))
+    if colors:
+        # color bars
+        for i, p in enumerate(patches):
+            plt.setp(p, 'facecolor', colors[i % len(colors)])
 
-
-def parse_algorithm_params(command, variables):
-    kvs = {}
-    for kv in command.split():
-        k, _, v = kv.partition('=')
-        if v:
-            # standard key=value format
-            kvs[k] = v
-        else:
-            # only key (flag) -> key=True
-            kvs[k] = True
-    result = {}
-    for k, v in kvs.items():
-        if v in variables.keys():
-            result[k] = variables[v]
-        elif isinstance(v, str) and '.' in v:
-            algo, _, param = v.partition('.')
-            if algo in variables.keys() and param in variables[algo].params.keys():
-                result[k] = variables[algo].params[param]
-        else:
-            try: # as int
-                result[k] = Variable(parse_int(v, variables))
-            except:
-                traceback.print_exc()
-                result[k] = v
-    return result
-'''

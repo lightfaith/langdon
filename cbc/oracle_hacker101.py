@@ -18,5 +18,5 @@ except:
     sys.exit(1)
 
 payload_based = payload_based.replace('=', '~').replace('/', '!').replace('+', '-')
-r, o, e = run_command('wget -qO- http://35.227.24.107:5001/464e14b3fb/?post=%s' % payload_based)
+r, o, e = run_command('wget -qO- http://35.190.155.168/8182ed00d8/?post=%s' % payload_based)
 sys.exit(1 if b'PaddingException' in o else 0)

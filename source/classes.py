@@ -1363,9 +1363,10 @@ class RSA(AsymmetricCipher):
             return False
 
         # get correct hash, verify given hash has no garbage after it
-        given_hash = decrypted.as_raw()[len(fs) + 2 + len(hash_algorithm.params['digest_info'].as_raw()):]
-        if not bleichenbacher and len(given_hash) != hash_algorithm.params['output_size']:
-            debug('Hash not at the end of the signature. Hello, Mr. Bleichenbacher.')
+        hash_offset = len(fs) + 2 + len(hash_algorithm.params['digest_info'].as_raw())
+        given_hash = decrypted.as_raw()[hash_offset:hash_offset+hash_algorithm.params['output_size']]
+        if not bleichenbacher and hash_offset + len(given_hash) != len(decrypted.as_raw()):
+            debug('Hash not at the end of the signature. Hello, Mr. Bleichenbacher!')
             return False
         
         # check plaintext length vs padding

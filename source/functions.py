@@ -190,12 +190,15 @@ def parse_algorithm_params(command, variables):
             if algo in variables.keys() and param in variables[algo].params.keys():
                 result[k] = variables[algo].params[param]
         else:
-            try: # as int
-                from source.classes import Variable
-                result[k] = Variable(parse_int(v, variables))
-            except:
-                traceback.print_exc()
+            if k in ('mode',): # beacuse of AES mode=cbc
                 result[k] = v
+            else:
+                try: # as int
+                    from source.classes import Variable
+                    result[k] = Variable(parse_int(v, variables))
+                except:
+                    traceback.print_exc()
+                    result[k] = v
     return result
 
 
