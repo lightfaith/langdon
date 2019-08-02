@@ -280,7 +280,179 @@ while True:
         pdb.set_trace()
         continue
 
-    if cmd == 'help':
+    if cmd.startswith('help'):
+        arg = cmd[4:].strip()
+        if not arg:
+            # general help
+            output.extend("""{color}
+Welcome! This is Langdon, experimental cryptography framework. It is designed
+to aid with common operations while dealing with crypto tasks.
+
+This is Langdon running interactively, you can also use the most common 
+functions from the command line (run {command}`{path} --help`{color} to list options).
+
+{bold}Basic usage{unbold}
+
+First of all, you can define variables as following:
+    {command}a = Hello{color}
+    {command}a = 'Hello'{color}
+    {command}a = 310939249775{color}
+    {command}a = 0x48656c6c6f{color}
+    {command}a = base64:SGVsbG8={color}
+
+Those commands are completely equivalent. You can also get file content directly:
+    {command}a = file:/etc/passwd{color}
+
+If you want to use each line from a file as distinct variable, you can use
+{command}multiline <file> <variable_prefix>{color} command.
+
+List variables with {command}vars{color}. To list specific variable, just write
+its name, in this case {command}a{color}.
+
+Use {command}<command>~<value>{color} for grep, or {command}<command>~~<regex>{color} for regular expression grep. For example:
+    {command}a~Hex{color}      # show only HEX form
+    {command}a~~B[a-z]+{color} # show Bin and Base64 form
+
+Export variables with {command}export a /tmp/a{color} command. The raw (byte) form
+is used by default, but you can force another form (raw, int, hex, bin, escaped, base64):
+    {command}export a /tmp/a base64{color}
+
+Export all variables at once with {command}export all{color} command.
+
+{bold}Sequences{unbold}
+
+You can use some of the following functions to generate sequence of data:
+    {command}random <start> <end> [<count>]{color} - random data from interval
+    {command}debruijn <length>{color} - DeBruijn pattern of given length
+    {command}zeros <count>{color} - sequence of NULL bytes
+    {command}prime [<bits>]{color} - generate prime number (default 1024b)
+
+{bold}Functions{unbold}
+
+You can use some of these common functions:
+    {command}len/length a{color} - get length of data
+    {command}concat a b{color} - concatenate multiple variables
+    {command}substring <variable> <start> <length>{color} - get a substring
+    {command}hexdump a{color} - show hexdump of data
+    {command}timestamp [<datetime>]{color} - get timestamp of current/specified datetime
+    {command}sleep <seconds>{color} - sleep for a while
+    {command}modexp m e n{color} - compute m^e mod n
+    {command}gcd a b{color} - compute greatest common divisor
+    {command}lcm a b{color} - compute least common multiple
+    {command}totient a b{color} - compute totient
+    {command}invmod/modinv a b{color} - compute modular inverse
+
+Langdon supports many crypto-related functions. These are currently supported:
+    {command}xor a b{color} - xor 2 variables
+    {command}brute-single-xor <variable>{color} - create single byte XORs of given variable
+    {command}break-xor <variable> <language> [<keysize>]{color} - use frequency analysis to 
+    break xor (use hamming to get keysize if necessary)
+    {command}timing-leak <oracle> <threshold> [slowest [alphabet]]{color} - send bytes
+    (or characters from the alphabet) one by one into oracle and remember the fastest (or slowest)
+    one. If the threshold is crossed, use it and continue with the next byte.
+    {command}{color}
+
+There is a number of real cryptographical attacks implemented. Use {command}help <algorithm>{color}
+to see details for them, but here is a list for quick reference:
+    {command}ecb-chosen-plaintext <oracle>{color} - AES ECB chosen plaintextattack
+    {command}ecb-injection <encryption_oracle> <decryption_oracle> <expected> <desired>{color} - ECB cut-and-paste attack
+    {command}cbc-bitflipping <encryption_oracle> <decryption_oracle> <target_block> <desired>{color} - CBC bitflipping attack
+    {command}cbc-padding <oracle> <data> [<blocksize> [<iv>]]{color} - CBC padding oracle attack
+    {command}cbc-key-as-iv <oracle> <ciphertext>{color} - CBC key==IV attack
+    {command}fixed-nonce <c1> <c2> ... <language>{color} - CTR fixed-nonce attack 
+    {command}ctr-bitflipping <encryption_oracle> <decryption_oracle> <offset> <payload>{color} - CTR bitflipping attack
+    {command}brute-timestamp-seed <RNG_type> <random_value> [<offset> [<reference_timestamp>]]{color} - bruteforce seed for known random value
+    {command}clone-rng <RNG_type> <states>{color} - clone RNG from output
+    {command}hash-extension <hash_type> <plaintext> <original_hash> <append_data> <oracle>{color} - hash length extension attack
+    {command}dh-shared-key (<alice_DH> <bob_DH>|<alice_DH> <bob_public_key>|<bob_public_key> <alice_private_key><modulus>) {color} - compute Diffie-Hellman shared key
+    {command}srp-register <server> <client>{color} - SRP registration
+    {command}srp-session-keys <client> <server>{color} - SRP session key computation
+    {command}srp-auth <client> <server>{color} - SRP authentication
+    {command}rsa-e3-broadcast <public_key1> <ciphertext1> <public_key2> <ciphertext2> <public_key3> <ciphertext3>{color} - RSA e=3 broadcast attack
+    {command}rsa-unpadded-recovery <RSA_public_key> <oracle>{color} - RSA unpadded message recovery oracle attack
+    {command}rsa-e3-forge-signature <RSA> <hash_type>{color} - Bleichenbacher's e=3 RSA signature attack
+
+{bold}Oracles{unbold}
+
+In many cryptographical attacks, you can split your program into two parts. The first
+one is universal for every usage (e.g. bruteforce in CBC padding oracle attack) - that
+is implemented in Langdon. The second part is unique for each case (testing for padding
+error in CBC padding oracle attack). For this reason you can specify an oracle - a program
+receiving input and responding somehow - and plug it in the attack implementation.
+
+Because of binary nature of payload, the input is base64'd before the oracle is executed.
+Oracle must take care of decoding. For the same reason, output (if any) must be
+Base64-encoded.
+
+To use oracle, simply specify the path, e.g. {command}o = cbc/oracle.sh{color}. To run
+once, use {command}oracle o <payload_variable>{color} command.
+
+{bold}Algorithms{unbold}
+
+In some cases, some structure with dependent variables and support of convenient 
+functions is needed. This is the case of common cipher algorithms.
+
+Supported algorithms:
+  Symmetric algorithms:
+    XOR
+    AES
+  Random number generators:
+    Mersenne32 - 32b Mersenne Twister
+    Mersenne64 - 64b Mersenne Twister
+  Hash algorithms:
+    SHA1
+    MD4
+  Asymmetric algorithms:
+    DH
+    SRPServer
+    SRPClient 
+    RSA
+
+You can get detailed help for algorithms with {command}help <algorithm>{color}.
+
+Create algorithm like this: {command}x = XOR plaintext=a key=b{color}. Now you can
+access individual arguments, for example {command}x.plaintext{color}.
+
+Edit individual algorithm arguments with {command}edit x.plaintext{color} command.
+
+Use {command}encrypt <algorithm>{color} and {command}decrypt <algorithm>{color} to
+run encryption/decryption on algorithms such as AES.
+
+Use {command}sign <algorithm> <hash algorithm>{color} and {command}verify <algorithm> <signature>{color}
+to deal with signing on algorithms such as RSA.
+
+Use {command}hash <algorithm>{color}, {command}mac <algorithm>{color} and {command}hmac <algorithm>{color}
+to get cryptographical hash for algorithms such as SHA1.
+
+Use {command}rng <RNG> <int|float|bytes> [<count>]{color} to generate random number/sequence from
+given RNG algorithm.
+
+{bold}Analysis{unbold}
+
+Load a wordlist as normal variable: {command}english = file:/wordlists/english.txt{color}.
+Then you can use {command}wordlist english{color} to test all variables against it.
+By default, only variables with 3+ words of 3+ length are considered.
+
+Get entropy with {command}entropy a{color} command (in interval <0; 1>). This can 
+help you decide how (badly) the data are compressed or encrypted. 
+Typical plaintexts have around 0.5 entropy.
+
+Hamming distance (number of different bits) of 2 given variables is computed 
+with {command}hamming a b{color}.
+
+You can subject your variables and algorithms to analysis to pinpoint potential
+problems. Use {command}analyze a{color} to analyze specific variable/algorithm or 
+{command}analyze{color} to analyze everything.
+
+""".format(path=sys.argv[0],
+           color=log.COLOR_DARK_GREEN,
+           command=log.COLOR_BROWN,
+           bold=log.COLOR_BOLD,
+           unbold=log.COLOR_UNBOLD,
+           ).splitlines())
+        else:
+            # help for specific algorithm
+            pass
         # TODO show help for interactive mode
         continue
     ##########################
@@ -336,6 +508,7 @@ while True:
             
     elif cmd.startswith('edit '):
         # algorithm param editation
+        # TODO even for normal variables?
         try:
             variable, param = tuple(cmd[5:].split('.'))
             v = variables[variable]
@@ -965,7 +1138,7 @@ while True:
                 output.append(result)
         except:
             traceback.print_exc()
-            log.err('You must define variable, language and sample size.')
+            log.err('You must define variables and language,')
 
     elif cmd.startswith('ctr-bitflipping '):
         try:

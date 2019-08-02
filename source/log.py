@@ -10,6 +10,7 @@ Colors
 """
 COLOR_NONE        = '\033[00m'
 COLOR_BOLD        = "\033[01m"
+COLOR_UNBOLD      = "\033[22m"
 
 COLOR_BLACK       = '\033[30m'
 COLOR_DARK_RED    = '\033[31m'
