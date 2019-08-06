@@ -44,6 +44,110 @@ def update_variable(name, value):
                                or isinstance(value, Algorithm)
                            else Variable(value))
 
+############
+# oneliners
+############
+def get_data_from_argv_or_stdin(args):
+    #pdb.set_trace()
+    result = []
+    # try to get data from argv
+    for arg in args:
+        if arg == '-': # use stdin
+            result.append(sys.stdin.read().encode())
+        else: # from file
+            with open(arg, 'rb') as f:
+                result.append(f.read())
+    if not result: # no args, use only stdin
+        result.append(sys.stdin.read().encode())
+    return b''.join(result) # TODO or independent results?
+
+try:
+    if sys.argv[1] in ('-h', '--help'):
+        print(
+"""
+Usage: {2}{0}{4}                          {3}# interactive mode{4}
+       {2}{0} --hex <file>{4}             {3}# convert to hex   (ABCD -> 41424344){4}
+       {2}{0} --unhex <file>{4}           {3}# convert from hex (41424344 -> ABCD){4}
+       {4}{1}{4}                          {3}# also from stdin,{4}
+       {4}{1}{4}                          {3}#  like `echo 'Hello world!' | {0} --hex`{4}
+       {4}{1}{4}                          {3}#  or `{0} --hex -`{4}
+       {2}{0} --bin <file>{4}             {3}# convert to bin   (A -> 01000001){4}
+       {2}{0} --unbin <file>{4}           {3}# convert from bin (01000001 -> A){4}
+       {2}{0} --entropy <file>{4}         {3}# compute entropy{4}
+       {2}{0} --histogram <file>{4}       {3}# show byte histogram{4}
+       {2}{0} --random <count>{4}         {3}# generate <count> random bytes{4}
+       {2}{0} --debruijn <length>{4}      {3}# generate DeBruijn pattern of length <length>{4}
+       {2}{0} --zeros <count>{4}          {3}# generate bytestring of <count> zeros{4}
+       {2}{0} --timestamp [<datetime>]{4} {3}# get timestamp of current/given datetime{4}
+       {2}{0} --prime [<n>]{4}            {3}# generate n-bit prime (default 1024){4}
+""".format(sys.argv[0], 
+           ' ' * len(sys.argv[0]),
+           log.COLOR_BROWN,
+           log.COLOR_DARK_GREEN,
+           log.COLOR_NONE))
+        sys.exit(0)
+
+    if sys.argv[1] in ('bin', '--bin'):
+        data = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(binary(data))
+    elif sys.argv[1] in ('unbin', '--unbin'):
+        data = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(unbinary(data))
+    if sys.argv[1] in ('hex', '--hex'):
+        data = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(hexadecimal(data))
+    elif sys.argv[1] in ('unhex', '--unhex'):
+        data = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(unhexadecimal(data))
+    elif sys.argv[1] in ('entropy', '--entropy'):
+        data = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(entropy(data))
+    elif sys.argv[1] in ('histogram', '--histogram'):
+        data = get_data_from_argv_or_stdin(sys.argv[2:])
+        plt_histogram(data, 
+                      range(256),
+                      'Byte histogram',
+                      (10, 5),
+                      ['#005073', '#107dac', '#189ad3', '#71c7ec'],)
+        plt.show() # TODO or save option?
+
+    elif sys.argv[1] in ('random', '--random'):
+        count = int(sys.argv[2])
+        prynt(b''.join(int_to_bytes(random.randint(0, 255)) for _ in range(count)))
+    elif sys.argv[1] in ('debruijn', '--debruijn'):
+        count = int(sys.argv[2])
+        prynt(debruijn(count))
+    elif sys.argv[1] in ('zeros', '--zeros'):
+        count = int(sys.argv[2])
+        prynt(bytes(count))
+    elif sys.argv[1] in ('timestamp', '--timestamp'):
+        try:
+            date = sys.argv[2]
+            prynt(int(datetime.timestamp(dateutil.parser.parse(date))))
+        except IndexError:
+            prynt(int(datetime.timestamp(datetime.now())))
+        except:
+            log.err('Invalid date.')
+    elif sys.argv[1] in ('prime', '--prime'):
+        try:
+            bits = int(sys.argv[2])
+        except:
+            bits = 1024
+        prynt(prime(bits))
+    # oneliner complete, exit
+    sys.exit(0)
+except SystemExit as e:
+    sys.exit(e)
+except IndexError:
+    # run interactively
+    pass
+except:
+    traceback.print_exc()
+    sys.exit(1)
+
+################
+# run main loop
+################
 while True:
     # print something from previous command if needed
     if output:
@@ -176,6 +280,201 @@ while True:
         pdb.set_trace()
         continue
 
+    if cmd.startswith('help'):
+        arg = cmd[4:].strip()
+        if not arg:
+            # general help
+            output.extend("""
+{color}Welcome! This is Langdon, experimental cryptography framework. It is designed to aid with common 
+operations while dealing with crypto tasks.
+
+This is Langdon running interactively, you can also use the most common functions from the command 
+line (run {command}`{path} --help`{color} to list options).
+
+{bold}Basic usage{unbold}
+
+First of all, you can define variables as following:
+    {command}a = Hello{color}
+    {command}a = 'Hello'{color}
+    {command}a = 310939249775{color}
+    {command}a = 0x48656c6c6f{color}
+    {command}a = base64:SGVsbG8={color}
+
+Those commands are completely equivalent. You can also get file content directly:
+    {command}a = file:/etc/passwd{color}
+
+If you want to use each line from a file as distinct variable, you can use {command}multiline <file> 
+<variable_prefix>{color} command.
+
+List variables with {command}vars{color}. To list specific variable, just write its name, in this case {command}a{color}.
+
+Use {command}<command>~<value>{color} for grep, or {command}<command>~~<regex>{color} for regular expression grep. For example:
+    {command}a~Hex{color}      # show only HEX form
+    {command}a~~B[a-z]+{color} # show Bin and Base64 form
+
+Export variables with {command}export a /tmp/a{color} command. The raw (byte) form is used by default, but you can 
+force another form (raw, int, hex, bin, escaped, base64):
+    {command}export a /tmp/a base64{color}
+
+Export all variables at once with {command}export all{color} command.
+
+{bold}Sequences{unbold}
+
+You can use some of the following functions to generate sequence of data:
+    {command}random <start> <end> [<count>]{color} - random data from interval
+    {command}debruijn <length>{color} - DeBruijn pattern of given length
+    {command}zeros <count>{color} - sequence of NULL bytes
+    {command}prime [<bits>]{color} - generate prime number (default 1024b)
+
+{bold}Functions{unbold}
+
+You can use some of these common functions:
+    {command}len/length a{color} - get length of data
+    {command}concat a b{color} - concatenate multiple variables
+    {command}substring <variable> <start> <length>{color} - get a substring
+    {command}hexdump a{color} - show hexdump of data
+    {command}timestamp [<datetime>]{color} - get timestamp of current/specified datetime
+    {command}sleep <seconds>{color} - sleep for a while
+    {command}modexp m e n{color} - compute m^e mod n
+    {command}gcd a b{color} - compute greatest common divisor
+    {command}lcm a b{color} - compute least common multiple
+    {command}totient a b{color} - compute totient
+    {command}invmod/modinv a b{color} - compute modular inverse
+
+Langdon supports many crypto-related functions. These are currently supported:
+    {command}xor a b{color} - xor 2 variables
+    {command}brute-single-xor <variable>{color} - create single byte XORs of given variable
+    {command}break-xor <variable> <language> [<keysize>]{color} - use frequency analysis to break xor (use hamming 
+to get keysize if necessary)
+    {command}timing-leak <oracle> <threshold> [slowest [<alphabet>]]{color} - send bytes (or characters from the 
+alphabet) one by one into oracle and remember the fastest (or slowest) one. If the threshold is 
+crossed, use it and continue with the next byte.
+
+There is a number of real cryptographical attacks implemented. Use {command}help <algorithm>{color} to see details 
+for them, but here is a list for quick reference:
+    {command}ecb-chosen-plaintext <oracle>{color} - AES ECB chosen plaintextattack
+    {command}ecb-cut-paste <expected> <desired> <encryption_oracle> [<decryption_oracle>]{color} - ECB cut-and-paste 
+attack
+    {command}cbc-bitflipping <encryption_oracle> <decryption_oracle> <target_block> <desired>{color} - CBC 
+bitflipping attack
+    {command}cbc-padding <oracle> <data> [<blocksize> [<iv>]]{color} - CBC padding oracle attack
+    {command}cbc-key-as-iv <oracle> <ciphertext>{color} - CBC key==IV attack
+    {command}fixed-nonce <c1> <c2> ... <language>{color} - CTR fixed-nonce attack 
+    {command}ctr-bitflipping <encryption_oracle> <decryption_oracle> <offset> <payload>{color} - CTR bitflipping 
+attack
+    {command}brute-timestamp-seed <RNG_type> <random_value> [<offset> [<reference_timestamp>]]{color} - bruteforce 
+seed for known random value
+    {command}clone-rng <RNG_type> <states>{color} - clone RNG from output
+    {command}hash-extension <hash_type> <plaintext> <original_hash> <append_data> <oracle>{color} - hash length 
+extension attack
+    {command}dh-shared-key (<alice_DH> <bob_DH>|<alice_DH> <bob_public_key>|<bob_public_key> 
+<alice_private_key><modulus>) {color} - compute Diffie-Hellman shared key
+    {command}srp-register <server> <client>{color} - SRP registration
+    {command}srp-session-keys <client> <server>{color} - SRP session key computation
+    {command}srp-auth <client> <server>{color} - SRP authentication
+    {command}rsa-e3-broadcast <public_key1> <ciphertext1> <public_key2> <ciphertext2> <public_key3> 
+<ciphertext3>{color} - RSA e=3 broadcast attack
+    {command}rsa-unpadded-recovery <RSA_public_key> <oracle>{color} - RSA unpadded message recovery oracle attack
+    {command}rsa-e3-forge-signature <RSA> <hash_type>{color} - Bleichenbacher's e=3 RSA signature attack
+
+{bold}Oracles{unbold}
+
+In many cryptographical attacks, you can split your program into two parts. The first one is 
+universal for every usage (e.g. bruteforce in CBC padding oracle attack) - that is implemented in 
+Langdon. The second part is unique for each case (testing for padding error in CBC padding oracle 
+attack). For this reason you can specify an oracle - a program receiving input and responding 
+somehow - and plug it in the attack implementation.
+
+Because of binary nature of payload, the input is base64'd before the oracle is executed. Oracle 
+must take care of decoding. For the same reason, output (if any) must be Base64-encoded.
+
+To use oracle, simply specify the path, e.g. {command}o = cbc/oracle.sh{color}. To run once, use {command}oracle o 
+<payload_variable>{color} command.
+
+{bold}Algorithms{unbold}
+
+In some cases, some structure with dependent variables and support of convenient functions is 
+needed. This is the case of common cipher algorithms.
+
+Supported algorithms:
+  Symmetric algorithms:
+    XOR
+    AES
+  Random number generators:
+    Mersenne32 - 32b Mersenne Twister
+    Mersenne64 - 64b Mersenne Twister
+  Hash algorithms:
+    SHA1
+    MD4
+  Asymmetric algorithms:
+    DH
+    SRPServer
+    SRPClient 
+    RSA
+
+You can get detailed help for algorithms with {command}help <algorithm>{color}.
+
+Create algorithm like this: {command}x = XOR plaintext=a key=b{color}. Now you can access individual arguments, for 
+example {command}x.plaintext{color}.
+
+Edit individual algorithm arguments with {command}edit x.plaintext{color} command.
+
+Use {command}encrypt <algorithm>{color} and {command}decrypt <algorithm>{color} to run encryption/decryption on algorithms such as 
+AES.
+
+Use {command}sign <algorithm> <hash algorithm>{color} and {command}verify <algorithm> <signature>{color} to deal with signing on 
+algorithms such as RSA.
+
+Use {command}hash <algorithm>{color}, {command}mac <algorithm>{color} and {command}hmac <algorithm>{color} to get cryptographical hash for 
+algorithms such as SHA1.
+
+Use {command}rng <RNG> <int|float|bytes> [<count>]{color} to generate random number/sequence from given RNG 
+algorithm.
+
+{bold}Analysis{unbold}
+
+Load a wordlist as normal variable: {command}english = file:/wordlists/english.txt{color}. Then you can use {command}wordlist
+ english{color} to test all variables against it. By default, only variables with 3+ words of 3+ length are
+ considered.
+
+Get entropy with {command}entropy a{color} command (in interval <0; 1>). This can help you decide how (badly) the 
+data are compressed or encrypted. Typical plaintexts have around 0.5 entropy.
+
+Hamming distance (number of different bits) of 2 given variables is computed with {command}hamming a b{color}.
+
+You can subject your variables and algorithms to analysis to pinpoint potential problems. Use {command}
+analyze a{color} to analyze specific variable/algorithm or {command}analyze{color} to analyze everything.
+
+""".format(path=sys.argv[0],
+           color=log.COLOR_DARK_GREEN,
+           command=log.COLOR_BROWN,
+           bold=log.COLOR_BOLD,
+           unbold=log.COLOR_UNBOLD,
+           ).splitlines())
+        else:
+            classes = {
+                'symmetriccipher': SymmetricCipher,
+                    'xor': XOR,
+                    'aes': AES,
+                'rng': RNG,
+                    'mersenne32': MersenneTwister32,
+                    'mersenne64': MersenneTwister64,
+                'hash': Hash,
+                    'sha1': SHA1,
+                    'md4': MD4,
+                'asymmetriccipher': AsymmetricCipher,
+                    'dh': DH,
+                    'srp': SRP,
+                        'srpserver': SRPServer,
+                        'srpclient': SRPClient,
+                    'rsa': RSA,
+            }
+            try:
+                output.extend(classes[arg.lower()].help())
+            except:
+                traceback.print_exc()
+                log.err('Non-existent algorithm.')
+        continue
     ##########################
     # framework control
     ##########################
@@ -229,6 +528,7 @@ while True:
             
     elif cmd.startswith('edit '):
         # algorithm param editation
+        # TODO even for normal variables?
         try:
             variable, param = tuple(cmd[5:].split('.'))
             v = variables[variable]
@@ -357,6 +657,19 @@ while True:
                 comment = ' (probably compressed)'
             log.info('  %*s  %0.5f%s' % (variable_max_length, k, ent, comment))
     
+    elif cmd.startswith('histogram'):
+        try:
+            data = all_variables[cmd.split()[1]]
+            plt_histogram(data.as_raw(), 
+                          range(256),
+                          'Byte histogram',
+                          (10, 5),
+                          ['#005073', '#107dac', '#189ad3', '#71c7ec'],)
+            plt.show() # TODO or save option?
+        except:
+            traceback.print_exc()
+            log.err('You must provide data variable.')
+
     # compute hamming distance of 2 given variables / 1-N / M-N
     elif cmd.startswith('hamming'):
         parts = cmd.split()
@@ -724,13 +1037,13 @@ while True:
             traceback.print_exc()
             log.err('You must define variable, language and optional keysize.')
 
-    # XORAlgorithm - create instance
+    # XOR - create instance
     # Usage: x = XOR key=k plaintext=p ciphertext=c
     elif cmd.startswith('XOR '):
         try:
             params = parse_algorithm_params(cmd[4:], variables)
             if variable_name:
-                update_variable(variable_name, XORAlgorithm(**params))
+                update_variable(variable_name, XOR(**params))
             else:
                 output.append(result)
 
@@ -741,11 +1054,11 @@ while True:
     ######################################
     # Symmetric algorithms
     ######################################
-    # AESAlgorithm - create instance
+    # AES - create instance
     elif cmd.startswith('AES '):
         try:
             params = parse_algorithm_params(cmd[4:], variables)
-            result = AESAlgorithm(**params)
+            result = AES(**params)
             if variable_name:
                 update_variable(variable_name, result)
             else:
@@ -766,18 +1079,18 @@ while True:
         else:
             log.err('You must specify an oracle.')
     
-    elif cmd.startswith('ecb-injection '):
+    elif cmd.startswith('ecb-cut-paste '):
         try:
             try:
                 _, e_oracle_path, d_oracle_path, expected, desired, payload = cmd.split()
-                result = attacks.ecb_injection(all_variables[e_oracle_path],
+                result = attacks.ecb_cut_paste(all_variables[e_oracle_path],
                                                all_variables[d_oracle_path],
                                                all_variables[expected],
                                                all_variables[desired],
                                                all_variables[payload])
             except:
                 _, e_oracle_path, d_oracle_path, expected, desired = cmd.split()
-                result = attacks.ecb_injection(all_variables[e_oracle_path],
+                result = attacks.ecb_cut_paste(all_variables[e_oracle_path],
                                                all_variables[d_oracle_path],
                                                all_variables[expected],
                                                all_variables[desired])
@@ -788,7 +1101,7 @@ while True:
                 output.append(Variable(result))
         except:
             traceback.print_exc()
-            log.err('You must specify encryption and decryption oracle, expected value, desired value and optional payload.')
+            log.err('You must specify an encryption oracle, a decryption oracle, expected value, desired value and optional payload.')
 
     elif cmd.startswith('cbc-bitflipping '):
         try:
@@ -845,7 +1158,7 @@ while True:
                 output.append(result)
         except:
             traceback.print_exc()
-            log.err('You must define variable, language and sample size.')
+            log.err('You must define variables and language,')
 
     elif cmd.startswith('ctr-bitflipping '):
         try:
@@ -1207,10 +1520,15 @@ while True:
         try:
             algo = variables[parts[1]]
             hash_algorithm = hashes[parts[2]]
-
+            result = attacks.rsa_e3_forge_signature(algo, hash_algorithm, variant=1)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+            
         except:
             traceback.print_exc()
-            log.err('You must provide RSA object (with private key and plaintext included) and hash function name.')
+            log.err('You must provide RSA object (with public key and plaintext included) and hash function name.')
     ####################################
     # Special cryptopals commands
     ####################################

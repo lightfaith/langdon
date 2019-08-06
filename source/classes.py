@@ -12,7 +12,7 @@ import threading
 import time
 import traceback
 
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES as AESCipher
 
 from source.lib import *
 from source.functions import *
@@ -385,15 +385,26 @@ class Algorithm:
                 output += v.analyze(output_offset+4, interactive)
         return output
 
+    @staticmethod
+    def help():
+        return []
+
 
 class SymmetricCipher(Algorithm):
     def __init__(self, name):
         super().__init__(name)
 
+    @staticmethod
+    def help():
+        return Algorithm.help() + """
+{bold}Symmetric Cipher{unbold}
 
-class AESAlgorithm(SymmetricCipher):
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
+
+class AES(SymmetricCipher):
     def __init__(self, **kwargs):
-        super().__init__('AESAlgorithm()')
+        super().__init__('AES()')
         self.params = {
             'mode': None,
             'blocksize': '16',
@@ -409,6 +420,118 @@ class AESAlgorithm(SymmetricCipher):
             if k in self.params.keys():
                 self.params[k] = v
     
+    @staticmethod
+    def help():
+        return SymmetricCipher.help() + """
+{color}{bold}AES{unbold}
+Advanced Encryption Standard, also known as Rijndael has been established in 2001. It supersedes DES algorithm.
+
+AES uses a fixed block size of 128 bits and a key size of 128, 192 or 256 bits. It operates on a 4x4 array of bytes (the state). 
+
+Standards:
+    FIPS PUB 197
+    ISO/IEC 18033-3
+
+AES blocks are used in several modes:
+
+{bold}ECB mode{unbold}{schema}
+               P1      P2                  C1      C2        
+               |       |                   |       |
+               |       |                   |       |
+        key --AES     AES-- key     key --AES     AES-- key
+               |       |                   |       |
+               |       |                   |       |
+               C1      C2                  P1      P2       {color}
+               Encryption                  Decryption
+
+In ECB mode, every block is encrypted/decrypted independently. This allows multiple attack approaches. ECB mode should NOT be used anywhere for security purposes.
+
+Repeating 128b blocks in ciphertext usually reveal that ECB mode is used. If an attacker has control of the plaintext and is able to observe resulting ciphertext, he can submit long string of identical characters. In ciphertext, this will result in repeating 128b blocks.
+
+{bold}ECB chosen-plaintext attack{unbold}
+
+If an attacker can read resulting ciphertext and controls a portion of plaintext, he can decrypt everything after that. Consider following blocks of ciphertext:
+
+    {schema}|?????????????con|trolled-plainte|xt??????????????|...{color}
+
+The attacker must first discover block alignment, this can be done by submitting a long string of identical characters and computing offset for the repeating block. Then he must align the message so one block have exactly one unknown byte:
+
+    {schema}|?????????????AAA|AAAAAAAAAAAAAA?|????????????????|...{color}
+
+After encryption, that block will have some value, e.g. 7ab17310f536a7cdaacbd4b06be2d2a3
+Now the attacker tries all possible values for the unknown byte, one of them ('H' in this case) will yield the same ciphertext (BTW the key is 'YELLOW SUBMARINE'). Next byte will be discovered in similar fashion:
+    
+    {schema}|?????????????AAA|AAAAAAAAAAAAAH?|????????????????|...{color}
+
+To execute this attack, you must compose an oracle that receives attacker-controlled plaintext and returns complete ciphertext. Then run:{command}
+o = /tmp/oracle.sh
+ecb-chosen-plaintext o
+{color}
+
+{bold}ECB cut-and-paste attack{unbold}
+
+Because individual blocks in ECB mode are completely independent, nothing stops the attacker from reordering, duplicating and ommiting some of them.
+
+Consider the following cookie before encryption:
+
+    email=foo@bar.com&uid=10&role=user
+
+where email is controlled by the attacker. The attacker would like very much to become the admin. In ECB mode, this is possible.
+
+    {schema}|email=foo@bar.co|m&uid=10&role=us|er.............|{color}
+
+First, the cookie must be properly aligned, something like:
+
+    {schema}|email=AAAAAAAAAA|AAA&uid=10&role=|user............|{color}
+
+Then, the attacker creates fake block holding desired value. In this case, the string 'admin' with valid PKCS#7 padding (because the implementation expects the string to replace to be at the end - if that is not your case, you must provide correct plaintext and then reorder ciphertext blocks manually).
+    
+    {schema}|email=AAAAAAAAAA|admin-----------|AAA&uid=10&role=|user............|{color}
+                                      ^- valid PKCS#7 padding
+
+Finally, after encryption, the last block can be dropped and crafted block is put at the end - the ECB mode allows that. The server will decrypt the cookie as:
+
+    {schema}|email=AAAAAAAAAA|AAA&uid=10&role=|admin-----------|{color}
+                                      
+To execute this attack, you must an oracle that receives the attacker-controlled string, sends that to the server and returns the ciphertext and another one that decrypts given ciphertext. Furthermore, you must define a value that is expected at the end of the plaintext and a value to replace it. Optionally, you also provide the string to be used. Then run:{command}
+e_oracle = ecb/cryptopals_13_encrypt.py
+d_oracle = ecb/cryptopals_13_decrypt.py
+expected = user
+desired = admin
+payload = nul@gmail.com
+x = ecb-cut-paste e_oracle d_oracle expected desired payload
+{color}
+
+If you are not able to create a decryption oracle, Langdon cannot compute offsets. In this case use {command}oracle e_oracle <payload>{color} and finish the work manually.
+
+{bold}CBC mode{unbold}{schema}
+               P1      P2                  C1      C2
+               |       |                   |____   |__ ...
+        IV ---(X)  ,--(X)                  |    |  |
+               |   |   |            key --AES   | AES-- key
+               |   |   |                   |    |  |
+        key --AES  |  AES-- key            |    |  |  
+               |__/    |__ ...      IV ---(X)    `(X)  
+               |       |                   |       |   
+               C1      C2                  P1      P2   {color}
+               Encryption                  Decryption 
+
+In CBC mode, blocks are no longer independent. In encryption, plaintext for given block is first XORed with ciphertext of previous block. For first block, a value known as Initialization Vector is used.
+
+{bold}CBC bitflipping{unbold}
+
+
+
+{bold}CTR mode{unbold}
+
+
+{clear}""".format(color=log.COLOR_DARK_GREEN,
+                  clear=log.COLOR_NONE,
+                  schema=log.COLOR_RED,
+                  command=log.COLOR_BROWN,
+                  bold=log.COLOR_BOLD, 
+                  unbold=log.COLOR_UNBOLD).splitlines()
+
     def detail(self):
         try:
             print('Mode:', self.params['mode'])
@@ -442,7 +565,7 @@ class AESAlgorithm(SymmetricCipher):
             iv = self.params['iv'].as_raw()
         if self.params.get('nonce'):
             nonce = int(self.params['nonce'].as_int())
-        cipher = AES.new(key, AES.MODE_ECB)
+        cipher = AESCipher.new(key, AESCipher.MODE_ECB)
         blocksize = int(self.params['blocksize'])
         ciphertext = b''
         
@@ -481,6 +604,9 @@ class AESAlgorithm(SymmetricCipher):
             """
             ciphertext = self.ctr_crypt(plaintext, cipher, nonce)
 
+        elif not self.params['mode']:
+            log.err('Mode is not specified.')
+            return None
         else:
             log.err('Unsupported mode.')
             return None
@@ -495,7 +621,7 @@ class AESAlgorithm(SymmetricCipher):
             iv = self.params['iv'].as_raw()
         if self.params.get('nonce'):
             nonce = int(self.params['nonce'].as_int())
-        cipher = AES.new(key, AES.MODE_ECB)
+        cipher = AESCipher.new(key, AESCipher.MODE_ECB)
         blocksize = int(self.params['blocksize'])
         
         padded = b''
@@ -574,9 +700,9 @@ class AESAlgorithm(SymmetricCipher):
         return output
 
 
-class XORAlgorithm(SymmetricCipher):
+class XOR(SymmetricCipher):
     def __init__(self, **kwargs):
-        super().__init__('XORAlgorithm()')
+        super().__init__('XOR()')
 
         # parameters of the algorithm
         # Variable objects are expected as values
@@ -589,6 +715,13 @@ class XORAlgorithm(SymmetricCipher):
         for k, v in kwargs.items():
             if k in self.params.keys():
                 self.params[k] = v
+
+    @staticmethod
+    def help():
+        return SymmetricCipher.help() + """
+{bold}XOR{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
 
     def detail(self):
         try:
@@ -673,6 +806,14 @@ class XORAlgorithm(SymmetricCipher):
 class RNG(Algorithm):
     def __init__(self, name):
         super().__init__(name)
+    
+    @staticmethod
+    def help():
+        return Algorithm.help() + """
+{bold}RNG{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
 
     def get(self, mode, count=1):
         if mode == 'int':
@@ -698,8 +839,20 @@ class RNG(Algorithm):
             log.err('Invalid mode.')
             return None
 
+class MersenneTwister(RNG):
+    def __init__(self, name):
+        super().__init__(name)
+    
+    @staticmethod
+    def help():
+        return RNG.help() + """
+{bold}Mersenne Twister{unbold}
 
-class MersenneTwister32(RNG):
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
+
+
+class MersenneTwister32(MersenneTwister):
     """
     https://github.com/james727/MTP/blob/master/mersenne_twister.py
     https://en.wikipedia.org/wiki/Mersenne_Twister
@@ -739,6 +892,13 @@ class MersenneTwister32(RNG):
                               + i)
                              & ((1 << self.params['w']) - 1)) # wrap to bits
     
+    @staticmethod
+    def help():
+        return MersenneTwister.help() + """
+{bold}Mersenne Twister (32b){unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
     def twist(self):
         for i in range(self.params['n']):
             temp = (((self.state[i] & self.upper_mask)
@@ -810,6 +970,14 @@ class MersenneTwister64(RNG):
                               + i)
                              & ((1 << self.params['w']) - 1)) # wrap to bits
     
+    @staticmethod
+    def help():
+        return MersenneTwister.help() + """
+{bold}Mersenne Twister (64b){unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
+    
     def twist(self):
         for i in range(self.params['n']):
             temp = (((self.state[i] & self.upper_mask)
@@ -856,6 +1024,14 @@ class Hash(Algorithm):
             'block_size': None,
             'output_size': None,
         }
+    
+    @staticmethod
+    def help():
+        return Algorithm.help() + """
+{bold}Hash{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
     
     def hash(self, data_modifier):
         raise NotImplementedError()
@@ -924,6 +1100,14 @@ class SHA1(Hash):
         self.params['digest_info'] = Variable(b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14')
         self.tmp = {}
         self.reset()
+    
+    @staticmethod
+    def help():
+        return Hash.help() + """
+{bold}SHA1{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
 
     def reset(self):
         self.tmp['h'] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0]
@@ -1000,6 +1184,14 @@ class MD4(Hash):
         self.params['output_size'] = 16
         self.tmp = {}
         self.reset()
+    
+    @staticmethod
+    def help():
+        return Hash.help() + """
+{bold}MD4{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
 
     def reset(self):
         self.tmp['h'] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476]
@@ -1095,6 +1287,14 @@ class MD4(Hash):
 class AsymmetricCipher(Algorithm):
     def __init__(self, name):
         super().__init__(name)
+    
+    @staticmethod
+    def help():
+        return Algorithm.help() + """
+{bold}Asymmetric Cipher{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
 
 class DH(AsymmetricCipher):
     def __init__(self, **kwargs):
@@ -1122,6 +1322,13 @@ class DH(AsymmetricCipher):
             self.params['pub'] = Variable(pow(int(self.params['g'].as_int()), 
                                               int(self.params['priv'].as_int()), 
                                               int(self.params['p'].as_int())))
+    @staticmethod
+    def help():
+        return AsymmetricCipher.help() + """
+{bold}Diffie-Hellman{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
     
     def analyze(self, output_offset=0, interactive=False): # AES analysis
         # TODO
@@ -1130,6 +1337,17 @@ class DH(AsymmetricCipher):
         output += self.analyze_params(output_offset, interactive)
         return output
 
+
+class SRP(AsymmetricCipher):
+    def __init__(self, name):
+        super().__init__(self, name)
+    
+    @staticmethod
+    def help():
+        return AsymmetricCipher.help() + """
+{bold}SRP{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
 
 class SRPClient(AsymmetricCipher):
     def __init__(self, **kwargs):
@@ -1151,6 +1369,14 @@ class SRPClient(AsymmetricCipher):
         self.params['A'] = Variable(pow(self.params['g'].as_int(),
                                         self.params['a'].as_int(),
                                         self.params['N'].as_int()))
+    
+    @staticmethod
+    def help():
+        return SRP.help() + """
+{bold}SRP Client{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
 
     def get_auth_hash(self):
         try:
@@ -1207,6 +1433,14 @@ class SRPServer(AsymmetricCipher):
         }
         # generate private key
         self.params['b'] = Variable(random.randint(0, 65536)) # TODO maybe new for each client?
+    
+    @staticmethod
+    def help():
+        return SRP.help() + """
+{bold}SRP Server{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
     
     def register(self, username, password):
         username = username.as_raw()
@@ -1300,6 +1534,13 @@ class RSA(AsymmetricCipher):
             else:
                 break
 
+    @staticmethod
+    def help():
+        return AsymmetricCipher.help() + """
+{bold}RSA{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
     def encrypt(self):
         try:
             result = pow(self.params['plaintext'].as_int(),
@@ -1363,9 +1604,10 @@ class RSA(AsymmetricCipher):
             return False
 
         # get correct hash, verify given hash has no garbage after it
-        given_hash = decrypted.as_raw()[len(fs) + 2 + len(hash_algorithm.params['digest_info'].as_raw()):]
-        if not bleichenbacher and len(given_hash) != hash_algorithm.params['output_size']:
-            debug('Hash not at the end of the signature. Hello, Mr. Bleichenbacher.')
+        hash_offset = len(fs) + 2 + len(hash_algorithm.params['digest_info'].as_raw())
+        given_hash = decrypted.as_raw()[hash_offset:hash_offset+hash_algorithm.params['output_size']]
+        if not bleichenbacher and hash_offset + len(given_hash) != len(decrypted.as_raw()):
+            debug('Hash not at the end of the signature. Hello, Mr. Bleichenbacher!')
             return False
         
         # check plaintext length vs padding

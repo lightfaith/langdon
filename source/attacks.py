@@ -36,9 +36,9 @@ def fixed_nonce(texts, language):
         xor_key += b'%c' % (xors.index(best[0]))
     #print(xor_key)
     log.info('Revealed XOR value:', Variable(xor_key))
-    result = XORAlgorithm(key=Variable(xor_key),
-                          ciphertext=Variable(texts[0]),
-                          plaintext=Variable(xor(texts[0], xor_key)))
+    result = XOR(key=Variable(xor_key),
+                 ciphertext=Variable(texts[0]),
+                 plaintext=Variable(xor(texts[0], xor_key)))
     return result
 
 
@@ -79,9 +79,9 @@ def break_xor(data, language, keysize=None):
             #for i in range(3):
             #    print(get_frequency_error(best[i], language))
         if not result:
-            result = XORAlgorithm(key=Variable(key),
-                                  ciphertext=Variable(data),
-                                  plaintext=Variable(xor(data, key)))
+            result = XOR(key=Variable(key),
+                         ciphertext=Variable(data),
+                         plaintext=Variable(xor(data, key)))
         #print('Key for keysize %d:' % keysize, key)
         #print('Deciphered message:')
         #prynt(xor(data, key))
@@ -216,9 +216,9 @@ def ecb_chosen_plaintext(oracle_path):
         return pkcs7_unpad(plaintext)
 
 
-def ecb_injection(e_oracle_path, d_oracle_path, expected, desired, payload=None):
+def ecb_cut_paste(e_oracle_path, d_oracle_path, expected, desired, payload=None):
     """
-    ECB injection
+    ECB cut-and-paste
     (Cryptopals 2.13)
 
     With control of portion of the plaintext, we can create fake blocks
@@ -296,7 +296,8 @@ def ecb_injection(e_oracle_path, d_oracle_path, expected, desired, payload=None)
         debug('Decrypted message:', decrypted)
         debug('Decrypted chunks:', [decrypted[i:i+blocksize]
                                     for i in range(0, len(decrypted), blocksize)])
-        return decrypted
+        #return decrypted
+        return reordered
 
 
 def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
@@ -400,7 +401,9 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
         except:
             previous_block = iv # even None
             debug('Previous block:',
-                  ' '.join('%02x' % c for c in previous_block))
+                  (' '.join('%02x' % c for c in previous_block)
+                   if iv
+                   else 'None'))
 
         debug('Actual block:  ', ' '.join('%02x' % c for c in block))
 
@@ -547,7 +550,7 @@ def brute_rng_xor(rng, ciphertext, known):
         return None
 
     seed = 0
-    x = XORAlgorithm(ciphertext=ciphertext)
+    x = XOR(ciphertext=ciphertext)
     result = []
     while True:
         if seed % 1024 == 0:
@@ -752,7 +755,38 @@ def rsa_unpadded_recovery(pubkey, oracle_path):
     return result
 
 
-def rsa_e3_forge_signature():
-    # TODO
-    pass
+def rsa_e3_forge_signature(rsa, hash_algorithm, variant=1):
+    """
+    When signature verification is implemented incorrectly, you can
+    manually craft valid signature (mod N) if the e is small (=3).
+    """
+    # http://karabut.com/google-ctf-2017-quals-rsa-ctf-challenge-writeup.html
+
+    hash_instance = hash_algorithm(data=rsa.params['plaintext'])
+    h = Variable(hash_instance.hash())
+    try:
+        digest_info = hash_instance.params['digest_info'].as_raw()
+    except:
+        log.err('Hashing algorithm is not supported (unknown digest_info).')
+        return None
+
+    if variant == 1:
+        # as in https://github.com/ricpacca/cryptopals
+        # simple 0001ff00 + ASN.1 + HASH + 00s, find cube root of it
+        # server will cube it and incorrecly check the padding
+        block = (b'\x00\x01\xff\x00'
+                 + digest_info
+                 + h.as_raw()) 
+        block = Variable(block + b'\x00' * ((rsa.params['bits'].as_int() + 7) // 8 - len(block))) # TODO how many?
+        debug('Block:', block)
+        signed = Variable(root(block.as_int(), 3))
+        debug('Signed:', signed.as_escaped())
+        return signed
+    elif variant == 2:
+        # TODO anything instead of ffs, no garbage after
+        # as in python-rsa https://blog.filippo.io/bleichenbacher-06-signature-forgery-in-python-rsa/
+        pass
+    else:
+        log.err('Unsupported variant.')
+        return None
 #####
