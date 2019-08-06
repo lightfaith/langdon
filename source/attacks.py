@@ -307,7 +307,7 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
 
     We can use unneeded chunk to hold specific value than, after XORed
     with next decoded chunk, will create desired payload. In total,
-    2 blocks are destroyed. In CP 16, authorization is bypassed.
+    2 blocks are changed. In CP 16, authorization is bypassed.
     """
     target_block = target_block.as_int()
 

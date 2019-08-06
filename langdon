@@ -24,7 +24,7 @@ variables = OrderedDict()
 output = []
 grep_value = None
 grep_method = None
-
+output_newline = True
 
 def update_variable(name, value):
     """
@@ -151,19 +151,21 @@ except:
 while True:
     # print something from previous command if needed
     if output:
+        end = '\n' if output_newline else ''
         #pdb.set_trace()
         for line in output:
             if grep_method == 'normal':
                 if grep_value in line:
-                    prynt(line)
+                    prynt(line, end=end)
             elif grep_method == 'regex':
                 if re.search(grep_value, line):
-                    prynt(line)
+                    prynt(line, end=end)
             else:
-                prynt(line)
+                prynt(line, end=end)
         output = []
     grep_value = None
     grep_method = None
+    output_newline = True
 
     # get command
     try:
@@ -284,7 +286,8 @@ while True:
         arg = cmd[4:].strip()
         if not arg:
             # general help
-            output.extend("""{color}
+            output_newline = False
+            output.extend(re.split('(\n)', """{color}
 Welcome! This is Langdon, experimental cryptography framework. It is designed
 to aid with common operations while dealing with crypto tasks.
 
@@ -449,7 +452,7 @@ problems. Use {command}analyze a{color} to analyze specific variable/algorithm o
            command=log.COLOR_BROWN,
            bold=log.COLOR_BOLD,
            unbold=log.COLOR_UNBOLD,
-           ).splitlines())
+           )))
         else:
             classes = {
                 'symmetriccipher': SymmetricCipher,
@@ -469,7 +472,8 @@ problems. Use {command}analyze a{color} to analyze specific variable/algorithm o
                     'rsa': RSA,
             }
             try:
-                output.extend(classes[arg.lower()].help())
+                output.extend(['%s\n' % line for line in classes[arg.lower()].help()])
+                output_newline = False
             except:
                 traceback.print_exc()
                 log.err('Non-existent algorithm.')

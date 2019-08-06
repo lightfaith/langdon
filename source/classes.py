@@ -486,8 +486,8 @@ First, the cookie must be properly aligned, something like:
 
 Then, the attacker creates fake block holding desired value. In this case, the string 'admin' with valid PKCS#7 padding (because the implementation expects the string to replace to be at the end - if that is not your case, you must provide correct plaintext and then reorder ciphertext blocks manually).
     
-    {schema}|email=AAAAAAAAAA|admin-----------|AAA&uid=10&role=|user............|{color}
-                                      ^- valid PKCS#7 padding
+    {schema}|email=AAAAAAAAAA|admin-----------|AAA&uid=10&role=|user............|
+    {color:}                        ^- valid PKCS#7 padding
 
 Finally, after encryption, the last block can be dropped and crafted block is put at the end - the ECB mode allows that. The server will decrypt the cookie as:
 
@@ -516,11 +516,61 @@ If you are not able to create a decryption oracle, Langdon cannot compute offset
                C1      C2                  P1      P2   {color}
                Encryption                  Decryption 
 
-In CBC mode, blocks are no longer independent. In encryption, plaintext for given block is first XORed with ciphertext of previous block. For first block, a value known as Initialization Vector is used.
+In CBC mode, blocks are no longer independent. In encryption, plaintext for given block is first XORed with ciphertext of previous block. For first block, a value known as Initialization Vector is used. IV should be different for every message sent, and in CBC it also must be upredictable at encryption time (as in SSLv2, where last ciphertext block of last message has been used as the IV for new message). After encryption, the IV can be made public (often prepended to the ciphertext).
 
 {bold}CBC bitflipping{unbold}
 
+When decrypting, ciphertext of previous block is XORed with AES decryption to get plaintext of current block. That means that attacker can accurately flip correct bits to achieve desired plaintext. Of course, the block with altered ciphertext will be destroyed.
 
+For example, string 'some_garbage=XXXXXXXXXXX&admin=0' is encrypted with key 'YELLOW SUBMARINE' and IV f370d32fcca1e9ac9c36605b1e4e0408 as (ignoring the padding):
+
+    {schema}|e2fcbc5c59b705f2e428363b1b0189c7|e99e062faa57cd4624a685252a3cb4b9|{color}
+
+The attacker knows he must flip the very last bit in the second plaintext block. To achieve that, same bit in previous block's ciphertext must be flapped: 
+    
+    {schema}|e2fcbc5c59b705f2e428363b1b0189c6|e99e062faa57cd4624a685252a3cb4b9|
+    {color:}                                ^
+
+After decryption, block 1 is destroyed, but block 2 has the desired value:
+
+    {schema}|c9429c2a0bae8b9b83d30b4bf26a3f1b|XXXXXXXX&admin=1|
+    {color:} ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                ^
+
+To execute this attack, you must compose encryption and decryption oracle, provide block index that should be changed and the desired value. Run:{command}
+e_oracle = cbc/cryptopals_16_encrypt.py
+d_oracle = cbc/cryptopals_16_decrypt.py
+payload = ';admin=true;a='
+
+# first run oracles to see how the message will look
+input = 'AAAAAAAAAAAAAAA'
+c = oracle e_oracle input
+p = oracle d_oracle c
+hexdump p
+
+# block index is known, now attack!
+target_block = 3
+x = cbc-bitflipping e_oracle d_oracle target_block payload
+hexdump x
+{color}
+
+{bold}CBC padding oracle attack{unbold}
+
+From definition of block algorithms, AES uses padding to ensure all plaintext (and therefore ciphertext) blocks are 128 bits long. PKCS#7 padding is commonly used and works as follows:
+
+- Number of "missing bytes" is determined.
+- That value is used to fill the last incomplete block.
+- If block is complete, whole new padding block is appended.
+
+Examples:
+    ninja_warrior    -> ninja_warrior\\x03\\x03\\x03
+    ABC              -> ABC\\x0d\\x0d\\x0d\\x0d\\x0d\\x0d\\x0d\\x0d\\x0d\\x0d\\x0d\\x0d\\x0d
+    YELLOW SUBMARINE -> YELLOW SUBMARINE\\x10\\x10\\x10\\x10\\x10\\x10\\x10\\x10\\x10\\x10\\x10\\x10\\x10\\x10\\x10\\x10
+
+When the padding is incorrect after deciphering, the message is damaged and should not be used as legitimate. However, the reason (that padding is invalid) should not be presented to the user, otherwise CBC padding oracle attack can be performed.
+
+The CBC padding oracle attack allows the attacker to fully decrypt an encrypted message. 
+
+{bold}CBC key=IV attack{unbold}
 
 {bold}CTR mode{unbold}
 
