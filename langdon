@@ -357,11 +357,11 @@ Langdon supports many crypto-related functions. These are currently supported:
 
 There is a number of real cryptographical attacks implemented. Use {command}help <algorithm>{color}
 to see details for them, but here is a list for quick reference:
-    {command}ecb-chosen-plaintext <oracle>{color} - AES ECB chosen plaintextattack
+    {command}ecb-chosen-plaintext <oracle>{color} - AES ECB chosen-plaintext attack
     {command}ecb-injection <encryption_oracle> <decryption_oracle> <expected> <desired>{color} - ECB cut-and-paste attack
     {command}cbc-bitflipping <encryption_oracle> <decryption_oracle> <target_block> <desired>{color} - CBC bitflipping attack
     {command}cbc-padding <oracle> <data> [<blocksize> [<iv>]]{color} - CBC padding oracle attack
-    {command}cbc-key-as-iv <oracle> <ciphertext>{color} - CBC key==IV attack
+    {command}cbc-chosen-ciphertext <oracle> <ciphertext>{color} - CBC chosen-ciphertext attack
     {command}fixed-nonce <c1> <c2> ... <language>{color} - CTR fixed-nonce attack 
     {command}ctr-bitflipping <encryption_oracle> <decryption_oracle> <offset> <payload>{color} - CTR bitflipping attack
     {command}brute-timestamp-seed <RNG_type> <random_value> [<offset> [<reference_timestamp>]]{color} - bruteforce seed for known random value
@@ -1178,12 +1178,12 @@ problems. Use {command}analyze a{color} to analyze specific variable/algorithm o
             traceback.print_exc()
             log.err('You must specify encryption and decryption oracle, offset to alter and desired value.')
 
-    elif cmd.startswith('cbc-key-as-iv '):
+    elif cmd.startswith('cbc-chosen-ciphertext '):
         parts = cmd.split()
         try:
             oracle_path = all_variables[parts[1]]
             ciphertext = all_variables[parts[2]]
-            result = attacks.cbc_key_as_iv(oracle_path, ciphertext)
+            result = attacks.cbc_chosen_ciphertext(oracle_path, ciphertext)
             if variable_name:
                 update_variable(variable_name, result)
             else:

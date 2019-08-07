@@ -514,9 +514,9 @@ If you are not able to create a decryption oracle, Langdon cannot compute offset
                |__/    |__ ...      IV ---(X)    `(X)  
                |       |                   |       |   
                C1      C2                  P1      P2   {color}
-               Encryption                  Decryption 
+               Encryption                  Decryption            
 
-In CBC mode, blocks are no longer independent. In encryption, plaintext for given block is first XORed with ciphertext of previous block. For first block, a value known as Initialization Vector is used. IV should be different for every message sent, and in CBC it also must be upredictable at encryption time (as in SSLv2, where last ciphertext block of last message has been used as the IV for new message). After encryption, the IV can be made public (often prepended to the ciphertext).
+In CBC mode, blocks are no longer independent. In encryption, plaintext for given block is first XORed with ciphertext of previous block. For first block, a value known as Initialization Vector is used. IV should be different for every message sent, and in CBC it also must be upredictable at encryption time (unlike SSLv2, where last ciphertext block of last message has been used as the IV for new message). After encryption, the IV can be made public (often prepended to the ciphertext).
 
 {bold}CBC bitflipping{unbold}
 
@@ -531,7 +531,7 @@ The attacker knows he must flip the very last bit in the second plaintext block.
     {schema}|e2fcbc5c59b705f2e428363b1b0189c6|e99e062faa57cd4624a685252a3cb4b9|
     {color:}                                ^
 
-After decryption, block 1 is destroyed, but block 2 has the desired value:
+After decryption, entire block 1 is destroyed, but block 2 has the desired value:
 
     {schema}|c9429c2a0bae8b9b83d30b4bf26a3f1b|XXXXXXXX&admin=1|
     {color:} ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                ^
@@ -568,9 +568,82 @@ Examples:
 
 When the padding is incorrect after deciphering, the message is damaged and should not be used as legitimate. However, the reason (that padding is invalid) should not be presented to the user, otherwise CBC padding oracle attack can be performed.
 
-The CBC padding oracle attack allows the attacker to fully decrypt an encrypted message. 
+The CBC padding oracle attack allows the attacker to fully decrypt an encrypted message if he can use oracle to determine whether submitted ciphertext has valid padding. The plaintext will be revealed in reverse order - from the last byte of the last block. Check the decryption routine:
+{schema}
+        C1      C2
+        |____   |__ ...
+        |    |  |
+ key --AES   | AES-- key
+        |    |  |
+     I1 |    |  | I2
+        |    |  |
+ IV ---(X)    `(X)  
+        |       |   
+        P1      P2   {color}
+        Decryption  
+        
+        P2 = AES(C2, key) ^ C1
+        P2 = I2           ^ C1
 
-{bold}CBC key=IV attack{unbold}
+The goal is to get the value right after AES decryption, that is AES(C2, key) - let's call that Intermediate state I2. If I2 is known, the plaintext can be easily revealed by XORing the value with previous block of ciphertext (which is known). Also, as shown in the CBC bitflipping attack, we can directly manipulate resulting plaintext bits P2 with previous ciphertext block C1. 
+
+Consider following schema of 2 successive blocks (key = 'YELLOW SUBMARINE', IV = 16 * \\x00 for simplification):
+
+                                                               P2[15] -,   {schema}
+    P: |L o r e m   i p s u m   d o l o |r   s i t   a m e t . 0505050505| (unknown)
+    C: |eadcc5aa4800dff175a49cf3a0f2041d|f476548f1806681d6b265735ead1458f| {color}
+                                      ^- C1[15]                      
+
+We now want to alter the C1 block to give new plaintext: 'Lorem ipsum dolor sit amet\\x05\\x05\\x05\\x05\\x01'. The padding will now be only the last byte, \\x01. This last byte is, unlike original padding, known to the attacker. The altered C1 block shall be named C1', the plaintext block P2 with altered padding shall be named P2'. The C1' block will consist of 15 bytes of any value and the last important byte C1'[15]. The C1'[15] byte will be bruteforced - sent to oracle waiting for 'No padding error'. Two of the tries may be successful, but only one C1'[15] value will be different from the original C1[15] byte - that is what we want.
+
+Then we can use those last bytes C1'[15] and P2'[15] to compute the last byte of the Intermediate state I2[15]:
+
+    I2[15] = C1'[15] ^ P2'[15]
+
+In our example, correct C1'[15] value will be \\x19, found by bruteforce (in this case \\x1d would also result into the valid padding \\x05, but we don't know the value now - we expect \\x01). I2[15] will therefore be \\x19 ^ \\x01 = \\x18. We will now use the value and original ciphertext byte C1[15] to compute correct plaintext byte P2[15]:
+
+    P2[15] = C1[15] ^ I2[15]
+
+In our example, we get P2[15] = \\x1d ^ \\x18 = \\x05 - the last byte in the (padded) original plaintext. Next byte is computed in similar way, just P2' will now end with \\x02\\x02 and C1' with \\x??\\x1a (the last byte is computed as I2[15] ^ P2'[15] = \\x18 ^ \\x02). Continue in the same fashion.
+
+The first block can be decrypted only if the IV is known or guessable.
+
+
+To execute this attack, you must compose an oracle that takes a ciphertext and returns 0 if the padding is correct, otherwise 1. Then run:{command}
+ciphertext = ...
+o = /tmp/oracle.sh
+p = cbc-padding ciphertext o
+{color}
+
+{bold}CBC chosen-ciphertext attack{unbold}
+
+If attacker is able to forge a ciphertext and get it decrypted, he can reveal the IV value. This is especially dangerous if IV and key are equivalent (this might make sense because the key has to be known to both parties anyway, so why not save some bandwidth and keep the IV secret as well?).
+
+Attacker needs at least 3 successive blocks. From the CBC mode diagrams, the equations are:
+
+    C1 = AES(P1 ^ IV, key)
+    C2 = AES(P2 ^ C1, key)
+    C3 = AES(P3 ^ C2, key)
+    P1 = AES(C1, key) ^ IV
+    P2 = AES(C2, key) ^ C1
+    P3 = AES(C3, key) ^ C2
+
+But if the attacker can replace blocks (C1, C2, C3) with (C1, 0, C1):
+
+    P1 = AES(C1, key) ^ IV
+    P2 = AES(0, key) ^ C1
+    P3 = AES(C1, key) ^ 0
+       = AES(C1, key)
+
+    P1 = P3 ^ IV
+    IV = P1 ^ P3
+
+To execute this attack, you must compose an oracle that takes a ciphertext, sends it to the server and returns the resulting plaintext. Then run:{command}
+ciphertext = ...
+o = /tmp/oracle.sh
+iv = cbc-chosen-ciphertext o ciphertext
+hexdump iv
+{color}
 
 {bold}CTR mode{unbold}
 

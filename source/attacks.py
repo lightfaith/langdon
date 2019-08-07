@@ -622,7 +622,7 @@ def ctr_bitflipping(e_oracle_path, d_oracle_path, offset, desired):
     decrypted = Oracle.once(fake, d_oracle_path)
     return decrypted
 
-def cbc_key_as_iv(oracle_path, ciphertext):
+def cbc_chosen_ciphertext(oracle_path, ciphertext):
     blocksize = 16
     ciphertext = ciphertext.as_raw()
     encrypted_chunks = chunks(ciphertext, blocksize)
