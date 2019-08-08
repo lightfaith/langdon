@@ -2,6 +2,7 @@
 
 import os
 import pdb
+import pydoc
 import random
 import re
 import sys
@@ -25,6 +26,7 @@ output = []
 grep_value = None
 grep_method = None
 output_newline = True
+use_pager = False
 
 def update_variable(name, value):
     """
@@ -151,21 +153,27 @@ except:
 while True:
     # print something from previous command if needed
     if output:
-        end = '\n' if output_newline else ''
+        final_output = []
+        end = '\n' if output_newline or grep_method else ''
         #pdb.set_trace()
         for line in output:
             if grep_method == 'normal':
                 if grep_value in line:
-                    prynt(line, end=end)
+                    final_output.append(line + end)
             elif grep_method == 'regex':
                 if re.search(grep_value, line):
-                    prynt(line, end=end)
+                    final_output.append(line + end)
             else:
-                prynt(line, end=end)
+                final_output.append(line + end)
         output = []
+        if use_pager:
+            pydoc.pipepager(''.join(final_output), cmd='less -r')
+        else:
+            prynt(''.join(final_output))
     grep_value = None
     grep_method = None
     output_newline = True
+    use_pager = False
 
     # get command
     try:
@@ -287,6 +295,7 @@ while True:
         if not arg:
             # general help
             output_newline = False
+            use_pager = True
             output.extend(re.split('(\n)', """{color}
 Welcome! This is Langdon, experimental cryptography framework. It is designed
 to aid with common operations while dealing with crypto tasks.
@@ -362,7 +371,7 @@ to see details for them, but here is a list for quick reference:
     {command}cbc-bitflipping <encryption_oracle> <decryption_oracle> <target_block> <desired>{color} - CBC bitflipping attack
     {command}cbc-padding <oracle> <data> [<blocksize> [<iv>]]{color} - CBC padding oracle attack
     {command}cbc-chosen-ciphertext <oracle> <ciphertext>{color} - CBC chosen-ciphertext attack
-    {command}fixed-nonce <c1> <c2> ... <language>{color} - CTR fixed-nonce attack 
+    {command}ctr-fixed-nonce <c1> <c2> ... <language>{color} - CTR fixed-nonce attack 
     {command}ctr-bitflipping <encryption_oracle> <decryption_oracle> <offset> <payload>{color} - CTR bitflipping attack
     {command}brute-timestamp-seed <RNG_type> <random_value> [<offset> [<reference_timestamp>]]{color} - bruteforce seed for known random value
     {command}clone-rng <RNG_type> <states>{color} - clone RNG from output
@@ -474,6 +483,7 @@ problems. Use {command}analyze a{color} to analyze specific variable/algorithm o
             try:
                 output.extend(['%s\n' % line for line in classes[arg.lower()].help()])
                 output_newline = False
+                use_pager = True
             except:
                 traceback.print_exc()
                 log.err('Non-existent algorithm.')
@@ -1148,13 +1158,13 @@ problems. Use {command}analyze a{color} to analyze specific variable/algorithm o
             traceback.print_exc()
             log.err('You must specify ciphertext, oracle path and optional blocksize.')
 
-    elif cmd.startswith('fixed-nonce '):
+    elif cmd.startswith('ctr-fixed-nonce '):
         try:
             parts = cmd.split()
             texts = [all_variables[p] for p in parts[1:-1]]
             language = parts[-1]
             #sample_size = int(parts[3])
-            result = attacks.fixed_nonce(texts, language)
+            result = attacks.ctr_fixed_nonce(texts, language)
             if variable_name:
                 update_variable(variable_name, result)
             else:

@@ -10,7 +10,7 @@ from source.log import *
 from source.functions import *
 from source.classes import *
 
-def fixed_nonce(texts, language):
+def ctr_fixed_nonce(texts, language):
     """
     If CTR mode is used with fixed nonce for multiple cases, it can be
     broken as XOR.

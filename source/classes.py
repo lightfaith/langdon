@@ -426,13 +426,24 @@ class AES(SymmetricCipher):
 {color}{bold}AES{unbold}
 Advanced Encryption Standard, also known as Rijndael has been established in 2001. It supersedes DES algorithm.
 
-AES uses a fixed block size of 128 bits and a key size of 128, 192 or 256 bits. It operates on a 4x4 array of bytes (the state). 
+AES uses a fixed block size of 128 bits and a key size of 128, 192 or 256 bits. It operates on a 4x4 array of bytes (the state). AES blocks are used in several modes (see below). 
 
 Standards:
     FIPS PUB 197
     ISO/IEC 18033-3
 
-AES blocks are used in several modes:
+Use following commands to create AES objects:{command}
+plaintext = file:/etc/passwd
+key = 'YELLOW SUBMARINE'
+iv = random 0 255 16
+nonce = 1337
+
+a = AES mode=ecb key=key plaintext=plaintext
+a = AES mode=cbc key=key plaintext=plaintext iv=iv
+a = AES mode=ctr key=key plaintext=plaintext nonce=nonce
+ciphertext = encrypt a
+{color}
+Analogically, you can provide ciphertext and get plaintext instead.
 
 {bold}ECB mode{unbold}{schema}
                P1      P2                  C1      C2        
@@ -522,19 +533,20 @@ In CBC mode, blocks are no longer independent. In encryption, plaintext for give
 
 When decrypting, ciphertext of previous block is XORed with AES decryption to get plaintext of current block. That means that attacker can accurately flip correct bits to achieve desired plaintext. Of course, the block with altered ciphertext will be destroyed.
 
-For example, string 'some_garbage=XXXXXXXXXXX&admin=0' is encrypted with key 'YELLOW SUBMARINE' and IV f370d32fcca1e9ac9c36605b1e4e0408 as (ignoring the padding):
+For example, string 'some_garbage=XXXXXXXXXXX&admin=0' is encrypted with key 'YELLOW SUBMARINE' and IV f370d32fcca1e9ac9c36605b1e4e0408 as (ignoring the padding):{schema}
 
-    {schema}|e2fcbc5c59b705f2e428363b1b0189c7|e99e062faa57cd4624a685252a3cb4b9|{color}
+    P |s o m e _ g a r b a g e = X X X |X X X X X X X X & a d m i n = 0 |
+    C |e2fcbc5c59b705f2e428363b1b0189c7|e99e062faa57cd4624a685252a3cb4b9|{color}
 
-The attacker knows he must flip the very last bit in the second plaintext block. To achieve that, same bit in previous block's ciphertext must be flapped: 
-    
-    {schema}|e2fcbc5c59b705f2e428363b1b0189c6|e99e062faa57cd4624a685252a3cb4b9|
-    {color:}                                ^
+The attacker knows he must flip the very last bit in the second plaintext block. To achieve that, same bit in previous block's ciphertext must be flapped:{schema}
 
-After decryption, entire block 1 is destroyed, but block 2 has the desired value:
+    C |e2fcbc5c59b705f2e428363b1b0189c6|e99e062faa57cd4624a685252a3cb4b9|{color}
+                                     ^^
 
-    {schema}|c9429c2a0bae8b9b83d30b4bf26a3f1b|XXXXXXXX&admin=1|
-    {color:} ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                ^
+After decryption, entire block 1 is destroyed, but block 2 has the desired value:{schema}
+
+    P |c9429c2a0bae8b9b83d30b4bf26a3f1b|X X X X X X X X & a d m i n = 1 |{color}
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                               ^^
 
 To execute this attack, you must compose encryption and decryption oracle, provide block index that should be changed and the desired value. Run:{command}
 e_oracle = cbc/cryptopals_16_encrypt.py
@@ -645,8 +657,71 @@ iv = cbc-chosen-ciphertext o ciphertext
 hexdump iv
 {color}
 
-{bold}CTR mode{unbold}
+{bold}CTR mode{unbold}{schema}
+              Nonce;Counter
+                   |
+            Key --AES
+                   |
+            P ----(X)
+                   |
+                   C {color}
+         Encryption/Decryption
 
+In CTR mode, encryption and decryption operations are identical, it is a simple XOR with generated keystream. That also means it can be easily used as stream cipher. The keystream itself is AES encryption of nonce (similar to IV) concatenated with counter value. See the following example for clarification (nonce = 0xdeadbeef, key = 'YELLOW SUBMARINE'):
+{schema}             
+    Nonce;Counter   |efbeadde000000000000000000000000|efbeadde000000000100000000000000|
+    Keystream       |5f59005d4288baa18a8546f6ee4230bd|9d1bad6e2932f9398b2ee4793ee6c699|
+    Plaintext       |L o r e m   i p s u m   d o l o |r   s i t   a m e t .  
+    Plaintext (hex) |4c6f72656d20697073756d20646f6c6f|722073697420616d65742e
+    Ciphertext      |133672382fa8d3d1f9f02bd68a2d5cd2|ef3bde075d129854ee5aca {color}
+
+{bold}CTR fixed-nonce attack{unbold}
+
+The issue is obvious - if you use same nonce and same key, you receive same keystream. That is:
+    
+         P1 = C1 ^ K
+         P2 = C2 ^ K          | ^ P1
+    P1 ^ P2 = P1 ^ C2 ^ K
+    P1 ^ P2 = C1 ^ K ^ C2 ^ K
+    P1 ^ P2 = C1 ^ C2         # and ECB Tux's cousin is here
+
+If captured enough ciphertexts, you transpose them (so each transposition is XORed with single byte), then XOR it with brute force and use frequency analysis to get the best. Run:{command}
+c1 = ...
+c2 = ...
+c3 = ...
+c4 = ...
+...
+key = ctr-fixed-nonce c1 c2 c3 c4 ... english
+xor c1 key
+{color}
+
+{bold}CTR random access read/write{unbold}
+
+Because encryption and decryption are in CTR equivalent, you can use exposed encryption routine to decrypt provided ciphertext. Of course, you can use it only in fixed-nonce situations or in systems where you include data into an existing ciphertext (imagine an encrypted drive).
+
+To execute this attack, you must prepare an oracle that takes given plaintext and returns corresponding ciphertext. Then provide ciphertext:{command}
+plaintext = file:/tmp/actually_a_ciphertext
+o = /tmp/oracle.sh
+oracle o plaintext
+{color}
+
+{bold}CTR bitflipping attack{unbold}
+
+Plaintext and corresponding ciphertext are entangled by XOR operation, where change of bit in source changes only bit of the same position in target. Therefore, with specifically crafted ciphertext, we can get arbitrary plaintext. It is similar to CBC bitflipping attack, but here we are not limited by block. Assume P' is desired plaintext and C' is ciphertext modified by adversary:
+    
+     P = C ^ K
+    P' = C' ^ K
+    C' = P' ^ K
+       = P' ^ P ^ C
+
+To execute this attack, you must compose encryption and decryption oracle, provide offset and the desired value. Run:{command}
+e_oracle = ctr/cryptopals_26_encrypt.py
+d_oracle = ctr/cryptopals_26_decrypt.py
+
+offset = 3
+payload = ';admin=true;'
+ctr-bitflipping e_oracle d_oracle offset payload
+{color}
 
 {clear}""".format(color=log.COLOR_DARK_GREEN,
                   clear=log.COLOR_NONE,
@@ -812,6 +887,9 @@ hexdump iv
         blocks = [cipher.encrypt(bytes(bytearray(pack('<Q', nonce))
                                        + bytearray(pack('<Q', block_counter))))
                   for block_counter in range((len(source) // 16) + 1)]
+        for b in blocks:
+            for line in hexdump(b):
+                print(line)
         return xor(source, b''.join(blocks)[:len(source)])
 
 
