@@ -249,7 +249,7 @@ class Variable:
             self.preferred_form = self.as_raw
             return
         except:
-            traceback.print_exc()
+            #traceback.print_exc()
             pass
         # value as int
         try:
