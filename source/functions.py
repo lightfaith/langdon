@@ -20,6 +20,7 @@ def binary(data):
     return b''.join([bin(b)[2:].rjust(8, '0').encode() for b in data])
         
 def unbinary(data):
+    # TODO ignoring leading zeros; fix
     return int(data, 2).to_bytes(len(data) // 8, 'big')
     
 def hexadecimal(data):
@@ -63,13 +64,26 @@ def get_frequency_error(data, language):
     actual = {c:(data.lower().count(c.encode()) / len(data)) for c in fs.keys()}
     return sum(abs((fs[c]-actual[c]) / len(actual)) for c in actual.keys())
 
-def xor(data1, data2):
+
+def bitwise(data1, data2, operation):
     #print(len(data1), len(data2))
     if not data1 or not data2:
         log.warn('Using XOR with empty value.')
         return data1 + data2
-    return b''.join(b'%c' % (data1[i % len(data1)] ^ data2[i % len(data2)]) 
+    return b''.join(b'%c' % operation(data1[i % len(data1)], data2[i % len(data2)])
                     for i in range(max(len(data1), len(data2))))
+    
+def xor(data1, data2):
+    return bitwise(data1, data2, lambda x, y: x ^ y)
+
+def bitwise_or(data1, data2):
+    return bitwise(data1, data2, lambda x, y: x | y)
+
+def bitwise_and(data1, data2):
+    return bitwise(data1, data2, lambda x, y: x & y)
+
+def bitwise_not(data):
+    return b''.join(b'%c' % (255 - c) for c in data)
 
 def bruteforce_xor(data1, keys):
     for key in keys:

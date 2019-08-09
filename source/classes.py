@@ -241,6 +241,15 @@ class Variable:
             if all(c in printables for c in self.value):
                 self.preferred_form = self.as_raw
             return
+        # value as bin
+        try:
+            to_unbin = value[2:] if value.startswith('0b') else value
+            self.value = unbinary(to_unbin)
+            #self.value = int_to_bytes(int(value, 16))
+            self.preferred_form = self.as_hex
+            return
+        except:
+            pass
         # value as int
         try:
             self.value = int_to_bytes(int(value))

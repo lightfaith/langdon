@@ -157,6 +157,8 @@ while True:
         end = '\n' if output_newline or grep_method else ''
         #pdb.set_trace()
         for line in output:
+            if isinstance(line, Variable):
+                line = str(line)
             if grep_method == 'normal':
                 if grep_value in line:
                     final_output.append(line + end)
@@ -355,7 +357,10 @@ You can use some of these common functions:
     {command}invmod/modinv a b{color} - compute modular inverse
 
 Langdon supports many crypto-related functions. These are currently supported:
+    {command}not a{color} - binwise not
     {command}xor a b{color} - xor 2 variables
+    {command}or a b{color} - bitwise or 2 variables
+    {command}and a b{color} - bitwise and 2 variables
     {command}brute-single-xor <variable>{color} - create single byte XORs of given variable
     {command}break-xor <variable> <language> [<keysize>]{color} - use frequency analysis to 
     break xor (use hamming to get keysize if necessary)
@@ -1000,18 +1005,62 @@ problems. Use {command}analyze a{color} to analyze specific variable/algorithm o
             output.append(Variable(result))
             
     # TODO math operations
-    # TODO help command
+    ######################################
+    # bitwise
+    ######################################
+    elif cmd.startswith('and '):
+        arguments = cmd[4:].split()
+        if arguments and arguments[0] in all_variables.keys():
+            result = all_variables[arguments[0]].as_raw()
+            for a in arguments[1:]:
+                if a in all_variables.keys():
+                    result = bitwise_and(result, all_variables[a].as_raw())
+                else:
+                    log.err('The \'%s\' is not a variable.' % a)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        else:
+            log.err('You must provide existing variables as arguments.')
+    
+    elif cmd.startswith('or '):
+        arguments = cmd[4:].split()
+        if arguments and arguments[0] in all_variables.keys():
+            result = all_variables[arguments[0]].as_raw()
+            for a in arguments[1:]:
+                if a in all_variables.keys():
+                    result = bitwise_or(result, all_variables[a].as_raw())
+                else:
+                    log.err('The \'%s\' is not a variable.' % a)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        else:
+            log.err('You must provide existing variables as arguments.')
+
+    elif cmd.startswith('not '):
+        argument = cmd[4:].strip()
+        if argument in all_variables.keys():
+            result = bitwise_not(all_variables[argument].as_raw())
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        else:
+            log.err('You must provide existing variable as argument.')
     ######################################
     # XOR
     ######################################
     # xor with any number of arguments
     elif cmd.startswith('xor '):
         arguments = cmd[4:].split()
-        if arguments and arguments[0] in variables.keys():
-            result = variables[arguments[0]].as_raw()
+        if arguments and arguments[0] in all_variables.keys():
+            result = all_variables[arguments[0]].as_raw()
             for a in arguments[1:]:
-                if a in variables.keys():
-                    result = xor(result, variables[a].as_raw())
+                if a in all_variables.keys():
+                    result = xor(result, all_variables[a].as_raw())
                 else:
                     log.err('The \'%s\' is not a variable.' % a)
             if variable_name:
