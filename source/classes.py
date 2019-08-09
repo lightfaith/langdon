@@ -352,7 +352,7 @@ class Variable:
             except:
                 continue
         if type(preferred) == bytes:
-            return preferred.decode()
+            return str(preferred)[3:-2]
         return preferred
         
     def __str__(self):
