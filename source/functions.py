@@ -20,8 +20,11 @@ def binary(data):
     return b''.join([bin(b)[2:].rjust(8, '0').encode() for b in data])
         
 def unbinary(data):
-    # TODO ignoring leading zeros; fix
-    return int(data, 2).to_bytes(len(data) // 8, 'big')
+    if isinstance(data, str):
+        data = data.encode()
+    #return int(data, 2).to_bytes(len(data) // 8, 'big') # ignores leading 0's
+    data = b'0' * ((8 - len(data) % 8) % 8) + data
+    return bytes([int(c, 2) for c in chunks(data, 8)])
     
 def hexadecimal(data):
     return b''.join(b'%02x' % c for c in data)

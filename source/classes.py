@@ -246,9 +246,10 @@ class Variable:
             to_unbin = value[2:] if value.startswith('0b') else value
             self.value = unbinary(to_unbin)
             #self.value = int_to_bytes(int(value, 16))
-            self.preferred_form = self.as_hex
+            self.preferred_form = self.as_raw
             return
         except:
+            traceback.print_exc()
             pass
         # value as int
         try:
