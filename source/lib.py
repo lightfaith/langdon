@@ -13,9 +13,11 @@ import tempfile
 #import math
 #import traceback
 #import random
-from source import log
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+
+from source import log
+
 
 """
 Constants
@@ -41,17 +43,31 @@ background_jobs = []
 """
 Standard functions
 """
+
+
 def debug(*args, **kwargs):
     if debug_flag:
         print('\033[90m[.]', *args, '\033[0m', **kwargs, file=sys.stderr)
 
+
+def positive(value):
+    if isinstance(value, str):
+        value = value.encode()
+    if isinstance(value, bytes):
+        value = value.lower()
+    if value in (b'yes', b'y', b'true', b't', b'1', 1, b'+', True):
+        return True
+    return False
+
+
 def run_command(command):
-    p = subprocess.Popen(command, 
-                         shell=True, 
+    p = subprocess.Popen(command,
+                         shell=True,
                          stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     return (p.returncode, out, err)
+
 
 def prynt(*args, end='\n'):
     """
@@ -59,7 +75,7 @@ def prynt(*args, end='\n'):
     """
     if sys.stdout.isatty():
         try:
-            print(*[(arg.decode() 
+            print(*[(arg.decode()
                      if (type(arg) == bytes)
                      else arg)
                     for arg in args], end=end)
@@ -68,6 +84,7 @@ def prynt(*args, end='\n'):
     else:
         sys.stdout.buffer.write(b' '.join(arg.encode() for arg in args))
 
+
 def quit_string(x):
     if type(x) != str:
         return False
@@ -75,6 +92,7 @@ def quit_string(x):
     if x in ['quit', 'exit', 'q', 'end', ':wq']:
         return True
     return False
+
 
 def edit_in_file(data):
     """
@@ -89,7 +107,8 @@ def edit_in_file(data):
         changes = f.read()
     return changes
 
-def exit_program(signal, frame):
+
+def exit_program(_, __):
     if background_jobs:
         """only terminate background jobs"""
         for b in background_jobs:
@@ -99,10 +118,13 @@ def exit_program(signal, frame):
         if signal == -1:
             sys.exit(0)
 
-        log.newline() # newline
-        #log.info('Killing all the threads...') # TODO
+        log.newline()  # newline
+        # log.info('Killing all the threads...') # TODO
         sys.exit(0 if signal is None else 1)
+
+
 signal.signal(signal.SIGINT, exit_program)
+
 
 def size_human(value, integer=False):
     format_string = '{0:.0f}' if integer else '{0:.3f}'
@@ -116,6 +138,7 @@ def size_human(value, integer=False):
         return ('%s kB' % format_string).format(value / (1024))
     return '{0} B'.format(value)
 
+
 def chunks(data, chunksize):
     """
     Split data in sequential chunks.
@@ -123,8 +146,10 @@ def chunks(data, chunksize):
     # TODO option for alternating chunks
     return [data[i:i+chunksize] for i in range(0, len(data), chunksize)]
 
+
 def rotate_left(value, shift):
     return ((value << shift) & 0xffffffff) | (value >> (32 - shift))
+
 
 def root(x, n):
     """
@@ -140,13 +165,16 @@ def root(x, n):
             high = mid
     return low
 
+
 def int_to_bytes(x, length=None, byteorder='big'):
     if not length:
         length = (x.bit_length() + 7) // 8
     return x.to_bytes(length, byteorder=byteorder)
 
+
 def bytes_to_int(x, byteorder='big'):
     return int.from_bytes(x, byteorder=byteorder)
+
 
 def get_colored_printable(b):
     """
@@ -156,21 +184,23 @@ def get_colored_printable(b):
     if b in (0x9, 0xa, 0xd):
         color = log.COLOR_DARK_GREEN
         b = ord('.')
-    elif b<0x20 or b>=0x7f:
+    elif b < 0x20 or b >= 0x7f:
         color = log.COLOR_NONE
         b = ord('.')
     return color+chr(b)+log.COLOR_NONE
+
 
 def get_colored_printable_hex(b):
     """
 
     """
     color = log.COLOR_NONE
-    if b>=0x20 and b<0x7f:
+    if b >= 0x20 and b < 0x7f:
         color = log.COLOR_BROWN
     elif b in (0x9, 0xa, 0xd):
         color = log.COLOR_DARK_GREEN
     return color + '%02x' % b + log.COLOR_NONE
+
 
 def hexdump(data):
     """
@@ -184,7 +214,7 @@ def hexdump(data):
                                      for start in range(0, 16, 2)])
 
         """add none with coloring - for layout"""
-        if len(hexa)<199:
+        if len(hexa) < 199:
             hexa += (log.COLOR_NONE+'  '+log.COLOR_NONE)*(16-len(chunk))
 
         result.append(log.COLOR_DARK_GREEN
@@ -196,6 +226,7 @@ def hexdump(data):
         line_count += 1
     return result
 
+
 def plt_histogram(data, ticks, title='', figsize=(10, 5), colors=None):
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(1, 1, 1)
@@ -206,9 +237,8 @@ def plt_histogram(data, ticks, title='', figsize=(10, 5), colors=None):
     # set hexadecimal ticks
     ax.get_xaxis().set_major_locator(ticker.MultipleLocator(16))
     ax.get_xaxis().set_major_formatter(plt.FuncFormatter(
-        lambda value,tick_number: '0x%x' % int(value)))
+        lambda value, tick_number: '0x%x' % int(value)))
     if colors:
         # color bars
         for i, p in enumerate(patches):
             plt.setp(p, 'facecolor', colors[i % len(colors)])
-

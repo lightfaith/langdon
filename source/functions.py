@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-
+General functions used by main script, classes and attacks.
 """
 import re
 import math
@@ -61,13 +61,13 @@ def entropy(data):
     return e
 
 def entropy_chunks(data, chunksize):
-    X = []
-    Y = []
+    xx = []
+    yy = []
     for i in range(len(data)//chunksize + 1):
-        X.append(i*chunksize)
-        Y.append(entropy(data[i*chunksize:min(
+        xx.append(i*chunksize)
+        yy.append(entropy(data[i*chunksize:min(
             (i+1)*chunksize, len(data))]))
-    return (X, Y)
+    return (xx, yy)
 
 def get_frequency_error(data, language):
     try:
@@ -114,7 +114,7 @@ def dict_success(sample, wordlist=None, min_word_match=1, min_word_len=1): # TOD
     """
     wordlist = wordlist or []
 
-    match_count = 0
+    #match_count = 0
     words = [w for w in re.sub(b'[^a-z]+', b' ', sample.lower()).split()
              if len(w) >= min_word_len]
     if not words:
@@ -186,9 +186,9 @@ def debruijn(length, unique_length=3, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef
 def parse_int(value, variable_pool):
     result = None
     for f in [
-        lambda x: int(variable_pool[x].as_int()),
-        lambda x: int(x),
-        lambda x: int(x, 16),
+            lambda x: int(variable_pool[x].as_int()),
+            int,
+            lambda x: int(x, 16),
     ]:
         try:
             result = f(value)
@@ -303,9 +303,9 @@ def aes_ecb_encrypt(data, key):
     return cipher.encrypt(pkcs7_pad(data))
 
 def aes_ecb_decrypt(data, key):
-        from Crypto.Cipher import AES
-        cipher = AES.new(key, AES.MODE_ECB)
-        return pkcs7_unpad(cipher.decrypt(data))
+    from Crypto.Cipher import AES
+    cipher = AES.new(key, AES.MODE_ECB)
+    return pkcs7_unpad(cipher.decrypt(data))
 
 def aes_cbc_encrypt(data, key, iv, blocksize=16):
     """
@@ -486,9 +486,9 @@ def md4(payload,
     """
     MD4 implementation
     """
-    F = lambda x, y, z: ((x & y) | (~x & z))
-    G = lambda x, y, z: ((x & y) | (x & z) | (y & z))
-    H = lambda x, y, z: x ^ y ^ z
+    ff = lambda x, y, z: ((x & y) | (~x & z))
+    gg = lambda x, y, z: ((x & y) | (x & z) | (y & z))
+    hh = lambda x, y, z: x ^ y ^ z
 
     #print('DEFAULT:', hexadecimal(b''.join(b'%c' % b for x in h for b in pack('<I', x))))
     h = list(h)
@@ -497,7 +497,7 @@ def md4(payload,
 
     last_chunk_altered = False
     order = [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15]
-    while len(payload):
+    while payload:
         if len(payload) < 64 and not last_chunk_altered:
             payload = hash_pad('md4', payload)
             last_chunk_altered = True
@@ -506,38 +506,38 @@ def md4(payload,
         #print()
        
         chunk = payload[:64]
-        X = list(unpack('<16I', chunk))
+        xx = list(unpack('<16I', chunk))
         a, b, c, d = tuple(h)
         for i in range(16):
             k = i
             if i % 4 == 0:
-                a = rotate_left((a + F(b, c, d) + X[k]) & 0xffffffff, 3)
+                a = rotate_left((a + ff(b, c, d) + xx[k]) & 0xffffffff, 3)
             elif i % 4 == 1:
-                d = rotate_left((d + F(a, b, c) + X[k]) & 0xffffffff, 7)
+                d = rotate_left((d + ff(a, b, c) + xx[k]) & 0xffffffff, 7)
             elif i % 4 == 2:
-                c = rotate_left((c + F(d, a, b) + X[k]) & 0xffffffff, 11)
+                c = rotate_left((c + ff(d, a, b) + xx[k]) & 0xffffffff, 11)
             elif i % 4 == 3:
-                b = rotate_left((b + F(c, d, a) + X[k]) & 0xffffffff, 19)
+                b = rotate_left((b + ff(c, d, a) + xx[k]) & 0xffffffff, 19)
         for i in range(16):
             k = i // 4 + (i % 4) * 4
             if i % 4 == 0:
-                a = rotate_left((a + G(b, c, d) + X[k] + 0x5a827999) & 0xffffffff, 3)
+                a = rotate_left((a + gg(b, c, d) + xx[k] + 0x5a827999) & 0xffffffff, 3)
             elif i % 4 == 1:
-                d = rotate_left((d + G(a, b, c) + X[k] + 0x5a827999) & 0xffffffff, 5)
+                d = rotate_left((d + gg(a, b, c) + xx[k] + 0x5a827999) & 0xffffffff, 5)
             elif i % 4 == 2:
-                c = rotate_left((c + G(d, a, b) + X[k] + 0x5a827999) & 0xffffffff, 9)
+                c = rotate_left((c + gg(d, a, b) + xx[k] + 0x5a827999) & 0xffffffff, 9)
             elif i % 4 == 3:
-                b = rotate_left((b + G(c, d, a) + X[k] + 0x5a827999) & 0xffffffff, 13)
+                b = rotate_left((b + gg(c, d, a) + xx[k] + 0x5a827999) & 0xffffffff, 13)
         for i in range(16):
             k = order[i]
             if i % 4 == 0:
-                a = rotate_left((a + H(b, c, d) + X[k] + 0x6ed9eba1) & 0xffffffff, 3)
+                a = rotate_left((a + hh(b, c, d) + xx[k] + 0x6ed9eba1) & 0xffffffff, 3)
             elif i % 4 == 1:
-                d = rotate_left((d + H(a, b, c) + X[k] + 0x6ed9eba1) & 0xffffffff, 9)
+                d = rotate_left((d + hh(a, b, c) + xx[k] + 0x6ed9eba1) & 0xffffffff, 9)
             elif i % 4 == 2:
-                c = rotate_left((c + H(d, a, b) + X[k] + 0x6ed9eba1) & 0xffffffff, 11)
+                c = rotate_left((c + hh(d, a, b) + xx[k] + 0x6ed9eba1) & 0xffffffff, 11)
             elif i % 4 == 3:
-                b = rotate_left((b + H(c, d, a) + X[k] + 0x6ed9eba1) & 0xffffffff, 15)
+                b = rotate_left((b + hh(c, d, a) + xx[k] + 0x6ed9eba1) & 0xffffffff, 15)
         
         h = [(x + y) & 0xffffffff for x,y in zip(h, (a, b, c, d))]
         payload = payload[64:]
@@ -545,7 +545,7 @@ def md4(payload,
     #print('MD4 values:', ['%08x' % hx for hx in h], end=' ')
     return b''.join(b'%c' % b for x in h for b in pack('<I', x))
 
-
+'''
 def hash_extension(algorithm, data, digest, append, oracle_path):
     """
     We try to create MAC of new data replacing key with arbitrary characters.
@@ -586,11 +586,12 @@ def hash_extension(algorithm, data, digest, append, oracle_path):
         for line in result.splitlines():
             print(line)
         print()
-
+'''
 """
 Specific functions (e.g. print all ROTs or the valid one)
 """
 
+'''
 def analyze(data, interactive=False):
     # TODO ALREADY OBSOLETE, objects have analyze() method
     """
@@ -649,7 +650,7 @@ def analyze(data, interactive=False):
                 break
         if analysis_level > 10:
             break
-            
+'''         
     
 
 def single_xor_print(data):
@@ -675,6 +676,7 @@ def diehard(rng_path):
     """
     https://en.wikipedia.org/wiki/Diehard_tests
     """
+    pass
     
 
 """

@@ -16,20 +16,18 @@ def ctr_fixed_nonce(texts, language):
     broken as XOR.
     """
     texts = [t.as_raw() for t in texts]
-    #print('num of texts:', len(texts)) #TODO del
     min_length = min([len(l) for l in texts])
     aligned_lines = [l[:min_length] for l in texts]
-    #print('aligned to', min_length) # TODO del
     transposed_lines = [b''.join(b'%c' % l[i]
-                                for l in aligned_lines)
-                       for i in range(min_length)]
+                                 for l in aligned_lines)
+                        for i in range(min_length)]
     xor_key = b''
     #print('transposed count:', len(transposed_lines))
     for line in transposed_lines:
         #print('transposed len', len(line))
         xors = list(bruteforce(line,
                                [b'%c' % c for c in range(256)],
-                               lambda a, b: xor(a, b)))
+                               xor))
         best = sorted(xors, key=lambda x: get_frequency_error(x, language))
         #for i in range(3):
         #    print(get_frequency_error(best[i], language))
@@ -70,7 +68,7 @@ def break_xor(data, language, keysize=None):
             transposed = data[offset::keysize]
             xors = list(bruteforce(transposed,
                                    [b'%c' % c for c in range(256)],
-                                   lambda a, b: xor(a, b)))
+                                   xor))
             best = sorted(xors, key=lambda x: get_frequency_error(x, language))
             #for i in range(3):
             #    print(get_frequency_error(best[i], language))
@@ -170,8 +168,8 @@ def ecb_chosen_plaintext(oracle_path):
                                          + plaintext
                                          + b'%c' % byte_index)
                             for byte_index in range(256)}
+                
                 oracle_count = 8
-                #oracle_count = 1 # TODO del
                 #workload = (len(payloads) // oracle_count
                 #            + (1 if len(payloads) % oracle_count != 0 else 0))
                 datasets = [{k:v for k,v in list(payloads.items())[i::oracle_count]}
@@ -182,7 +180,7 @@ def ecb_chosen_plaintext(oracle_path):
                                   datasets[i],
                                   (lambda i,r,o,e,kw:
                                    (o[kw['reference_index']:kw['reference_index']
-                                    + kw['blocksize']] == kw['reference'])),
+                                      + kw['blocksize']] == kw['reference'])),
                                   reference=reference,
                                   reference_index=reference_index,
                                   blocksize=blocksize)
@@ -272,7 +270,7 @@ def ecb_cut_paste(e_oracle_path, d_oracle_path, expected, desired, payload=None)
         # payload -> get left and right lengths
         # PKCS#7 pad the fake block
         start_payload_padding = blocksize - payload_offset
-        end_payload_padding = len(payload) - start_payload_padding
+        #end_payload_padding = len(payload) - start_payload_padding
         
         fake_block = pkcs7_pad(desired.as_raw(), blocksize)
         payload = (payload[:start_payload_padding]
@@ -436,7 +434,7 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
             oracle_count = 8 # use this for speed
             oracles = [Oracle(oracle_path,
                               {k:v for k,v in payloads.items()
-                                   if (k // (len(payloads)/oracle_count) == i)},
+                               if k // (len(payloads)/oracle_count) == i},
                               lambda i,r,o,e,kw: (r == 0))
                        for i in range(oracle_count)]
             for oracle in oracles:
@@ -551,7 +549,6 @@ def brute_rng_xor(rng, ciphertext, known):
 
     seed = 0
     x = XOR(ciphertext=ciphertext)
-    result = []
     while True:
         if seed % 1024 == 0:
             debug(seed)
@@ -649,8 +646,7 @@ def hash_extension(algorithm, original, original_hash, append, oracle_path):
     h = algorithm(data=append)
     # New payload needs the padding automatically added...
     debug('Preparing payloads up to key_length == 256...')
-    #for key_length in range(256):
-    for key_length in range(15, 20):  # TODO del
+    for key_length in range(256):
         #debug('Key len:', key_length)
         h.restore(original_hash.as_raw())
         forged_data = h.pad(b'A' * key_length + original.as_raw())[key_length:] + append.as_raw()

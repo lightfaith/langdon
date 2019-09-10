@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """
+Classes of more complex objects
 """
-
 #import subprocess
 #import sys
 import base64
@@ -335,6 +335,7 @@ class Variable:
         if find_repeating_patterns(self.value, min_size=16):
             output.append(log.warn('Repeating patterns of blocksize=16 found, this could be AES-ECB ciphertext.', offset=output_offset, stdout=False))
 
+        # TODO low number of 1's in graycoded -> xor of 2 similar things?
         # TODO more
         # TODO CP 3.24 Write a function to check if any given password token is actually the product of an MT19937 PRNG seeded with the current time. 
         return output
@@ -368,8 +369,8 @@ class Variable:
     def short(self):
         preferred = self.preferred_form()
         for continuation, replaces in [
-            ('...', [('\x0a', '\\n'), ('\x0d', '\\r'), ],),
-            (b'...', [(b'\x0a', b'\\n'), (b'\x0d', b'\\r'), ],),
+                ('...', [('\x0a', '\\n'), ('\x0d', '\\r'), ],),
+                (b'...', [(b'\x0a', b'\\n'), (b'\x0d', b'\\r'), ],),
         ]:
             try:
                 preferred = (preferred 
@@ -407,7 +408,7 @@ class Algorithm:
         self.tmp = {}
 
     def short(self):
-        return(self.name)
+        return self.name
 
     def detail(self):
         print('Detailed overview not implemented.')
@@ -814,7 +815,7 @@ ctr-bitflipping e_oracle d_oracle offset payload
                   for i in range(0, len(padded), blocksize)]
 
         if self.params['mode'] == 'ecb':
-             ciphertext = cipher.encrypt(padded)
+            ciphertext = cipher.encrypt(padded)
         elif self.params['mode'] == 'cbc':
             """
                P1      P2
@@ -869,9 +870,9 @@ ctr-bitflipping e_oracle d_oracle offset payload
                   for i in range(0, len(ciphertext), blocksize)]
         
         if self.params['mode'] == 'ecb':
-             padded = cipher.decrypt(ciphertext)
-             if self.params['ignore_padding']:
-                 plaintext = padded
+            padded = cipher.decrypt(ciphertext)
+            if self.params['ignore_padding']:
+                plaintext = padded
         elif self.params['mode'] == 'cbc':
             """
                C1      C2
@@ -1049,8 +1050,8 @@ Chi test
                                          len(self.params['plaintext'].as_raw()))
 
         self.params['ciphertext'] = Variable(
-                                        xor(self.params['plaintext'].as_raw(), 
-                                            key))
+            xor(self.params['plaintext'].as_raw(), 
+                key))
         return self.params['ciphertext']
 
     def decrypt(self): # XOR decrypt
@@ -1061,8 +1062,8 @@ Chi test
                                          len(self.params['ciphertext'].as_raw()))
 
         self.params['plaintext'] = Variable(
-                                        xor(self.params['ciphertext'].as_raw(), 
-                                            key))
+            xor(self.params['ciphertext'].as_raw(), 
+                key))
         return self.params['plaintext']
 
     def update_key(self, param, new_value):
@@ -1142,6 +1143,12 @@ class RNG(Algorithm):
         else:
             log.err('Invalid mode.')
             return None
+    
+    def randint(self):
+        raise NotImplementedError
+
+    def randfloat(self):
+        raise NotImplementedError
 
 class MersenneTwister(RNG):
     def __init__(self, name):
@@ -1150,10 +1157,16 @@ class MersenneTwister(RNG):
     @staticmethod
     def help():
         return RNG.help() + """
+    
 {bold}Mersenne Twister{unbold}
 
 """.format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+    
+    def randint(self):
+        raise NotImplementedError
 
+    def randfloat(self):
+        raise NotImplementedError
 
 
 class MersenneTwister32(MersenneTwister):
@@ -1337,7 +1350,7 @@ class Hash(Algorithm):
 """.format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
 
     
-    def hash(self, data_modifier):
+    def hash(self, data_modifier, bits_len=0):
         raise NotImplementedError()
 
     @staticmethod
@@ -1354,11 +1367,11 @@ class Hash(Algorithm):
         block_size = hash_algorithm.params['block_size']
 
         if len(key) > block_size:
-            key = self.__class__.run(key)
+            key = hash_algorithm.run(key) # TODO fixed correctly?
         if len(key) < block_size:
             key += b'\x00' * (block_size - len(key))
         return (xor(key, b'\x5c' * block_size)
-                    + hash_algorithm.__class__(data=Variable(xor(key, b'\x36' * block_size)+data)).hash())
+                + hash_algorithm.__class__(data=Variable(xor(key, b'\x36' * block_size)+data)).hash())
     
     def hmac(self):
         return self.hash(Hash.hmac_modifier)
@@ -1521,9 +1534,9 @@ class MD4(Hash):
         #debug('   Hashing padded:', data)
         if not bits_len:
             bits_len = len(data) * 8
-        F = lambda x, y, z: ((x & y) | (~x & z))
-        G = lambda x, y, z: ((x & y) | (x & z) | (y & z))
-        H = lambda x, y, z: x ^ y ^ z
+        ff = lambda x, y, z: ((x & y) | (~x & z))
+        gg = lambda x, y, z: ((x & y) | (x & z) | (y & z))
+        hh = lambda x, y, z: x ^ y ^ z
 
         #print('DEFAULT:', hexadecimal(b''.join(b'%c' % b for x in h for b in pack('<I', x))))
 
@@ -1539,38 +1552,38 @@ class MD4(Hash):
 
             chunk = data[:64]
             #debug('chunk', chunk, len(chunk))
-            X = list(unpack('<16I', chunk))
+            xx = list(unpack('<16I', chunk))
             a, b, c, d = self.tmp['h']
             for i in range(16):
                 k = i
                 if i % 4 == 0:
-                    a = rotate_left((a + F(b, c, d) + X[k]) & 0xffffffff, 3)
+                    a = rotate_left((a + ff(b, c, d) + xx[k]) & 0xffffffff, 3)
                 elif i % 4 == 1:
-                    d = rotate_left((d + F(a, b, c) + X[k]) & 0xffffffff, 7)
+                    d = rotate_left((d + ff(a, b, c) + xx[k]) & 0xffffffff, 7)
                 elif i % 4 == 2:
-                    c = rotate_left((c + F(d, a, b) + X[k]) & 0xffffffff, 11)
+                    c = rotate_left((c + ff(d, a, b) + xx[k]) & 0xffffffff, 11)
                 elif i % 4 == 3:
-                    b = rotate_left((b + F(c, d, a) + X[k]) & 0xffffffff, 19)
+                    b = rotate_left((b + ff(c, d, a) + xx[k]) & 0xffffffff, 19)
             for i in range(16):
                 k = i // 4 + (i % 4) * 4
                 if i % 4 == 0:
-                    a = rotate_left((a + G(b, c, d) + X[k] + 0x5a827999) & 0xffffffff, 3)
+                    a = rotate_left((a + gg(b, c, d) + xx[k] + 0x5a827999) & 0xffffffff, 3)
                 elif i % 4 == 1:
-                    d = rotate_left((d + G(a, b, c) + X[k] + 0x5a827999) & 0xffffffff, 5)
+                    d = rotate_left((d + gg(a, b, c) + xx[k] + 0x5a827999) & 0xffffffff, 5)
                 elif i % 4 == 2:
-                    c = rotate_left((c + G(d, a, b) + X[k] + 0x5a827999) & 0xffffffff, 9)
+                    c = rotate_left((c + gg(d, a, b) + xx[k] + 0x5a827999) & 0xffffffff, 9)
                 elif i % 4 == 3:
-                    b = rotate_left((b + G(c, d, a) + X[k] + 0x5a827999) & 0xffffffff, 13)
+                    b = rotate_left((b + gg(c, d, a) + xx[k] + 0x5a827999) & 0xffffffff, 13)
             for i in range(16):
                 k = order[i]
                 if i % 4 == 0:
-                    a = rotate_left((a + H(b, c, d) + X[k] + 0x6ed9eba1) & 0xffffffff, 3)
+                    a = rotate_left((a + hh(b, c, d) + xx[k] + 0x6ed9eba1) & 0xffffffff, 3)
                 elif i % 4 == 1:
-                    d = rotate_left((d + H(a, b, c) + X[k] + 0x6ed9eba1) & 0xffffffff, 9)
+                    d = rotate_left((d + hh(a, b, c) + xx[k] + 0x6ed9eba1) & 0xffffffff, 9)
                 elif i % 4 == 2:
-                    c = rotate_left((c + H(d, a, b) + X[k] + 0x6ed9eba1) & 0xffffffff, 11)
+                    c = rotate_left((c + hh(d, a, b) + xx[k] + 0x6ed9eba1) & 0xffffffff, 11)
                 elif i % 4 == 3:
-                    b = rotate_left((b + H(c, d, a) + X[k] + 0x6ed9eba1) & 0xffffffff, 15)
+                    b = rotate_left((b + hh(c, d, a) + xx[k] + 0x6ed9eba1) & 0xffffffff, 15)
 
             self.tmp['h'] = [(x + y) & 0xffffffff for x,y in zip(self.tmp['h'], (a, b, c, d))]
             data = data[64:]
@@ -1827,7 +1840,7 @@ class RSA(AsymmetricCipher):
                 self.params['q'] = Variable(prime(self.params['bits'].as_int()))
                 self.params['n'] = Variable(self.params['p'].as_int() * self.params['q'].as_int())
                 self.params['et'] = Variable((self.params['p'].as_int() - 1) 
-                                              * (self.params['q'].as_int() - 1))
+                                             * (self.params['q'].as_int() - 1))
             # try to compute private key
             if self.params['e'] and self.params['et']:
                 d = invmod(self.params['e'].as_int(), self.params['et'].as_int())

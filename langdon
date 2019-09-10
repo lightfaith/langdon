@@ -1,16 +1,20 @@
 #!/usr/bin/python3
-
+"""
+Langdon - cryptographical framework
+"""
 import os
 import pdb
 import pydoc
 import random
 import re
 import sys
-import gnureadline
 import traceback
+
 from collections import OrderedDict
-import dateutil.parser
 from datetime import datetime
+
+import dateutil.parser
+import gnureadline
 
 from source import lib
 from source import log
@@ -18,15 +22,9 @@ from source import attacks
 from source.classes import *
 from source.functions import *
 
-"""
-deal with commands
-"""
+
 variables = OrderedDict()
-output = []
-grep_value = None
-grep_method = None
-output_newline = True
-use_pager = False
+
 
 def update_variable(name, value):
     """
@@ -43,7 +41,7 @@ def update_variable(name, value):
     else:
         variables[name] = (value 
                            if isinstance(value, Variable) 
-                               or isinstance(value, Algorithm)
+                           or isinstance(value, Algorithm)
                            else Variable(value))
 
 ############
@@ -63,647 +61,167 @@ def get_data_from_argv_or_stdin(args):
         result.append(sys.stdin.read().encode())
     return b''.join(result) # TODO or independent results?
 
-try:
-    if sys.argv[1] in ('-h', '--help'):
-        print(
-"""
-Usage: {2}{0}{4}                          {3}# interactive mode{4}
-       {2}{0} --hex <file>{4}             {3}# convert to hex   (ABCD -> 41424344){4}
-       {2}{0} --unhex <file>{4}           {3}# convert from hex (41424344 -> ABCD){4}
-       {4}{1}{4}                          {3}# also from stdin,{4}
-       {4}{1}{4}                          {3}#  like `echo 'Hello world!' | {0} --hex`{4}
-       {4}{1}{4}                          {3}#  or `{0} --hex -`{4}
-       {2}{0} --bin <file>{4}             {3}# convert to bin   (A -> 01000001){4}
-       {2}{0} --unbin <file>{4}           {3}# convert from bin (01000001 -> A){4}
-       {2}{0} --gray <file>{4}            {3}# convert to 8b Gray code (Hello -> lWZZX){4}
-       {2}{0} --ungray <file>{4}          {3}# convert from 8b Gray code (lWZZX -> Hello){4}
-       {2}{0} --entropy <file>{4}         {3}# compute entropy{4}
-       {2}{0} --histogram <file>{4}       {3}# show byte histogram{4}
-       {2}{0} --random <count>{4}         {3}# generate <count> random bytes{4}
-       {2}{0} --debruijn <length>{4}      {3}# generate DeBruijn pattern of length <length>{4}
-       {2}{0} --zeros <count>{4}          {3}# generate bytestring of <count> zeros{4}
-       {2}{0} --timestamp [<datetime>]{4} {3}# get timestamp of current/given datetime{4}
-       {2}{0} --prime [<n>]{4}            {3}# generate n-bit prime (default 1024){4}
-""".format(sys.argv[0], 
-           ' ' * len(sys.argv[0]),
-           log.COLOR_BROWN,
-           log.COLOR_DARK_GREEN,
-           log.COLOR_NONE))
-        sys.exit(0)
-
-    if sys.argv[1] in ('bin', '--bin'):
-        data = get_data_from_argv_or_stdin(sys.argv[2:])
-        prynt(binary(data))
-    elif sys.argv[1] in ('unbin', '--unbin'):
-        data = get_data_from_argv_or_stdin(sys.argv[2:])
-        prynt(unbinary(data))
-    elif sys.argv[1] in ('hex', '--hex'):
-        data = get_data_from_argv_or_stdin(sys.argv[2:])
-        prynt(hexadecimal(data))
-    elif sys.argv[1] in ('unhex', '--unhex'):
-        data = get_data_from_argv_or_stdin(sys.argv[2:])
-        prynt(unhexadecimal(data))
-    elif sys.argv[1] in ('gray', '--gray'):
-        data = get_data_from_argv_or_stdin(sys.argv[2:])
-        prynt(gray(data))
-    elif sys.argv[1] in ('ungray', '--ungray'):
-        data = get_data_from_argv_or_stdin(sys.argv[2:])
-        prynt(ungray(data))
-    elif sys.argv[1] in ('entropy', '--entropy'):
-        data = get_data_from_argv_or_stdin(sys.argv[2:])
-        prynt(entropy(data))
-    elif sys.argv[1] in ('histogram', '--histogram'):
-        data = get_data_from_argv_or_stdin(sys.argv[2:])
-        plt_histogram(data, 
-                      range(256),
-                      'Byte histogram',
-                      (10, 5),
-                      ['#005073', '#107dac', '#189ad3', '#71c7ec'],)
-        plt.show() # TODO or save option?
-
-    elif sys.argv[1] in ('random', '--random'):
-        count = int(sys.argv[2])
-        prynt(b''.join(int_to_bytes(random.randint(0, 255)) for _ in range(count)))
-    elif sys.argv[1] in ('debruijn', '--debruijn'):
-        count = int(sys.argv[2])
-        prynt(debruijn(count))
-    elif sys.argv[1] in ('zeros', '--zeros'):
-        count = int(sys.argv[2])
-        prynt(bytes(count))
-    elif sys.argv[1] in ('timestamp', '--timestamp'):
-        try:
-            date = sys.argv[2]
-            prynt(int(datetime.timestamp(dateutil.parser.parse(date))))
-        except IndexError:
-            prynt(int(datetime.timestamp(datetime.now())))
-        except:
-            log.err('Invalid date.')
-    elif sys.argv[1] in ('prime', '--prime'):
-        try:
-            bits = int(sys.argv[2])
-        except:
-            bits = 1024
-        prynt(prime(bits))
-    # oneliner complete, exit
-    sys.exit(0)
-except SystemExit as e:
-    sys.exit(e)
-except IndexError:
-    # run interactively
-    pass
-except:
-    traceback.print_exc()
-    sys.exit(1)
-
-################
-# run main loop
-################
-while True:
-    # print something from previous command if needed
-    if output:
-        final_output = []
-        end = '\n' if output_newline or grep_method else ''
-        #pdb.set_trace()
-        for line in output:
-            if isinstance(line, Variable):
-                line = str(line)
-            if grep_method == 'normal':
-                if grep_value in line:
-                    final_output.append(line + end)
-            elif grep_method == 'regex':
-                if re.search(grep_value, line):
-                    final_output.append(line + end)
-            else:
-                final_output.append(line + end)
-        output = []
-        if use_pager:
-            pydoc.pipepager(''.join(final_output), cmd='less -r')
-        else:
-            prynt(''.join(final_output))
-    grep_value = None
-    grep_method = None
-    output_newline = True
-    use_pager = False
-
-    # get command
+def main():
     try:
-        cmd = input(log.COLOR_PURPLE + '*** ' + log.COLOR_NONE).strip()
-    except EOFError: # Ctrl+D -> quit
-        log.newline()
-        lib.exit_program(None, None)
-    
-    if len(cmd) == 0 or cmd.startswith('#'):
-        continue
+        if sys.argv[1] in ('-h', '--help'):
+            print(
+                """
+    Usage: {2}{0}{4}                          {3}# interactive mode{4}
+        {2}{0} --hex <file>{4}             {3}# convert to hex   (ABCD -> 41424344){4}
+        {2}{0} --unhex <file>{4}           {3}# convert from hex (41424344 -> ABCD){4}
+        {4}{1}{4}                          {3}# also from stdin,{4}
+        {4}{1}{4}                          {3}#  like `echo 'Hello world!' | {0} --hex`{4}
+        {4}{1}{4}                          {3}#  or `{0} --hex -`{4}
+        {2}{0} --bin <file>{4}             {3}# convert to bin   (A -> 01000001){4}
+        {2}{0} --unbin <file>{4}           {3}# convert from bin (01000001 -> A){4}
+        {2}{0} --gray <file>{4}            {3}# convert to 8b Gray code (Hello -> lWZZX){4}
+        {2}{0} --ungray <file>{4}          {3}# convert from 8b Gray code (lWZZX -> Hello){4}
+        {2}{0} --entropy <file>{4}         {3}# compute entropy{4}
+        {2}{0} --histogram <file>{4}       {3}# show byte histogram{4}
+        {2}{0} --random <count>{4}         {3}# generate <count> random bytes{4}
+        {2}{0} --debruijn <length>{4}      {3}# generate DeBruijn pattern of length <length>{4}
+        {2}{0} --zeros <count>{4}          {3}# generate bytestring of <count> zeros{4}
+        {2}{0} --timestamp [<datetime>]{4} {3}# get timestamp of current/given datetime{4}
+        {2}{0} --prime [<n>]{4}            {3}# generate n-bit prime (default 1024){4}
+    """.format(sys.argv[0], 
+               ' ' * len(sys.argv[0]),
+               log.COLOR_BROWN,
+               log.COLOR_DARK_GREEN,
+               log.COLOR_NONE))
+            sys.exit(0)
 
-    # is there ~~ or ~ ? that's grep, remember it
-    quote_flags = {'\'': 0, '"': 0}
-    for i, c in enumerate(cmd):
-        if c in quote_flags.keys():
-            quote_flags[c] ^= 0x1
-            continue
-        if c == '~' and not any(quote_flags.values()):
-            #pdb.set_trace()
-            try:
-                if cmd[i+1] == '~':
-                    grep_value = cmd[i+2:].strip()
-                    grep_method = 'regex'
-                else:
-                    raise ValueError
-            except:
-                grep_value = cmd[i+1:].strip()
-                grep_method = 'normal'
-            cmd = cmd[:i].strip()
-            break
-            
-                
-    # prepare dict of all variables (including algorithm params)
-    all_variables = {}
-    for k,v in variables.items():
-        if isinstance(v, Variable):
-            all_variables[k] = v
-        elif isinstance(v, Algorithm):
-            for k2, v2 in v.params.items():
-                all_variables['%s.%s' % (k, k2)] = v2
-
-
-    # is this an assign?
-    variable_name = None
-    variable_match = re.match('^([A-Za-z0-9_\-\.]+) *= *(.*)$', cmd)
-    if variable_match:
-        variable_name = variable_match.group(1).strip()
-        cmd = variable_match.group(2).strip()
-
-    # run following commands, return result into variable if defined
-    #     else store in output and print on the next iteration
-    # if no command matches, use the content as variable value (constant)
-
-    
-    # is this just a variable name? add to print queue
-    if cmd in all_variables.keys():
-        #pdb.set_trace()
-        v = all_variables[cmd]
-        if isinstance(v, Algorithm):
-            # algorithm, print detail of it
-            if variable_name:
-                update_variable(variable_name, v)
-            else:
-                v.detail()
-        else:
-            # Variable
-            if variable_name:
-                update_variable(variable_name, v)
-            else:
-                length = len(v.as_raw())
-                if length < 256:
-                    output.append('Bin:    ' + v.as_binary())
-                if length < 4096:
-                    output.append('Int:    ' + str(v.as_int()))
-                if length < 4096:
-                    output.append('Hex:    ' + v.as_hex())
-                output.append('Raw:    ' + str(v.as_raw()))
-                output.append('Base64: ' + v.as_base64())
-        continue
-    elif cmd in variables.keys(): # only Algorithms are left
-        v = variables[cmd]
-        if variable_name:
-            update_variable(variable_name, v)
-        else:
-            v.detail()
-        continue
-        
-
-    # quit?
-    if lib.quit_string(cmd):
-        log.warn('Do you really want to quit? ', new_line=False)
-        if lib.positive(input()):
-            lib.exit_program(None, None)
-        continue
-
-    # test
-    if cmd == 'test':
-        #venn(events, 'category == auth', 'severity == critical')
-        #for x in range(4):
-        #    for y in range(4):
-        #        print(x, y, debruijn(190, params=(x, y))[-10:])
-        #print(Hash.__subclasses__())
-        Hash.get_algorithm_from_digest_info(b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x11')
-        pass
-   
-    if cmd.startswith('python '):
-        try:
-            output.append(eval(cmd[7:]))
-        except Exception as e:
-            log.err(e)
-        continue
-
-    if cmd == 'pdb':
-        pdb.set_trace()
-        continue
-
-    if cmd.startswith('help'):
-        arg = cmd[4:].strip()
-        if not arg:
-            # general help
-            output_newline = False
-            use_pager = True
-            output.extend(re.split('(\n)', """{color}
-Welcome! This is Langdon, experimental cryptography framework. It is designed
-to aid with common operations while dealing with crypto tasks.
-
-This is Langdon running interactively, you can also use the most common 
-functions from the command line (run {command}`{path} --help`{color} to list options).
-
-{bold}Basic usage{unbold}
-
-First of all, you can define variables as following:
-    {command}a = Hello{color}
-    {command}a = 'Hello'{color}
-    {command}a = 310939249775{color}
-    {command}a = 0x48656c6c6f{color}
-    {command}a = base64:SGVsbG8={color}
-
-Those commands are completely equivalent. You can also get file content directly:
-    {command}a = file:/etc/passwd{color}
-
-If you want to use each line from a file as distinct variable, you can use
-{command}multiline <file> <variable_prefix>{color} command.
-
-List variables with {command}vars{color}. To list specific variable, just write
-its name, in this case {command}a{color}.
-
-Use {command}<command>~<value>{color} for grep, or {command}<command>~~<regex>{color} for regular expression grep. For example:
-    {command}a~Hex{color}      # show only HEX form
-    {command}a~~B[a-z]+{color} # show Bin and Base64 form
-
-Export variables with {command}export a /tmp/a{color} command. The raw (byte) form
-is used by default, but you can force another form (raw, int, hex, bin, escaped, base64):
-    {command}export a /tmp/a base64{color}
-
-Export all variables at once with {command}export all{color} command.
-
-{bold}Sequences{unbold}
-
-You can use some of the following functions to generate sequence of data:
-    {command}random <start> <end> [<count>]{color} - random data from interval
-    {command}debruijn <length>{color} - DeBruijn pattern of given length
-    {command}zeros <count>{color} - sequence of NULL bytes
-    {command}prime [<bits>]{color} - generate prime number (default 1024b)
-
-{bold}Functions{unbold}
-
-You can use some of these common functions:
-    {command}len/length a{color} - get length of data
-    {command}concat a b{color} - concatenate multiple variables
-    {command}substring <variable> <start> <length>{color} - get a substring
-    {command}hexdump a{color} - show hexdump of data
-    {command}gray a{color} - convert data into 8b Gray code
-    {command}ungray a{color} - convert data from 8b Gray code
-    {command}timestamp [<datetime>]{color} - get timestamp of current/specified datetime
-    {command}sleep <seconds>{color} - sleep for a while
-    {command}modexp m e n{color} - compute m^e mod n
-    {command}gcd a b{color} - compute greatest common divisor
-    {command}lcm a b{color} - compute least common multiple
-    {command}totient a b{color} - compute totient
-    {command}invmod/modinv a b{color} - compute modular inverse
-
-Langdon supports many crypto-related functions. These are currently supported:
-    {command}not a{color} - binwise not
-    {command}xor a b{color} - xor 2 variables
-    {command}or a b{color} - bitwise or 2 variables
-    {command}and a b{color} - bitwise and 2 variables
-    {command}brute-single-xor <variable>{color} - create single byte XORs of given variable
-    {command}break-xor <variable> <language> [<keysize>]{color} - use frequency analysis to 
-    break xor (use hamming to get keysize if necessary)
-    {command}timing-leak <oracle> <threshold> [slowest [alphabet]]{color} - send bytes
-    (or characters from the alphabet) one by one into oracle and remember the fastest (or slowest)
-    one. If the threshold is crossed, use it and continue with the next byte.
-    {command}{color}
-
-There is a number of real cryptographical attacks implemented. Use {command}help <algorithm>{color}
-to see details for them, but here is a list for quick reference:
-    {command}ecb-chosen-plaintext <oracle>{color} - AES ECB chosen-plaintext attack
-    {command}ecb-injection <encryption_oracle> <decryption_oracle> <expected> <desired>{color} - ECB cut-and-paste attack
-    {command}cbc-bitflipping <encryption_oracle> <decryption_oracle> <target_block> <desired>{color} - CBC bitflipping attack
-    {command}cbc-padding <oracle> <data> [<blocksize> [<iv>]]{color} - CBC padding oracle attack
-    {command}cbc-chosen-ciphertext <oracle> <ciphertext>{color} - CBC chosen-ciphertext attack
-    {command}ctr-fixed-nonce <c1> <c2> ... <language>{color} - CTR fixed-nonce attack 
-    {command}ctr-bitflipping <encryption_oracle> <decryption_oracle> <offset> <payload>{color} - CTR bitflipping attack
-    {command}brute-timestamp-seed <RNG_type> <random_value> [<offset> [<reference_timestamp>]]{color} - bruteforce seed for known random value
-    {command}clone-rng <RNG_type> <states>{color} - clone RNG from output
-    {command}hash-extension <hash_type> <plaintext> <original_hash> <append_data> <oracle>{color} - hash length extension attack
-    {command}dh-shared-key (<alice_DH> <bob_DH>|<alice_DH> <bob_public_key>|<bob_public_key> <alice_private_key><modulus>) {color} - compute Diffie-Hellman shared key
-    {command}srp-register <server> <client>{color} - SRP registration
-    {command}srp-session-keys <client> <server>{color} - SRP session key computation
-    {command}srp-auth <client> <server>{color} - SRP authentication
-    {command}rsa-e3-broadcast <public_key1> <ciphertext1> <public_key2> <ciphertext2> <public_key3> <ciphertext3>{color} - RSA e=3 broadcast attack
-    {command}rsa-unpadded-recovery <RSA_public_key> <oracle>{color} - RSA unpadded message recovery oracle attack
-    {command}rsa-e3-forge-signature <RSA> <hash_type>{color} - Bleichenbacher's e=3 RSA signature attack
-
-{bold}Oracles{unbold}
-
-In many cryptographical attacks, you can split your program into two parts. The first
-one is universal for every usage (e.g. bruteforce in CBC padding oracle attack) - that
-is implemented in Langdon. The second part is unique for each case (testing for padding
-error in CBC padding oracle attack). For this reason you can specify an oracle - a program
-receiving input and responding somehow - and plug it in the attack implementation.
-
-Because of binary nature of payload, the input is base64'd before the oracle is executed.
-Oracle must take care of decoding. For the same reason, output (if any) must be
-Base64-encoded.
-
-To use oracle, simply specify the path, e.g. {command}o = cbc/oracle.sh{color}. To run
-once, use {command}oracle o <payload_variable>{color} command.
-
-{bold}Algorithms{unbold}
-
-In some cases, some structure with dependent variables and support of convenient 
-functions is needed. This is the case of common cipher algorithms.
-
-Supported algorithms:
-  Symmetric algorithms:
-    XOR
-    AES
-  Random number generators:
-    Mersenne32 - 32b Mersenne Twister
-    Mersenne64 - 64b Mersenne Twister
-  Hash algorithms:
-    SHA1
-    MD4
-  Asymmetric algorithms:
-    DH
-    SRPServer
-    SRPClient 
-    RSA
-
-You can get detailed help for algorithms with {command}help <algorithm>{color}.
-
-Create algorithm like this: {command}x = XOR plaintext=a key=b{color}. Now you can
-access individual arguments, for example {command}x.plaintext{color}.
-
-Edit individual algorithm arguments with {command}edit x.plaintext{color} command.
-
-Use {command}encrypt <algorithm>{color} and {command}decrypt <algorithm>{color} to
-run encryption/decryption on algorithms such as AES.
-
-Use {command}sign <algorithm> <hash algorithm>{color} and {command}verify <algorithm> <signature>{color}
-to deal with signing on algorithms such as RSA.
-
-Use {command}hash <algorithm>{color}, {command}mac <algorithm>{color} and {command}hmac <algorithm>{color}
-to get cryptographical hash for algorithms such as SHA1.
-
-Use {command}rng <RNG> <int|float|bytes> [<count>]{color} to generate random number/sequence from
-given RNG algorithm.
-
-{bold}Analysis{unbold}
-
-Load a wordlist as normal variable: {command}english = file:/wordlists/english.txt{color}.
-Then you can use {command}wordlist english{color} to test all variables against it.
-By default, only variables with 3+ words of 3+ length are considered.
-
-Get entropy with {command}entropy a{color} command (in interval <0; 1>). This can 
-help you decide how (badly) the data are compressed or encrypted. 
-Typical plaintexts have around 0.5 entropy.
-
-Hamming distance (number of different bits) of 2 given variables is computed 
-with {command}hamming a b{color}.
-
-You can subject your variables and algorithms to analysis to pinpoint potential
-problems. Use {command}analyze a{color} to analyze specific variable/algorithm or 
-{command}analyze{color} to analyze everything.
-
-""".format(path=sys.argv[0],
-           color=log.COLOR_DARK_GREEN,
-           command=log.COLOR_BROWN,
-           bold=log.COLOR_BOLD,
-           unbold=log.COLOR_UNBOLD,
-           )))
-        else:
-            classes = {
-                'symmetriccipher': SymmetricCipher,
-                    'xor': XOR,
-                    'aes': AES,
-                'rng': RNG,
-                    'mersenne32': MersenneTwister32,
-                    'mersenne64': MersenneTwister64,
-                'hash': Hash,
-                    'sha1': SHA1,
-                    'md4': MD4,
-                'asymmetriccipher': AsymmetricCipher,
-                    'dh': DH,
-                    'srp': SRP,
-                        'srpserver': SRPServer,
-                        'srpclient': SRPClient,
-                    'rsa': RSA,
-            }
-            try:
-                output.extend(['%s\n' % line for line in classes[arg.lower()].help()])
-                output_newline = False
-                use_pager = True
-            except:
-                traceback.print_exc()
-                log.err('Non-existent algorithm.')
-        continue
-    ##########################
-    # framework control
-    ##########################
-    # list variables
-    if cmd in ('var', 'vars', 'variables'):
-        k_len = max([0] + [len(k) for k in variables.keys()])
-        for k, v in variables.items():
-            output.append('%*s  %s' % (k_len, k, v.short()))
-        continue
-            
-    if cmd.startswith('export '):
-        parts = cmd[7:].split()
-        format_f = None
-        if len(parts) == 2:
-            variable = parts[0]
-            filename = parts[1]
-            format_f = lambda x: x.as_raw()
-        elif len(parts) == 3:
-            variable = parts[0]
-            filename = parts[1]
-            formats = {
-                'raw': lambda x: x.as_raw(),
-                'int': lambda x: x.as_int(),
-                'hex': lambda x: x.as_hex(),
-                'bin': lambda x: x.as_binary(),
-                'escaped': lambda x: x.as_escaped(),
-                'base64': lambda x: x.as_base64(),
-            }
-            format_f = formats.get(parts[2])
-        else:
-            log.err('Invalid arguments.')
-
-        if format_f:
-            if variable  == 'all':
-                for k,v in all_variables.items():
-                    with open('%s_%s' % (filename, k), 'wb') as f:
-                        to_output = format_f(v)
-                        try:
-                            f.write(to_output)
-                        except:
-                            f.write(to_output.encode())
-            elif variable in all_variables.keys():
-                with open(filename, 'wb') as f:
-                    to_output = format_f(all_variables[variable])
-                    try:
-                        f.write(to_output)
-                    except:
-                        f.write(to_output.encode())
-            else:
-                log.err('No such variable.')
-            
-    elif cmd.startswith('edit '):
-        # algorithm param editation
-        # TODO even for normal variables?
-        try:
-            variable, param = tuple(cmd[5:].split('.'))
-            v = variables[variable]
-            old_data = v.params[param].as_raw()
-            new_data = edit_in_file(old_data)
-            if isinstance(v, SymmetricCipher):
-                if param in ('plaintext', 'ciphertext'):
-                    try:
-                        v.update_key(param, new_data)
-                        log.info('Algorithm parameters updated.')
-                    except AttributeError: # function undefined
-                        pass
-            else:
-                log.warn('Algorithm may be inconsistent now...')
-        except:
-            traceback.print_exc()
-            log.err('You must specify variable of algorithm and the parameter.')
-
-    elif cmd.startswith('multiline '):
-        # variables are in file 1 per line, load it
-        parts = cmd.split()
-        if len(parts) == 3:
-            filename = parts[1]
-            prefix = parts[2]
-            form = None
-        elif len(parts) == 4:
-            filename = parts[1]
-            prefix = parts[2]
-            form = parts[3]
-        try:
-            with open(filename, 'r') as f:
-                lines = f.read().splitlines()
-                for i, line in enumerate(lines):
-                    if not line.strip():
-                        continue
-                    if form and form in ('file', 'base64'):
-                        line = '%s:%s' % (form, line)
-                    elif form:
-                        raise ValueError
-                    update_variable('%s_%d' % (prefix, i), Variable(line, constant=True))
-
-        except:
-            traceback.print_exc()
-    #################################
-    # basic methods
-    #################################
-    # check wordlist compatibility for all variables (except the wordlist)
-    elif cmd.startswith('wordlist '):
-        try:
-            wordlist_name = cmd[9:].strip()
-            w = variables[wordlist_name].as_raw().split()
-            variable_max_length = max([0] + [len(k) for k in variables.keys()])
-
-            thread_count = 1 if len(variables) < 8 else 8
-
-            def wordlist_worker(indices, samples, data_f = lambda x: x, thread_ref=None, **kwargs):
-                if not thread_ref:
-                    log.err('Worker has no thread reference!')
-                    return []
-                for i, x in zip(indices, samples):
-                    if thread_ref.terminate:
-                        break
-                    success = dict_success(data_f(x), **kwargs)
-                    if success >= 0.8:
-                        log.ok('  %s:  %0.3f  %s' % (x[0], success, x[1].short()))
-                    elif success > 0:
-                        log.info('  %s:  %0.3f' % (x[0], success))
-                return [] # not needed
-
-            log.info('  %*s  Score' % (variable_max_length, 'Variable'))
-            p = Parallelizer(thread_count, 
-                             [(k, v) for k,v in variables.items() if k != wordlist_name], 
-                             wordlist_worker,
-                             {'data_f': lambda x: x[1].as_raw(),
-                              'wordlist': w,
-                              'min_word_match': 3,
-                              'min_word_len': 3,
-                             }
-                            )
-            p.start()
-            p.waitfor()
-        except:
-            traceback.print_exc()
-            log.err('No such wordlist.')
-    
-    elif cmd.startswith('analyze'):
-        parts = cmd.split()
-
-        if len(parts) == 1:
-            keys = variables.keys() # algorithms will run analysis on its params...
-            variable_source = variables
-        else:
-            keys = [parts[1]] if variables.get(parts[1]) else [] # standard Variable or Algorithms
-            if keys: 
-                variable_source = variables
-            else:
-                keys = [parts[1]] if all_variables.get(parts[1]) else [] # so Algorithm param?
-                variable_source = all_variables
-
-        for k in keys:
-            output.append(log.info('Analysis for %s%s%s:' % (log.COLOR_PURPLE, k, log.COLOR_NONE), stdout=False))
-            output += variable_source[k].analyze(output_offset=2)
-
-    # compute entropy for given variable / all variables
-    elif cmd.startswith('entropy'):
-        parts = cmd.split()
-
-        if len(parts) > 1:
-            interesting_keys = parts[1:]
-        else:
-            interesting_keys = all_variables.keys()
-
-        variable_max_length = max([0] + [len(k) for k in interesting_keys])
-        for k,v in all_variables.items():
-            # skip those we are not interested in
-            if k not in interesting_keys:
-                continue
-            # skip non-Variable data (e.g. AES mode)
-            if not isinstance(v, Variable):
-                continue
-            ent = entropy(v.as_raw())
-            comment = ''
-            if ent > 0.998:
-                comment = ' (probably encrypted)'
-            elif ent > 0.95:
-                comment = ' (probably compressed)'
-            log.info('  %*s  %0.5f%s' % (variable_max_length, k, ent, comment))
-    
-    elif cmd.startswith('histogram'):
-        try:
-            data = all_variables[cmd.split()[1]]
-            plt_histogram(data.as_raw(), 
+        if sys.argv[1] in ('bin', '--bin'):
+            data = get_data_from_argv_or_stdin(sys.argv[2:])
+            prynt(binary(data))
+        elif sys.argv[1] in ('unbin', '--unbin'):
+            data = get_data_from_argv_or_stdin(sys.argv[2:])
+            prynt(unbinary(data))
+        elif sys.argv[1] in ('hex', '--hex'):
+            data = get_data_from_argv_or_stdin(sys.argv[2:])
+            prynt(hexadecimal(data))
+        elif sys.argv[1] in ('unhex', '--unhex'):
+            data = get_data_from_argv_or_stdin(sys.argv[2:])
+            prynt(unhexadecimal(data))
+        elif sys.argv[1] in ('gray', '--gray'):
+            data = get_data_from_argv_or_stdin(sys.argv[2:])
+            prynt(gray(data))
+        elif sys.argv[1] in ('ungray', '--ungray'):
+            data = get_data_from_argv_or_stdin(sys.argv[2:])
+            prynt(ungray(data))
+        elif sys.argv[1] in ('entropy', '--entropy'):
+            data = get_data_from_argv_or_stdin(sys.argv[2:])
+            prynt(entropy(data))
+        elif sys.argv[1] in ('histogram', '--histogram'):
+            data = get_data_from_argv_or_stdin(sys.argv[2:])
+            plt_histogram(data, 
                           range(256),
                           'Byte histogram',
                           (10, 5),
                           ['#005073', '#107dac', '#189ad3', '#71c7ec'],)
-            plt.show() # TODO or save option?
-        except:
-            traceback.print_exc()
-            log.err('You must provide data variable.')
+            plt.show()
 
-    # compute hamming distance of 2 given variables / 1-N / M-N
-    elif cmd.startswith('hamming'):
-        parts = cmd.split()
-        pairs = []
+        elif sys.argv[1] in ('random', '--random'):
+            count = int(sys.argv[2])
+            prynt(b''.join(int_to_bytes(random.randint(0, 255)) for _ in range(count)))
+        elif sys.argv[1] in ('debruijn', '--debruijn'):
+            count = int(sys.argv[2])
+            prynt(debruijn(count))
+        elif sys.argv[1] in ('zeros', '--zeros'):
+            count = int(sys.argv[2])
+            prynt(bytes(count))
+        elif sys.argv[1] in ('timestamp', '--timestamp'):
+            try:
+                date = sys.argv[2]
+                prynt(int(datetime.timestamp(dateutil.parser.parse(date))))
+            except IndexError:
+                prynt(int(datetime.timestamp(datetime.now())))
+            except:
+                log.err('Invalid date.')
+        elif sys.argv[1] in ('prime', '--prime'):
+            try:
+                bits = int(sys.argv[2])
+            except:
+                bits = 1024
+            prynt(prime(bits))
+        # oneliner complete, exit
+        sys.exit(0)
+    except SystemExit as e:
+        sys.exit(e)
+    except IndexError:
+        # run interactively
+        pass
+    except:
+        traceback.print_exc()
+        sys.exit(1)
+
+    ################
+    # run main loop
+    ################
+    grep_value = None
+    grep_method = None
+    output_newline = True
+    use_pager = False
+    output = []
+
+    while True:
+        # print something from previous command if needed
+        if output:
+            final_output = []
+            end = '\n' if output_newline or grep_method else ''
+            #pdb.set_trace()
+            for line in output:
+                if isinstance(line, Variable):
+                    line = str(line)
+                if grep_method == 'normal':
+                    if grep_value in line:
+                        final_output.append(line + end)
+                elif grep_method == 'regex':
+                    if re.search(grep_value, line):
+                        final_output.append(line + end)
+                else:
+                    final_output.append(line + end)
+            output = []
+            if use_pager:
+                pydoc.pipepager(''.join(final_output), cmd='less -r')
+            else:
+                prynt(''.join(final_output))
+        grep_value = None
+        grep_method = None
+        output_newline = True
+        use_pager = False
+
+        # get command
+        try:
+            cmd = input(log.COLOR_PURPLE + '*** ' + log.COLOR_NONE).strip()
+        except EOFError: # Ctrl+D -> quit
+            log.newline()
+            lib.exit_program(None, None)
         
-        # prepare data (variables and algorithm params)
+        if not cmd or cmd.startswith('#'):
+            continue
+
+        # is there ~~ or ~ ? that's grep, remember it
+        quote_flags = {'\'': 0, '"': 0}
+        for i, c in enumerate(cmd):
+            if c in quote_flags.keys():
+                quote_flags[c] ^= 0x1
+                continue
+            if c == '~' and not any(quote_flags.values()):
+                #pdb.set_trace()
+                try:
+                    if cmd[i+1] == '~':
+                        grep_value = cmd[i+2:].strip()
+                        grep_method = 'regex'
+                    else:
+                        raise ValueError
+                except:
+                    grep_value = cmd[i+1:].strip()
+                    grep_method = 'normal'
+                cmd = cmd[:i].strip()
+                break
+                
+                    
+        # prepare dict of all variables (including algorithm params)
         all_variables = {}
         for k,v in variables.items():
             if isinstance(v, Variable):
@@ -711,946 +229,1443 @@ problems. Use {command}analyze a{color} to analyze specific variable/algorithm o
             elif isinstance(v, Algorithm):
                 for k2, v2 in v.params.items():
                     all_variables['%s.%s' % (k, k2)] = v2
+
+
+        # is this an assign?
+        variable_name = None
+        variable_match = re.match(r'^([A-Za-z0-9_\-\.]+) *= *(.*)$', cmd)
+        if variable_match:
+            variable_name = variable_match.group(1).strip()
+            cmd = variable_match.group(2).strip()
+
+        # run following commands, return result into variable if defined
+        #     else store in output and print on the next iteration
+        # if no command matches, use the content as variable value (constant)
+
         
-        # detect variant, prepare pairs
-        if len(parts) == 3:
-            pairs.append((parts[1], parts[2]))
-        elif len(parts) == 2 and parts[1] in all_variables.keys():
-            for k in all_variables.keys():
-                if k == parts[1]:
-                    continue
-                pairs.append((parts[1], k))
-        elif len(parts) == 1:
-            for k1 in all_variables.keys():
-                for k2 in all_variables.keys():
-                    if k1 == k2:
-                        continue
-                    if (k2, k1) not in pairs:
-                        pairs.append((k1, k2))
-        # print
-        if len(pairs) == 1:
-            try:
-                log.info(hamming(all_variables[pairs[0][0]].as_raw(), 
-                                 all_variables[pairs[0][1]].as_raw()))
-            except: 
-                #traceback.print_exc()
-                pass # probably not Variable
-                #log.err('No such variable.')
-        elif pairs:
-            pair_names = ['%s-%s' % (a, b) for a, b in pairs]
-            max_pair_name_length = max([0] + [len(x) for x in pair_names])
-            for (a, b), name in zip(pairs, pair_names):
-                try:
-                    distance = hamming(all_variables[a].as_raw(), all_variables[b].as_raw())
-                    log.info('%*s:  %d' % (max_pair_name_length, name, distance))
-                except:
-                    #traceback.print_exc()
-                    pass # probably not Variable
-
-    elif cmd.startswith('gray'):
-        v = cmd[5:].strip()
-        try:
-            result = gray(all_variables[v].as_raw())
+        # is this just a variable name? add to print queue
+        if cmd in all_variables.keys():
+            #pdb.set_trace()
+            v = all_variables[cmd]
+            if isinstance(v, Algorithm):
+                # algorithm, print detail of it
+                if variable_name:
+                    update_variable(variable_name, v)
+                else:
+                    v.detail()
+            else:
+                # Variable
+                if variable_name:
+                    update_variable(variable_name, v)
+                else:
+                    length = len(v.as_raw())
+                    if length < 256:
+                        output.append('Bin:    ' + v.as_binary())
+                    if length < 4096:
+                        output.append('Int:    ' + str(v.as_int()))
+                    if length < 4096:
+                        output.append('Hex:    ' + v.as_hex())
+                    output.append('Raw:    ' + str(v.as_raw()))
+                    output.append('Base64: ' + v.as_base64())
+            continue
+        elif cmd in variables.keys(): # only Algorithms are left
+            v = variables[cmd]
             if variable_name:
-                update_variable(variable_name, result)
+                update_variable(variable_name, v)
             else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify a variable.')
-
-    elif cmd.startswith('ungray'):
-        v = cmd[7:].strip()
-        try:
-            result = ungray(all_variables[v].as_raw())
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify a variable.')
-
-    elif cmd.startswith('encrypt '):
-        v = cmd[8:].strip()
-        try:
-            result = variables[v].encrypt()
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify an algorithm variable.')
-
-    elif cmd.startswith('decrypt '):
-        v = cmd[8:].strip()
-        try:
-            result = variables[v].decrypt()
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify an algorithm variable.')
-
-    elif cmd.startswith('sign '):
-        parts = cmd.split()
-        hashes = {
-            'sha1': SHA1, 
-            'md4': MD4
-        }
-        try:
-            privkey = variables[parts[1]]
-            hash_algorithm = hashes[parts[2].lower()]
-            result = privkey.sign(hash_algorithm)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must provide asymmetrical algorithm object (with private key and plaintext included) and hash function name.')
-
-    elif cmd.startswith('verify '):
-        parts = cmd.split()
-        try:
-            privkey = variables[parts[1]]
-            signature = all_variables[parts[2]]
-            if privkey.verify(signature):
-                log.ok('Signature is valid.')
-            else:
-                log.warn('Signature is invalid.')
-        except:
-            traceback.print_exc()
-            log.err('You must provide asymmetrical algorithm object (with public key and plaintext included) and signature to verify.')
-
-    elif cmd.startswith('hexdump '):
-        v = cmd[8:].strip()
-        try:
-            for line in hexdump(all_variables[v].as_raw()):
-                output.append(line)
-        except:
-            log.err('You must specify a variable.')
-
-    elif cmd.startswith('random '):
-        parts = cmd.split()
-        args = {}
-        try:
-            # parse arguments
-            for arg, index in [('start', 1), ('end', 2), ('count', 3)]:
-                try:
-                    args[arg] = parse_int(parts[index], all_variables)
-                except:
-                    pass
-            # generate number/bytes
-            if args.get('count'):
-                result = b''.join(int_to_bytes(random.randint(args['start'], args['end'])) or b'\x00' 
-                                  for i in range(args['count']))
-            else:
-                result = random.randint(args['start'], args['end'])
-            # save / prepare for output
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must provide start, end and optional length.')
-
-    elif cmd.startswith(('len ', 'length ')):
-        v = cmd.partition(' ')[2]
-        try:
-            result = len(all_variables[v].as_raw())
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
+                v.detail()
+            continue
             
-        except:
-            traceback.print_exc()
-            log.err('No such variable.')
+
+        # quit?
+        if lib.quit_string(cmd):
+            log.warn('Do you really want to quit? ', new_line=False)
+            if lib.positive(input()):
+                lib.exit_program(None, None)
+            continue
+
+        # test
+        if cmd == 'test':
+            #venn(events, 'category == auth', 'severity == critical')
+            #for x in range(4):
+            #    for y in range(4):
+            #        print(x, y, debruijn(190, params=(x, y))[-10:])
+            #print(Hash.__subclasses__())
+            Hash.get_algorithm_from_digest_info(b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x11')
+            print('Test complete.')
     
-    elif cmd.startswith('concat '):
-        parts = cmd.split()[1:]
-        result = b''
-        for part in parts:
+        """
+        if cmd.startswith('python '):
             try:
-                result += all_variables[part].as_raw()
-            except:
-                log.err('Non-existent variable %s.' % part)
-        if result:
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
+                output.append(eval(cmd[7:]))
+            except Exception as e:
+                log.err(e)
+            continue
+        """
+        if cmd == 'pdb':
+            pdb.set_trace()
+            continue
 
-    elif cmd.startswith('oracle '):
-        try:
-            _, oracle_path, payload = cmd.split()
-            result = Oracle.once(all_variables[payload], 
-                                 all_variables[oracle_path])
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify oracle and payload.')
+        if cmd.startswith('help'):
+            arg = cmd[4:].strip()
+            if not arg:
+                # general help
+                output_newline = False
+                use_pager = True
+                output.extend(re.split('(\n)', """{color}
+    Welcome! This is Langdon, experimental cryptography framework. It is designed
+    to aid with common operations while dealing with crypto tasks.
 
-    elif cmd.startswith('debruijn '):
-        try:
-            length = int(cmd[9:].strip())
-            result = debruijn(length)
-            if variable_name:
-                update_variable(variable_name, Variable(result, constant=True))
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('Length must be specified.')
+    This is Langdon running interactively, you can also use the most common 
+    functions from the command line (run {command}`{path} --help`{color} to list options).
 
-    elif cmd.startswith('zeros '):
-        try:
-            count = parse_int(cmd[5:].strip(), all_variables)
-            result = bytes([0] * count)
-            if variable_name:
-                update_variable(variable_name, result)
+    {bold}Basic usage{unbold}
+
+    First of all, you can define variables as following:
+        {command}a = Hello{color}
+        {command}a = 'Hello'{color}
+        {command}a = 310939249775{color}
+        {command}a = 0x48656c6c6f{color}
+        {command}a = base64:SGVsbG8={color}
+
+    Those commands are completely equivalent. You can also get file content directly:
+        {command}a = file:/etc/passwd{color}
+
+    If you want to use each line from a file as distinct variable, you can use
+    {command}multiline <file> <variable_prefix>{color} command.
+
+    List variables with {command}vars{color}. To list specific variable, just write
+    its name, in this case {command}a{color}.
+
+    Use {command}<command>~<value>{color} for grep, or {command}<command>~~<regex>{color} for regular expression grep. For example:
+        {command}a~Hex{color}      # show only HEX form
+        {command}a~~B[a-z]+{color} # show Bin and Base64 form
+
+    Export variables with {command}export a /tmp/a{color} command. The raw (byte) form
+    is used by default, but you can force another form (raw, int, hex, bin, escaped, base64):
+        {command}export a /tmp/a base64{color}
+
+    Export all variables at once with {command}export all{color} command.
+
+    {bold}Sequences{unbold}
+
+    You can use some of the following functions to generate sequence of data:
+        {command}random <start> <end> [<count>]{color} - random data from interval
+        {command}debruijn <length>{color} - DeBruijn pattern of given length
+        {command}zeros <count>{color} - sequence of NULL bytes
+        {command}prime [<bits>]{color} - generate prime number (default 1024b)
+
+    {bold}Functions{unbold}
+
+    You can use some of these common functions:
+        {command}len/length a{color} - get length of data
+        {command}concat a b{color} - concatenate multiple variables
+        {command}substring <variable> <start> <length>{color} - get a substring
+        {command}hexdump a{color} - show hexdump of data
+        {command}gray a{color} - convert data into 8b Gray code
+        {command}ungray a{color} - convert data from 8b Gray code
+        {command}timestamp [<datetime>]{color} - get timestamp of current/specified datetime
+        {command}sleep <seconds>{color} - sleep for a while
+        {command}modexp m e n{color} - compute m^e mod n
+        {command}gcd a b{color} - compute greatest common divisor
+        {command}lcm a b{color} - compute least common multiple
+        {command}totient a b{color} - compute totient
+        {command}invmod/modinv a b{color} - compute modular inverse
+
+    Langdon supports many crypto-related functions. These are currently supported:
+        {command}not a{color} - binwise not
+        {command}xor a b{color} - xor 2 variables
+        {command}or a b{color} - bitwise or 2 variables
+        {command}and a b{color} - bitwise and 2 variables
+        {command}brute-single-xor <variable>{color} - create single byte XORs of given variable
+        {command}break-xor <variable> <language> [<keysize>]{color} - use frequency analysis to 
+        break xor (use hamming to get keysize if necessary)
+        {command}timing-leak <oracle> <threshold> [slowest [alphabet]]{color} - send bytes
+        (or characters from the alphabet) one by one into oracle and remember the fastest (or slowest)
+        one. If the threshold is crossed, use it and continue with the next byte.
+        {command}{color}
+
+    There is a number of real cryptographical attacks implemented. Use {command}help <algorithm>{color}
+    to see details for them, but here is a list for quick reference:
+        {command}ecb-chosen-plaintext <oracle>{color} - AES ECB chosen-plaintext attack
+        {command}ecb-injection <encryption_oracle> <decryption_oracle> <expected> <desired>{color} - ECB cut-and-paste attack
+        {command}cbc-bitflipping <encryption_oracle> <decryption_oracle> <target_block> <desired>{color} - CBC bitflipping attack
+        {command}cbc-padding <oracle> <data> [<blocksize> [<iv>]]{color} - CBC padding oracle attack
+        {command}cbc-chosen-ciphertext <oracle> <ciphertext>{color} - CBC chosen-ciphertext attack
+        {command}ctr-fixed-nonce <c1> <c2> ... <language>{color} - CTR fixed-nonce attack 
+        {command}ctr-bitflipping <encryption_oracle> <decryption_oracle> <offset> <payload>{color} - CTR bitflipping attack
+        {command}brute-timestamp-seed <RNG_type> <random_value> [<offset> [<reference_timestamp>]]{color} - bruteforce seed for known random value
+        {command}clone-rng <RNG_type> <states>{color} - clone RNG from output
+        {command}hash-extension <hash_type> <plaintext> <original_hash> <append_data> <oracle>{color} - hash length extension attack
+        {command}dh-shared-key (<alice_DH> <bob_DH>|<alice_DH> <bob_public_key>|<bob_public_key> <alice_private_key><modulus>) {color} - compute Diffie-Hellman shared key
+        {command}srp-register <server> <client>{color} - SRP registration
+        {command}srp-session-keys <client> <server>{color} - SRP session key computation
+        {command}srp-auth <client> <server>{color} - SRP authentication
+        {command}rsa-e3-broadcast <public_key1> <ciphertext1> <public_key2> <ciphertext2> <public_key3> <ciphertext3>{color} - RSA e=3 broadcast attack
+        {command}rsa-unpadded-recovery <RSA_public_key> <oracle>{color} - RSA unpadded message recovery oracle attack
+        {command}rsa-e3-forge-signature <RSA> <hash_type>{color} - Bleichenbacher's e=3 RSA signature attack
+
+    {bold}Oracles{unbold}
+
+    In many cryptographical attacks, you can split your program into two parts. The first
+    one is universal for every usage (e.g. bruteforce in CBC padding oracle attack) - that
+    is implemented in Langdon. The second part is unique for each case (testing for padding
+    error in CBC padding oracle attack). For this reason you can specify an oracle - a program
+    receiving input and responding somehow - and plug it in the attack implementation.
+
+    Because of binary nature of payload, the input is base64'd before the oracle is executed.
+    Oracle must take care of decoding. For the same reason, output (if any) must be
+    Base64-encoded.
+
+    To use oracle, simply specify the path, e.g. {command}o = cbc/oracle.sh{color}. To run
+    once, use {command}oracle o <payload_variable>{color} command.
+
+    {bold}Algorithms{unbold}
+
+    In some cases, some structure with dependent variables and support of convenient 
+    functions is needed. This is the case of common cipher algorithms.
+
+    Supported algorithms:
+    Symmetric algorithms:
+        XOR
+        AES
+    Random number generators:
+        Mersenne32 - 32b Mersenne Twister
+        Mersenne64 - 64b Mersenne Twister
+    Hash algorithms:
+        SHA1
+        MD4
+    Asymmetric algorithms:
+        DH
+        SRPServer
+        SRPClient 
+        RSA
+
+    You can get detailed help for algorithms with {command}help <algorithm>{color}.
+
+    Create algorithm like this: {command}x = XOR plaintext=a key=b{color}. Now you can
+    access individual arguments, for example {command}x.plaintext{color}.
+
+    Edit individual algorithm arguments with {command}edit x.plaintext{color} command.
+
+    Use {command}encrypt <algorithm>{color} and {command}decrypt <algorithm>{color} to
+    run encryption/decryption on algorithms such as AES.
+
+    Use {command}sign <algorithm> <hash algorithm>{color} and {command}verify <algorithm> <signature>{color}
+    to deal with signing on algorithms such as RSA.
+
+    Use {command}hash <algorithm>{color}, {command}mac <algorithm>{color} and {command}hmac <algorithm>{color}
+    to get cryptographical hash for algorithms such as SHA1.
+
+    Use {command}rng <RNG> <int|float|bytes> [<count>]{color} to generate random number/sequence from
+    given RNG algorithm.
+
+    {bold}Analysis{unbold}
+
+    Load a wordlist as normal variable: {command}english = file:/wordlists/english.txt{color}.
+    Then you can use {command}wordlist english{color} to test all variables against it.
+    By default, only variables with 3+ words of 3+ length are considered.
+
+    Get entropy with {command}entropy a{color} command (in interval <0; 1>). This can 
+    help you decide how (badly) the data are compressed or encrypted. 
+    Typical plaintexts have around 0.5 entropy.
+
+    Hamming distance (number of different bits) of 2 given variables is computed 
+    with {command}hamming a b{color}.
+
+    You can subject your variables and algorithms to analysis to pinpoint potential
+    problems. Use {command}analyze a{color} to analyze specific variable/algorithm or 
+    {command}analyze{color} to analyze everything.
+
+    """.format(path=sys.argv[0],
+               color=log.COLOR_DARK_GREEN,
+               command=log.COLOR_BROWN,
+               bold=log.COLOR_BOLD,
+               unbold=log.COLOR_UNBOLD,
+              )))
             else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must define count.')
-    
-    elif cmd.startswith('timestamp'):
-        _, _, date = cmd.partition(' ')
-        if date:
+                classes = {
+                    'symmetriccipher': SymmetricCipher,
+                    'xor': XOR,
+                    'aes': AES,
+
+                    'rng': RNG,
+                    'mersenne32': MersenneTwister32,
+                    'mersenne64': MersenneTwister64,
+
+                    'hash': Hash,
+                    'sha1': SHA1,
+                    'md4': MD4,
+
+                    'asymmetriccipher': AsymmetricCipher,
+                    'dh': DH,
+                    'srp': SRP,
+                    'srpserver': SRPServer,
+                    'srpclient': SRPClient,
+                    'rsa': RSA,
+                }
+                try:
+                    output.extend(['%s\n' % line for line in classes[arg.lower()].help()])
+                    output_newline = False
+                    use_pager = True
+                except:
+                    traceback.print_exc()
+                    log.err('Non-existent algorithm.')
+            continue
+        ##########################
+        # framework control
+        ##########################
+        # list variables
+        if cmd in ('var', 'vars', 'variables'):
+            k_len = max([0] + [len(k) for k in variables.keys()])
+            for k, v in variables.items():
+                output.append('%*s  %s' % (k_len, k, v.short()))
+            continue
+                
+        if cmd.startswith('export '):
+            parts = cmd[7:].split()
+            format_f = None
+            if len(parts) == 2:
+                variable = parts[0]
+                filename = parts[1]
+                format_f = lambda x: x.as_raw()
+            elif len(parts) == 3:
+                variable = parts[0]
+                filename = parts[1]
+                formats = {
+                    'raw': lambda x: x.as_raw(),
+                    'int': lambda x: x.as_int(),
+                    'hex': lambda x: x.as_hex(),
+                    'bin': lambda x: x.as_binary(),
+                    'escaped': lambda x: x.as_escaped(),
+                    'base64': lambda x: x.as_base64(),
+                }
+                format_f = formats.get(parts[2])
+            else:
+                log.err('Invalid arguments.')
+
+            if format_f:
+                if variable  == 'all':
+                    for k,v in all_variables.items():
+                        with open('%s_%s' % (filename, k), 'wb') as f:
+                            to_output = format_f(v)
+                            try:
+                                f.write(to_output)
+                            except:
+                                f.write(to_output.encode())
+                elif variable in all_variables.keys():
+                    with open(filename, 'wb') as f:
+                        to_output = format_f(all_variables[variable])
+                        try:
+                            f.write(to_output)
+                        except:
+                            f.write(to_output.encode())
+                else:
+                    log.err('No such variable.')
+                
+        elif cmd.startswith('edit '):
+            # algorithm param editation
+            # TODO even for normal variables?
             try:
-                result = max([0, datetime.timestamp(dateutil.parser.parse(date))])
-            except:
-                result = 0
-        else:
-            result = datetime.timestamp(datetime.now())
-        if variable_name:
-            update_variable(variable_name, result)
-        else:
-            output.append(Variable(result))
-
-    elif cmd.startswith('sleep '):
-        try:
-            time.sleep(float(cmd[6:].strip()))
-        except:
-            traceback.print_exc()
-            log.err('Bad sleep value.')
-
-    elif cmd.startswith('timing-leak '):
-        parts = cmd.split()
-        try:
-            oracle_path = all_variables[parts[1]]
-            threshold = float(parts[2])
-            try:
-                slowest = (parts[3] == 'slowest')
-            except:
-                slowest = True
-            try:
-                alphabet = set(all_variables[parts[4]].as_raw())
-            except KeyError:
-                log.warn('Alphabet not defined, using all possible byte values.')
-                alphabet = range(256)
+                variable, param = tuple(cmd[5:].split('.'))
+                v = variables[variable]
+                old_data = v.params[param].as_raw()
+                new_data = edit_in_file(old_data)
+                if isinstance(v, SymmetricCipher):
+                    if param in ('plaintext', 'ciphertext'):
+                        try:
+                            v.update_key(param, new_data)
+                            log.info('Algorithm parameters updated.')
+                        except AttributeError: # function undefined
+                            pass
+                else:
+                    log.warn('Algorithm may be inconsistent now...')
             except:
                 traceback.print_exc()
-                alphabet = range(256)
+                log.err('You must specify variable of algorithm and the parameter.')
 
-            result = attacks.timing_leak(oracle_path, threshold, slowest, alphabet)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must provide oracle path, optional slowest/fastest flag and optional alphabet.')
-        
-    elif cmd.startswith('modexp '):
-        parts = cmd.split()
-        args = {}
-        try:
-            # parse arguments
-            for arg, index in [('base', 1), ('exponent', 2), ('modulus', 3)]:
-                args[arg] = parse_int(parts[index], all_variables)
-            result = pow(args['base'], args['exponent'], args['modulus'])
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must provide base, exponent and modulus.')
-
-    elif cmd.startswith(('gcd', 'lcm', 'totient', 'invmod', 'modinv')):
-        parts = cmd.split()
-        args = {}
-        try:
-            # parse arguments
-            for arg, index in [('a', 1), ('b', 2)]:
-                args[arg] = parse_int(parts[index], all_variables)
-            fs = {
-                'gcd': gcd,
-                'lcm': lcm,
-                'totient': lambda a, b: lcm(a-1, b-1),
-                'invmod': invmod,
-                'modinv': invmod,
-            }
-            result = fs[parts[0]](*args.values())
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must provide base, exponent and modulus.')
-    
-    elif cmd.startswith('substring '):
-        parts = cmd.split()
-        try:
-            variable = all_variables[parts[1]]
-            start = parse_int(parts[2], all_variables)
-            try:
-                length = parse_int(parts[3], all_variables)
-            except:
-                length = 1
-            result = variable.as_raw()[start:start+length]
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must provide variable, start and optional length.')
-
-    
-    elif cmd.startswith('prime'):
-        parts = cmd.split()
-        bits = parse_int(parts[1], all_variables) if len(parts) == 2 else None
-        result = prime(bits) if bits else prime()
-        if variable_name:
-            update_variable(variable_name, result)
-        else:
-            output.append(Variable(result))
-            
-    # TODO math operations
-    ######################################
-    # bitwise
-    ######################################
-    elif cmd.startswith('and '):
-        arguments = cmd[4:].split()
-        if arguments and arguments[0] in all_variables.keys():
-            result = all_variables[arguments[0]].as_raw()
-            for a in arguments[1:]:
-                if a in all_variables.keys():
-                    result = bitwise_and(result, all_variables[a].as_raw())
-                else:
-                    log.err('The \'%s\' is not a variable.' % a)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        else:
-            log.err('You must provide existing variables as arguments.')
-    
-    elif cmd.startswith('or '):
-        arguments = cmd[4:].split()
-        if arguments and arguments[0] in all_variables.keys():
-            result = all_variables[arguments[0]].as_raw()
-            for a in arguments[1:]:
-                if a in all_variables.keys():
-                    result = bitwise_or(result, all_variables[a].as_raw())
-                else:
-                    log.err('The \'%s\' is not a variable.' % a)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        else:
-            log.err('You must provide existing variables as arguments.')
-
-    elif cmd.startswith('not '):
-        argument = cmd[4:].strip()
-        if argument in all_variables.keys():
-            result = bitwise_not(all_variables[argument].as_raw())
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        else:
-            log.err('You must provide existing variable as argument.')
-    ######################################
-    # XOR
-    ######################################
-    # xor with any number of arguments
-    elif cmd.startswith('xor '):
-        arguments = cmd[4:].split()
-        if arguments and arguments[0] in all_variables.keys():
-            result = all_variables[arguments[0]].as_raw()
-            for a in arguments[1:]:
-                if a in all_variables.keys():
-                    result = xor(result, all_variables[a].as_raw())
-                else:
-                    log.err('The \'%s\' is not a variable.' % a)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        else:
-            log.err('You must provide existing variables as arguments.')
-    
-    # bruteforce xor of given variable
-    elif cmd.startswith('brute-single-xor '):
-        v = cmd[17:].strip()
-        if v in variables.keys():
-            source = variables[v]
-            for b in range(256):
-                v2 = '%s_%02x' % (v, b)
-                variables[v2] = Variable(xor(source.as_raw(), b'%c' % b))
-        else:
-            log.err('No such variable.')
-
-    elif cmd.startswith('break-xor '):
-        try:
+        elif cmd.startswith('multiline '):
+            # variables are in file 1 per line, load it
             parts = cmd.split()
-            data = variables[parts[1]]
-            language = parts[2]
-            try:
-                keysize = int(parts[3])
-            except:
-                keysize = None
-            result = attacks.break_xor(data.as_raw(), language, keysize)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(result)
-        except:
-            traceback.print_exc()
-            log.err('You must define variable, language and optional keysize.')
-
-    # XOR - create instance
-    # Usage: x = XOR key=k plaintext=p ciphertext=c
-    elif cmd.startswith('XOR '):
-        try:
-            params = parse_algorithm_params(cmd[4:], variables)
-            if variable_name:
-                update_variable(variable_name, XOR(**params))
-            else:
-                output.append(result)
-
-        except:
-            traceback.print_exc()
-            log.err('Specify known parameters and variables holding the values.')
-
-    ######################################
-    # Symmetric algorithms
-    ######################################
-    # AES - create instance
-    elif cmd.startswith('AES '):
-        try:
-            params = parse_algorithm_params(cmd[4:], variables)
-            result = AES(**params)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(result)
-
-        except:
-            traceback.print_exc()
-            log.err('Specify known parameters and variables holding the values.')
-
-    elif cmd.startswith('ecb-chosen-plaintext '):
-        oracle_path = cmd.rpartition(' ')[2]
-        if oracle_path in all_variables.keys():
-            result = attacks.ecb_chosen_plaintext(all_variables[oracle_path])
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        else:
-            log.err('You must specify an oracle.')
-    
-    elif cmd.startswith('ecb-cut-paste '):
-        try:
-            try:
-                _, e_oracle_path, d_oracle_path, expected, desired, payload = cmd.split()
-                result = attacks.ecb_cut_paste(all_variables[e_oracle_path],
-                                               all_variables[d_oracle_path],
-                                               all_variables[expected],
-                                               all_variables[desired],
-                                               all_variables[payload])
-            except:
-                _, e_oracle_path, d_oracle_path, expected, desired = cmd.split()
-                result = attacks.ecb_cut_paste(all_variables[e_oracle_path],
-                                               all_variables[d_oracle_path],
-                                               all_variables[expected],
-                                               all_variables[desired])
-                
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify an encryption oracle, a decryption oracle, expected value, desired value and optional payload.')
-
-    elif cmd.startswith('cbc-bitflipping '):
-        try:
-            _, e_oracle_path, d_oracle_path, target_block, payload = cmd.split()
-            result = attacks.cbc_bitflipping(all_variables[e_oracle_path], 
-                                             all_variables[d_oracle_path], 
-                                             all_variables[target_block], 
-                                             all_variables[payload])
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify encryption and decryption oracle, block index to alter and desired value.')
-
-    elif cmd.startswith('cbc-padding '):
-        try:
-            try:
-                try:
-                    _, ciphertext, oracle_path, blocksize, iv = cmd.split()
-                    blocksize = int(blocksize)
-                except:
-                    _, ciphertext, oracle_path, blocksize = cmd.split()
-                    iv = None
-                    blocksize = int(blocksize)
-            except:
-                _, ciphertext, oracle_path = cmd.split()
-                iv = None
-                blocksize = 16
-            
-            result = attacks.cbc_padding(all_variables[ciphertext], 
-                                         all_variables[oracle_path], 
-                                         blocksize,
-                                         all_variables.get(iv))
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify ciphertext, oracle path and optional blocksize.')
-
-    elif cmd.startswith('ctr-fixed-nonce '):
-        try:
-            parts = cmd.split()
-            texts = [all_variables[p] for p in parts[1:-1]]
-            language = parts[-1]
-            #sample_size = int(parts[3])
-            result = attacks.ctr_fixed_nonce(texts, language)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(result)
-        except:
-            traceback.print_exc()
-            log.err('You must define variables and language,')
-
-    elif cmd.startswith('ctr-bitflipping '):
-        try:
-            _, e_oracle_path, d_oracle_path, target_offset, payload = cmd.split()
-            result = attacks.ctr_bitflipping(all_variables[e_oracle_path], 
-                                             all_variables[d_oracle_path], 
-                                             all_variables[target_offset],
-                                             all_variables[payload])
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify encryption and decryption oracle, offset to alter and desired value.')
-
-    elif cmd.startswith('cbc-chosen-ciphertext '):
-        parts = cmd.split()
-        try:
-            oracle_path = all_variables[parts[1]]
-            ciphertext = all_variables[parts[2]]
-            result = attacks.cbc_chosen_ciphertext(oracle_path, ciphertext)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify decryption oracle and ciphertext.')
-    ######################################
-    # RNG
-    ######################################
-    elif cmd.startswith('Mersenne32'):
-        try:
-            seed = parse_int(cmd.split()[-1], all_variables)
-        except:
-            seed = 5489 
-        
-        result = MersenneTwister32(seed)
-        if variable_name:
-            update_variable(variable_name, result)
-        else:
-            output.append(result)
-
-    elif cmd.startswith('Mersenne64'):
-        try:
-            seed = parse_int(cmd.split()[-1], all_variables)
-        except:
-            seed = 5489 
-        
-        result = MersenneTwister64(seed)
-        if variable_name:
-            update_variable(variable_name, result)
-        else:
-            output.append(result)
-
-    elif cmd.startswith('rng '):
-        parts = cmd.split()
-        mt = variables[parts[1]]
-        mode = parts[2]
-        try:
-            count = parse_int(parts[3], all_variables)
-        except:
-            count = 1
-
-        result = mt.get(mode, count)
-        if variable_name:
-            update_variable(variable_name, result)
-        else:
-            output.append(Variable(result))
-
-    elif cmd.startswith('brute-timestamp-seed '):
-        parts = cmd.split()
-        value = None
-        value_offset = 0
-        reference_ts = None
-        try:
-            mt = parts[1]
-            value = all_variables[parts[2]]
-            if len(parts) >= 4:
-                # also order is given
-                try:
-                    value_offset = parse_int(parts[3], all_variables)
-                except:
-                    pass
-            if len(parts) == 5:
-                # also reference timestamp is given
-                reference_ts = all_variables[parts[4]]
-            result = attacks.brute_timestamp_seed(mt, value, value_offset, reference_ts.as_int())
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify RNG, optional mode and value and optional reference timestamp.')
-
-    elif cmd.startswith('clone-rng '):
-        try:
-            parts = cmd.split()
-            rng = parts[1]
-            states = [int(x) for x in all_variables[parts[2]].as_raw().split()]
-            result = attacks.clone_rng(rng, states)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(result)
-        except:
-            traceback.print_exc()
-            log.err('You must provide RNG type and newline-separated list of states.')
-
-    elif cmd.startswith('brute-rng-xor '):
-        try:
-            parts = cmd.split()
-            rng = parts[1]
-            ciphertext = all_variables[parts[2]]
-            known = all_variables[parts[3]]
-            
-            result = attacks.brute_rng_xor(rng, ciphertext, known)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must provide RNG type, ciphertext and known portion.')
-            
-    ######################################
-    # Hashes
-    ######################################
-    elif cmd.startswith(('SHA1 ', 'MD4 ')):
-        try:
-            algorithms = {
-                'SHA1': SHA1,
-                'MD4': MD4,
-            }
-            algorithm = cmd.split()[0]
-            params = parse_algorithm_params(cmd[4:], variables)
-            result = algorithms[algorithm](**params)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(result)
-        except:
-            traceback.print_exc()
-            log.err('Specify known parameters and variables holding the values.')
-
-    elif cmd.startswith(('hash ', 'mac ', 'hmac ')):
-        method, _, v = cmd.partition(' ')
-        try:
-            variables[v].reset()
-            if method == 'hash':
-                result = variables[v].hash()
-            elif method == 'mac':
-                result = variables[v].mac()
-            elif method == 'hmac':
-                result = variables[v].hmac()
-            
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must specify an algorithm variable.')
-    
-    elif cmd.startswith('hash-extension '):
-        parts = cmd.split()
-        algorithms = {
-            'sha1': SHA1,
-            'md4': MD4,
-        }
-        try:
-            algorithm = algorithms[parts[1]]
-            original = all_variables[parts[2]]
-            digest = all_variables[parts[3]]
-            append = all_variables[parts[4]]
-            oracle_path = variables[parts[5]]
-            
-            result = attacks.hash_extension(algorithm, original, digest, append, oracle_path)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-
-        except:
-            traceback.print_exc()
-            log.err('You must provide algorithm, original data, data to append and hashing oracle.')
-    ######################################
-    # Asymmetric algorithms
-    ######################################
-    elif cmd.startswith('DH '):
-        try:
-            params = parse_algorithm_params(cmd[3:], variables)
-            result = DH(**params)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(result)
-
-        except:
-            traceback.print_exc()
-            log.err('Specify known parameters and variables holding the values.')
-        
-    elif cmd.startswith('dh-shared-key '):
-        parts = cmd.split()
-        try:
-            if len(parts) == 3: # (DH, DH) or (DH, pubkey)
-                first = variables[parts[1]]
-                second = None
-                second_pub = None
-                try:
-                    second = variables[parts[2]]
-                    if not isinstance(second, DH):
-                        second = None
-                        raise AttributeError
-                    second_pub = second.params['pub']
-                except:
-                    second_pub = Variable(parse_int(parts[2], all_variables))
-                # compute shared key
-                result = Variable(pow(second_pub.as_int(),
-                                      first.params['priv'].as_int(),
-                                      first.params['p'].as_int()
-                                     ))
-                first.params['shared'] = result
-                if second:
-                    second.params['shared'] = result
+            if len(parts) == 3:
+                filename = parts[1]
+                prefix = parts[2]
+                form = None
             elif len(parts) == 4:
-                public = parse_int(parts[1], all_variables)
-                private = parse_int(parts[2], all_variables)
-                modulus = parse_int(parts[3], all_variables)
-                result = Variable(pow(public, private, modulus))
+                filename = parts[1]
+                prefix = parts[2]
+                form = parts[3]
+            try:
+                with open(filename, 'r') as f:
+                    lines = f.read().splitlines()
+                    for i, line in enumerate(lines):
+                        if not line.strip():
+                            continue
+                        if form and form in ('file', 'base64'):
+                            line = '%s:%s' % (form, line)
+                        elif form:
+                            raise ValueError
+                        update_variable('%s_%d' % (prefix, i), Variable(line, constant=True))
+
+            except:
+                traceback.print_exc()
+        #################################
+        # basic methods
+        #################################
+        # check wordlist compatibility for all variables (except the wordlist)
+        elif cmd.startswith('wordlist '):
+            try:
+                wordlist_name = cmd[9:].strip()
+                w = variables[wordlist_name].as_raw().split()
+                variable_max_length = max([0] + [len(k) for k in variables.keys()])
+
+                thread_count = 1 if len(variables) < 8 else 8
+
+                def wordlist_worker(indices, samples, data_f = lambda x: x, thread_ref=None, **kwargs):
+                    if not thread_ref:
+                        log.err('Worker has no thread reference!')
+                        return []
+                    for i, x in zip(indices, samples):
+                        if thread_ref.terminate:
+                            break
+                        success = dict_success(data_f(x), **kwargs)
+                        if success >= 0.8:
+                            log.ok('  %s:  %0.3f  %s' % (x[0], success, x[1].short()))
+                        elif success > 0:
+                            log.info('  %s:  %0.3f' % (x[0], success))
+                    return [] # not needed
+
+                log.info('  %*s  Score' % (variable_max_length, 'Variable'))
+                p = Parallelizer(thread_count, 
+                                 [(k, v) for k,v in variables.items() if k != wordlist_name], 
+                                 wordlist_worker,
+                                 {'data_f': lambda x: x[1].as_raw(),
+                                  'wordlist': w,
+                                  'min_word_match': 3,
+                                  'min_word_len': 3,
+                                 }
+                                )
+                p.start()
+                p.waitfor()
+            except:
+                traceback.print_exc()
+                log.err('No such wordlist.')
+        
+        elif cmd.startswith('analyze'):
+            parts = cmd.split()
+
+            if len(parts) == 1:
+                keys = variables.keys() # algorithms will run analysis on its params...
+                variable_source = variables
             else:
-                raise AttributeError
+                keys = [parts[1]] if variables.get(parts[1]) else [] # standard Variable or Algorithms
+                if keys: 
+                    variable_source = variables
+                else:
+                    keys = [parts[1]] if all_variables.get(parts[1]) else [] # so Algorithm param?
+                    variable_source = all_variables
+
+            for k in keys:
+                output.append(log.info('Analysis for %s%s%s:' % (log.COLOR_PURPLE, k, log.COLOR_NONE), stdout=False))
+                output += variable_source[k].analyze(output_offset=2)
+
+        # compute entropy for given variable / all variables
+        elif cmd.startswith('entropy'):
+            parts = cmd.split()
+
+            if len(parts) > 1:
+                interesting_keys = parts[1:]
+            else:
+                interesting_keys = all_variables.keys()
+
+            variable_max_length = max([0] + [len(k) for k in interesting_keys])
+            for k,v in all_variables.items():
+                # skip those we are not interested in
+                if k not in interesting_keys:
+                    continue
+                # skip non-Variable data (e.g. AES mode)
+                if not isinstance(v, Variable):
+                    continue
+                ent = entropy(v.as_raw())
+                comment = ''
+                if ent > 0.998:
+                    comment = ' (probably encrypted)'
+                elif ent > 0.95:
+                    comment = ' (probably compressed)'
+                log.info('  %*s  %0.5f%s' % (variable_max_length, k, ent, comment))
+        
+        elif cmd.startswith('histogram'):
+            try:
+                data = all_variables[cmd.split()[1]]
+                plt_histogram(data.as_raw(), 
+                              range(256),
+                              'Byte histogram',
+                              (10, 5),
+                              ['#005073', '#107dac', '#189ad3', '#71c7ec'],)
+                plt.show() # TODO or save option for docker variant?
+            except:
+                traceback.print_exc()
+                log.err('You must provide data variable.')
+
+        # compute hamming distance of 2 given variables / 1-N / M-N
+        elif cmd.startswith('hamming'):
+            parts = cmd.split()
+            pairs = []
             
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(result)
-        except:
-            traceback.print_exc()
-            log.err('You must provide 2 DH objects, DH object and public key or public key, private key and modulus.')
+            # prepare data (variables and algorithm params)
+            all_variables = {}
+            for k,v in variables.items():
+                if isinstance(v, Variable):
+                    all_variables[k] = v
+                elif isinstance(v, Algorithm):
+                    for k2, v2 in v.params.items():
+                        all_variables['%s.%s' % (k, k2)] = v2
+            
+            # detect variant, prepare pairs
+            if len(parts) == 3:
+                pairs.append((parts[1], parts[2]))
+            elif len(parts) == 2 and parts[1] in all_variables.keys():
+                for k,_ in all_variables.items():
+                    if k == parts[1]:
+                        continue
+                    pairs.append((parts[1], k))
+            elif len(parts) == 1:
+                for k1, _ in all_variables.items():
+                    for k2, _ in all_variables.items():
+                        if k1 == k2:
+                            continue
+                        if (k2, k1) not in pairs:
+                            pairs.append((k1, k2))
+            # print
+            if len(pairs) == 1:
+                try:
+                    log.info(hamming(all_variables[pairs[0][0]].as_raw(), 
+                                     all_variables[pairs[0][1]].as_raw()))
+                except: 
+                    #traceback.print_exc()
+                    pass # probably not Variable
+                    #log.err('No such variable.')
+            elif pairs:
+                pair_names = ['%s-%s' % (a, b) for a, b in pairs]
+                max_pair_name_length = max([0] + [len(x) for x in pair_names])
+                for (a, b), name in zip(pairs, pair_names):
+                    try:
+                        distance = hamming(all_variables[a].as_raw(), all_variables[b].as_raw())
+                        log.info('%*s:  %d' % (max_pair_name_length, name, distance))
+                    except:
+                        #traceback.print_exc()
+                        pass # probably not Variable
 
-    elif cmd.startswith('SRPClient '):
-        try:
-            params = parse_algorithm_params(cmd[3:], variables)
-            result = SRPClient(**params)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(result)
+        elif cmd.startswith('gray'):
+            v = cmd[5:].strip()
+            try:
+                result = gray(all_variables[v].as_raw())
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify a variable.')
 
-        except:
-            traceback.print_exc()
-            log.err('Specify known parameters and variables holding the values.')
+        elif cmd.startswith('ungray'):
+            v = cmd[7:].strip()
+            try:
+                result = ungray(all_variables[v].as_raw())
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify a variable.')
 
-    elif cmd.startswith('SRPServer '):
-        try:
-            params = parse_algorithm_params(cmd[3:], variables)
-            result = SRPServer(**params)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(result)
+        elif cmd.startswith('encrypt '):
+            v = cmd[8:].strip()
+            try:
+                result = variables[v].encrypt()
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify an algorithm variable.')
 
-        except:
-            traceback.print_exc()
-            log.err('Specify known parameters and variables holding the values.')
+        elif cmd.startswith('decrypt '):
+            v = cmd[8:].strip()
+            try:
+                result = variables[v].decrypt()
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify an algorithm variable.')
 
-    elif cmd.startswith('srp-register '):
-        parts = cmd.split()
-        try:
-            server = variables[parts[1]]
-            client = variables[parts[2]]
-            server.register(client.params['username'], 
-                            client.params['password'])
-        except:
-            traceback.print_exc()
-            log.err('You must specify SRP server and SRP client.')
+        elif cmd.startswith('sign '):
+            parts = cmd.split()
+            hashes = {
+                'sha1': SHA1, 
+                'md4': MD4
+            }
+            try:
+                privkey = variables[parts[1]]
+                hash_algorithm = hashes[parts[2].lower()]
+                result = privkey.sign(hash_algorithm)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide asymmetrical algorithm object (with private key and plaintext included) and hash function name.')
 
-    elif cmd.startswith('srp-session-keys '):
-        parts = cmd.split()
-        try:
-            client = variables[parts[1]]
-            server = variables[parts[2]]
-            salt, s_pubkey = server.compute_session_key(client.params['username'],
-                                                        client.params['A'])
-            client.compute_session_key(salt, s_pubkey)
-        except:
-            traceback.print_exc()
-            log.err('You must specify SRP server and SRP client.')
+        elif cmd.startswith('verify '):
+            parts = cmd.split()
+            try:
+                privkey = variables[parts[1]]
+                signature = all_variables[parts[2]]
+                if privkey.verify(signature):
+                    log.ok('Signature is valid.')
+                else:
+                    log.warn('Signature is invalid.')
+            except:
+                traceback.print_exc()
+                log.err('You must provide asymmetrical algorithm object (with public key and plaintext included) and signature to verify.')
 
-    elif cmd.startswith('srp-auth '):
-        parts = cmd.split()
-        try:
-            client = variables[parts[1]]
-            server = variables[parts[2]]
-            if server.auth(client.get_auth_hash()):
-                log.ok('Client successfully authenticated.')
-            else:
-                log.err('Authentication failed.')
+        elif cmd.startswith('hexdump '):
+            v = cmd[8:].strip()
+            try:
+                for line in hexdump(all_variables[v].as_raw()):
+                    output.append(line)
+            except:
+                log.err('You must specify a variable.')
+
+        elif cmd.startswith('random '):
+            parts = cmd.split()
+            args = {}
+            try:
+                # parse arguments
+                for arg, index in [('start', 1), ('end', 2), ('count', 3)]:
+                    try:
+                        args[arg] = parse_int(parts[index], all_variables)
+                    except:
+                        pass
+                # generate number/bytes
+                if args.get('count'):
+                    result = b''.join(int_to_bytes(random.randint(args['start'], args['end'])) or b'\x00' 
+                                      for i in range(args['count']))
+                else:
+                    result = random.randint(args['start'], args['end'])
+                # save / prepare for output
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide start, end and optional length.')
+
+        elif cmd.startswith(('len ', 'length ')):
+            v = cmd.partition(' ')[2]
+            try:
+                result = len(all_variables[v].as_raw())
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
                 
-        except:
-            traceback.print_exc()
-            log.err('You must specify SRP server and SRP client.')
+            except:
+                traceback.print_exc()
+                log.err('No such variable.')
+        
+        elif cmd.startswith('concat '):
+            parts = cmd.split()[1:]
+            result = b''
+            for part in parts:
+                try:
+                    result += all_variables[part].as_raw()
+                except:
+                    log.err('Non-existent variable %s.' % part)
+            if result:
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
 
-    elif cmd.startswith('RSA'):
-        try:
-            params = parse_algorithm_params(cmd[3:], variables)
-            result = RSA(**params)
+        elif cmd.startswith('oracle '):
+            try:
+                _, oracle_path, payload = cmd.split()
+                result = Oracle.once(all_variables[payload], 
+                                     all_variables[oracle_path])
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify oracle and payload.')
+
+        elif cmd.startswith('debruijn '):
+            try:
+                length = int(cmd[9:].strip())
+                result = debruijn(length)
+                if variable_name:
+                    update_variable(variable_name, Variable(result, constant=True))
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('Length must be specified.')
+
+        elif cmd.startswith('zeros '):
+            try:
+                count = parse_int(cmd[5:].strip(), all_variables)
+                result = bytes([0] * count)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must define count.')
+        
+        elif cmd.startswith('timestamp'):
+            _, _, date = cmd.partition(' ')
+            if date:
+                try:
+                    result = max([0, datetime.timestamp(dateutil.parser.parse(date))])
+                except:
+                    result = 0
+            else:
+                result = datetime.timestamp(datetime.now())
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+
+        elif cmd.startswith('sleep '):
+            try:
+                time.sleep(float(cmd[6:].strip()))
+            except:
+                traceback.print_exc()
+                log.err('Bad sleep value.')
+
+        elif cmd.startswith('timing-leak '):
+            parts = cmd.split()
+            try:
+                oracle_path = all_variables[parts[1]]
+                threshold = float(parts[2])
+                try:
+                    slowest = (parts[3] == 'slowest')
+                except:
+                    slowest = True
+                try:
+                    alphabet = set(all_variables[parts[4]].as_raw())
+                except KeyError:
+                    log.warn('Alphabet not defined, using all possible byte values.')
+                    alphabet = range(256)
+                except:
+                    traceback.print_exc()
+                    alphabet = range(256)
+
+                result = attacks.timing_leak(oracle_path, threshold, slowest, alphabet)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide oracle path, optional slowest/fastest flag and optional alphabet.')
+            
+        elif cmd.startswith('modexp '):
+            parts = cmd.split()
+            args = {}
+            try:
+                # parse arguments
+                for arg, index in [('base', 1), ('exponent', 2), ('modulus', 3)]:
+                    args[arg] = parse_int(parts[index], all_variables)
+                result = pow(args['base'], args['exponent'], args['modulus'])
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide base, exponent and modulus.')
+
+        elif cmd.startswith(('gcd', 'lcm', 'totient', 'invmod', 'modinv')):
+            parts = cmd.split()
+            args = {}
+            try:
+                # parse arguments
+                for arg, index in [('a', 1), ('b', 2)]:
+                    args[arg] = parse_int(parts[index], all_variables)
+                fs = {
+                    'gcd': gcd,
+                    'lcm': lcm,
+                    'totient': lambda a, b: lcm(a-1, b-1),
+                    'invmod': invmod,
+                    'modinv': invmod,
+                }
+                result = fs[parts[0]](*args.values())
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide base, exponent and modulus.')
+        
+        elif cmd.startswith('substring '):
+            parts = cmd.split()
+            try:
+                variable = all_variables[parts[1]]
+                start = parse_int(parts[2], all_variables)
+                try:
+                    length = parse_int(parts[3], all_variables)
+                except:
+                    length = 1
+                result = variable.as_raw()[start:start+length]
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide variable, start and optional length.')
+
+        
+        elif cmd.startswith('prime'):
+            parts = cmd.split()
+            bits = parse_int(parts[1], all_variables) if len(parts) == 2 else None
+            result = prime(bits) if bits else prime()
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+                
+        
+        ######################################
+        # bitwise
+        ######################################
+        elif cmd.startswith('and '):
+            arguments = cmd[4:].split()
+            if arguments and arguments[0] in all_variables.keys():
+                result = all_variables[arguments[0]].as_raw()
+                for a in arguments[1:]:
+                    if a in all_variables.keys():
+                        result = bitwise_and(result, all_variables[a].as_raw())
+                    else:
+                        log.err('The \'%s\' is not a variable.' % a)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            else:
+                log.err('You must provide existing variables as arguments.')
+        
+        elif cmd.startswith('or '):
+            arguments = cmd[4:].split()
+            if arguments and arguments[0] in all_variables.keys():
+                result = all_variables[arguments[0]].as_raw()
+                for a in arguments[1:]:
+                    if a in all_variables.keys():
+                        result = bitwise_or(result, all_variables[a].as_raw())
+                    else:
+                        log.err('The \'%s\' is not a variable.' % a)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            else:
+                log.err('You must provide existing variables as arguments.')
+
+        elif cmd.startswith('not '):
+            argument = cmd[4:].strip()
+            if argument in all_variables.keys():
+                result = bitwise_not(all_variables[argument].as_raw())
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            else:
+                log.err('You must provide existing variable as argument.')
+        ######################################
+        # XOR
+        ######################################
+        # xor with any number of arguments
+        elif cmd.startswith('xor '):
+            arguments = cmd[4:].split()
+            if arguments and arguments[0] in all_variables.keys():
+                result = all_variables[arguments[0]].as_raw()
+                for a in arguments[1:]:
+                    if a in all_variables.keys():
+                        result = xor(result, all_variables[a].as_raw())
+                    else:
+                        log.err('The \'%s\' is not a variable.' % a)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            else:
+                log.err('You must provide existing variables as arguments.')
+        
+        # bruteforce xor of given variable
+        elif cmd.startswith('brute-single-xor '):
+            v = cmd[17:].strip()
+            if v in variables.keys():
+                source = variables[v]
+                for b in range(256):
+                    v2 = '%s_%02x' % (v, b)
+                    variables[v2] = Variable(xor(source.as_raw(), b'%c' % b))
+            else:
+                log.err('No such variable.')
+
+        elif cmd.startswith('break-xor '):
+            try:
+                parts = cmd.split()
+                data = variables[parts[1]]
+                language = parts[2]
+                try:
+                    keysize = int(parts[3])
+                except:
+                    keysize = None
+                result = attacks.break_xor(data.as_raw(), language, keysize)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+            except:
+                traceback.print_exc()
+                log.err('You must define variable, language and optional keysize.')
+
+        # XOR - create instance
+        # Usage: x = XOR key=k plaintext=p ciphertext=c
+        elif cmd.startswith('XOR '):
+            try:
+                params = parse_algorithm_params(cmd[4:], variables)
+                if variable_name:
+                    update_variable(variable_name, XOR(**params))
+                else:
+                    output.append(result)
+
+            except:
+                traceback.print_exc()
+                log.err('Specify known parameters and variables holding the values.')
+
+        ######################################
+        # Symmetric algorithms
+        ######################################
+        # AES - create instance
+        elif cmd.startswith('AES '):
+            try:
+                params = parse_algorithm_params(cmd[4:], variables)
+                result = AES(**params)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+
+            except:
+                traceback.print_exc()
+                log.err('Specify known parameters and variables holding the values.')
+
+        elif cmd.startswith('ecb-chosen-plaintext '):
+            oracle_path = cmd.rpartition(' ')[2]
+            if oracle_path in all_variables.keys():
+                result = attacks.ecb_chosen_plaintext(all_variables[oracle_path])
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            else:
+                log.err('You must specify an oracle.')
+        
+        elif cmd.startswith('ecb-cut-paste '):
+            try:
+                try:
+                    _, e_oracle_path, d_oracle_path, expected, desired, payload = cmd.split()
+                    result = attacks.ecb_cut_paste(all_variables[e_oracle_path],
+                                                   all_variables[d_oracle_path],
+                                                   all_variables[expected],
+                                                   all_variables[desired],
+                                                   all_variables[payload])
+                except:
+                    _, e_oracle_path, d_oracle_path, expected, desired = cmd.split()
+                    result = attacks.ecb_cut_paste(all_variables[e_oracle_path],
+                                                   all_variables[d_oracle_path],
+                                                   all_variables[expected],
+                                                   all_variables[desired])
+                    
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify an encryption oracle, a decryption oracle, expected value, desired value and optional payload.')
+
+        elif cmd.startswith('cbc-bitflipping '):
+            try:
+                _, e_oracle_path, d_oracle_path, target_block, payload = cmd.split()
+                result = attacks.cbc_bitflipping(all_variables[e_oracle_path], 
+                                                 all_variables[d_oracle_path], 
+                                                 all_variables[target_block], 
+                                                 all_variables[payload])
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify encryption and decryption oracle, block index to alter and desired value.')
+
+        elif cmd.startswith('cbc-padding '):
+            try:
+                try:
+                    try:
+                        _, ciphertext, oracle_path, blocksize, iv = cmd.split()
+                        blocksize = int(blocksize)
+                    except:
+                        _, ciphertext, oracle_path, blocksize = cmd.split()
+                        iv = None
+                        blocksize = int(blocksize)
+                except:
+                    _, ciphertext, oracle_path = cmd.split()
+                    iv = None
+                    blocksize = 16
+                
+                result = attacks.cbc_padding(all_variables[ciphertext], 
+                                             all_variables[oracle_path], 
+                                             blocksize,
+                                             all_variables.get(iv))
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify ciphertext, oracle path and optional blocksize.')
+
+        elif cmd.startswith('ctr-fixed-nonce '):
+            try:
+                parts = cmd.split()
+                texts = [all_variables[p] for p in parts[1:-1]]
+                language = parts[-1]
+                #sample_size = int(parts[3])
+                result = attacks.ctr_fixed_nonce(texts, language)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+            except:
+                traceback.print_exc()
+                log.err('You must define variables and language,')
+
+        elif cmd.startswith('ctr-bitflipping '):
+            try:
+                _, e_oracle_path, d_oracle_path, target_offset, payload = cmd.split()
+                result = attacks.ctr_bitflipping(all_variables[e_oracle_path], 
+                                                 all_variables[d_oracle_path], 
+                                                 all_variables[target_offset],
+                                                 all_variables[payload])
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify encryption and decryption oracle, offset to alter and desired value.')
+
+        elif cmd.startswith('cbc-chosen-ciphertext '):
+            parts = cmd.split()
+            try:
+                oracle_path = all_variables[parts[1]]
+                ciphertext = all_variables[parts[2]]
+                result = attacks.cbc_chosen_ciphertext(oracle_path, ciphertext)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify decryption oracle and ciphertext.')
+        ######################################
+        # RNG
+        ######################################
+        elif cmd.startswith('Mersenne32'):
+            try:
+                seed = parse_int(cmd.split()[-1], all_variables)
+            except:
+                seed = 5489 
+            
+            result = MersenneTwister32(seed)
             if variable_name:
                 update_variable(variable_name, result)
             else:
                 output.append(result)
 
-        except:
-            traceback.print_exc()
-            log.err('Specify known parameters and variables holding the values.')
-    
-    elif cmd.startswith('rsa-e3-broadcast '):
-        """
-        Best explanation: https://www.youtube.com/watch?v=nrgGU2mUum4
-        """
-        parts = cmd.split()
-        try:
-            # as value or from pubkey
-            modulis = [all_variables.get(parts[i]) or variables[parts[i]].params['n'] 
-                       for i in range(1, 7, 2)]
-            ciphertexts = [all_variables[parts[i]] for i in range(2, 7, 2)]
-            result = attacks.rsa_e3_broadcast(modulis, ciphertexts)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must provide 3 pairs of (RSA public key, ciphertext).')
-
-    elif cmd.startswith('rsa-unpadded-recovery '):
-        parts = cmd.split()
-        try:
-            pubkey = variables[parts[1]]
-            oracle_path = all_variables[parts[2]]
-            result = attacks.rsa_unpadded_recovery(pubkey, oracle_path)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
-        except:
-            traceback.print_exc()
-            log.err('You must provide RSA object (with public key and ciphertext included) and path to decryption oracle.')
-    
-    elif cmd.startswith('rsa-e3-forge-signature '):
-        parts = cmd.split()
-        hashes = {
-            'sha1': SHA1,
-            'md4': MD4,
-        }
-        try:
-            algo = variables[parts[1]]
-            hash_algorithm = hashes[parts[2]]
-            result = attacks.rsa_e3_forge_signature(algo, hash_algorithm, variant=1)
-            if variable_name:
-                update_variable(variable_name, result)
-            else:
-                output.append(Variable(result))
+        elif cmd.startswith('Mersenne64'):
+            try:
+                seed = parse_int(cmd.split()[-1], all_variables)
+            except:
+                seed = 5489 
             
-        except:
-            traceback.print_exc()
-            log.err('You must provide RSA object (with public key and plaintext included) and hash function name.')
-    ####################################
-    # Special cryptopals commands
-    ####################################
-    elif cmd.startswith('cp-42 '):
-        parts = cmd.split()
-        try:
-            privkey = variables[parts[1]]
-            signature = all_variables[parts[2]]
-            if privkey.verify(signature, bleichenbacher=True):
-                log.ok('Signature is valid.')
+            result = MersenneTwister64(seed)
+            if variable_name:
+                update_variable(variable_name, result)
             else:
-                log.warn('Signature is invalid.')
-        except:
-            traceback.print_exc()
-            log.err('You must provide asymmetrical algorithm object and signature to verify.')
+                output.append(result)
 
-    ######################################
-    # constant value OR bad command
-    ######################################
-    else:
-        if variable_name:
-            v = Variable(cmd, constant=True)
-            update_variable(variable_name, v)
-            log.info(variable_name, '=', v.short())
+        elif cmd.startswith('rng '):
+            parts = cmd.split()
+            mt = variables[parts[1]]
+            mode = parts[2]
+            try:
+                count = parse_int(parts[3], all_variables)
+            except:
+                count = 1
+
+            result = mt.get(mode, count)
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+
+        elif cmd.startswith('brute-timestamp-seed '):
+            parts = cmd.split()
+            value = None
+            value_offset = 0
+            reference_ts = None
+            try:
+                mt = parts[1]
+                value = all_variables[parts[2]]
+                if len(parts) >= 4:
+                    # also order is given
+                    try:
+                        value_offset = parse_int(parts[3], all_variables)
+                    except:
+                        pass
+                if len(parts) == 5:
+                    # also reference timestamp is given
+                    reference_ts = all_variables[parts[4]]
+                result = attacks.brute_timestamp_seed(mt, value, value_offset, reference_ts.as_int())
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify RNG, optional mode and value and optional reference timestamp.')
+
+        elif cmd.startswith('clone-rng '):
+            try:
+                parts = cmd.split()
+                rng = parts[1]
+                states = [int(x) for x in all_variables[parts[2]].as_raw().split()]
+                result = attacks.clone_rng(rng, states)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+            except:
+                traceback.print_exc()
+                log.err('You must provide RNG type and newline-separated list of states.')
+
+        elif cmd.startswith('brute-rng-xor '):
+            try:
+                parts = cmd.split()
+                rng = parts[1]
+                ciphertext = all_variables[parts[2]]
+                known = all_variables[parts[3]]
+                
+                result = attacks.brute_rng_xor(rng, ciphertext, known)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide RNG type, ciphertext and known portion.')
+                
+        ######################################
+        # Hashes
+        ######################################
+        elif cmd.startswith(('SHA1 ', 'MD4 ')):
+            try:
+                algorithms = {
+                    'SHA1': SHA1,
+                    'MD4': MD4,
+                }
+                algorithm = cmd.split()[0]
+                params = parse_algorithm_params(cmd[4:], variables)
+                result = algorithms[algorithm](**params)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+            except:
+                traceback.print_exc()
+                log.err('Specify known parameters and variables holding the values.')
+
+        elif cmd.startswith(('hash ', 'mac ', 'hmac ')):
+            method, _, v = cmd.partition(' ')
+            try:
+                variables[v].reset()
+                if method == 'hash':
+                    result = variables[v].hash()
+                elif method == 'mac':
+                    result = variables[v].mac()
+                elif method == 'hmac':
+                    result = variables[v].hmac()
+                
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must specify an algorithm variable.')
+        
+        elif cmd.startswith('hash-extension '):
+            parts = cmd.split()
+            algorithms = {
+                'sha1': SHA1,
+                'md4': MD4,
+            }
+            try:
+                algorithm = algorithms[parts[1]]
+                original = all_variables[parts[2]]
+                digest = all_variables[parts[3]]
+                append = all_variables[parts[4]]
+                oracle_path = variables[parts[5]]
+                
+                result = attacks.hash_extension(algorithm, original, digest, append, oracle_path)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+
+            except:
+                traceback.print_exc()
+                log.err('You must provide algorithm, original data, data to append and hashing oracle.')
+        ######################################
+        # Asymmetric algorithms
+        ######################################
+        elif cmd.startswith('DH '):
+            try:
+                params = parse_algorithm_params(cmd[3:], variables)
+                result = DH(**params)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+
+            except:
+                traceback.print_exc()
+                log.err('Specify known parameters and variables holding the values.')
+            
+        elif cmd.startswith('dh-shared-key '):
+            parts = cmd.split()
+            try:
+                if len(parts) == 3: # (DH, DH) or (DH, pubkey)
+                    first = variables[parts[1]]
+                    second = None
+                    second_pub = None
+                    try:
+                        second = variables[parts[2]]
+                        if not isinstance(second, DH):
+                            second = None
+                            raise AttributeError
+                        second_pub = second.params['pub']
+                    except:
+                        second_pub = Variable(parse_int(parts[2], all_variables))
+                    # compute shared key
+                    result = Variable(pow(second_pub.as_int(),
+                                          first.params['priv'].as_int(),
+                                          first.params['p'].as_int()
+                                         ))
+                    first.params['shared'] = result
+                    if second:
+                        second.params['shared'] = result
+                elif len(parts) == 4:
+                    public = parse_int(parts[1], all_variables)
+                    private = parse_int(parts[2], all_variables)
+                    modulus = parse_int(parts[3], all_variables)
+                    result = Variable(pow(public, private, modulus))
+                else:
+                    raise AttributeError
+                
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+            except:
+                traceback.print_exc()
+                log.err('You must provide 2 DH objects, DH object and public key or public key, private key and modulus.')
+
+        elif cmd.startswith('SRPClient '):
+            try:
+                params = parse_algorithm_params(cmd[3:], variables)
+                result = SRPClient(**params)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+
+            except:
+                traceback.print_exc()
+                log.err('Specify known parameters and variables holding the values.')
+
+        elif cmd.startswith('SRPServer '):
+            try:
+                params = parse_algorithm_params(cmd[3:], variables)
+                result = SRPServer(**params)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+
+            except:
+                traceback.print_exc()
+                log.err('Specify known parameters and variables holding the values.')
+
+        elif cmd.startswith('srp-register '):
+            parts = cmd.split()
+            try:
+                server = variables[parts[1]]
+                client = variables[parts[2]]
+                server.register(client.params['username'], 
+                                client.params['password'])
+            except:
+                traceback.print_exc()
+                log.err('You must specify SRP server and SRP client.')
+
+        elif cmd.startswith('srp-session-keys '):
+            parts = cmd.split()
+            try:
+                client = variables[parts[1]]
+                server = variables[parts[2]]
+                salt, s_pubkey = server.compute_session_key(client.params['username'],
+                                                            client.params['A'])
+                client.compute_session_key(salt, s_pubkey)
+            except:
+                traceback.print_exc()
+                log.err('You must specify SRP server and SRP client.')
+
+        elif cmd.startswith('srp-auth '):
+            parts = cmd.split()
+            try:
+                client = variables[parts[1]]
+                server = variables[parts[2]]
+                if server.auth(client.get_auth_hash()):
+                    log.ok('Client successfully authenticated.')
+                else:
+                    log.err('Authentication failed.')
+                    
+            except:
+                traceback.print_exc()
+                log.err('You must specify SRP server and SRP client.')
+
+        elif cmd.startswith('RSA'):
+            try:
+                params = parse_algorithm_params(cmd[3:], variables)
+                result = RSA(**params)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+
+            except:
+                traceback.print_exc()
+                log.err('Specify known parameters and variables holding the values.')
+        
+        elif cmd.startswith('rsa-e3-broadcast '):
+            """
+            Best explanation: https://www.youtube.com/watch?v=nrgGU2mUum4
+            """
+            parts = cmd.split()
+            try:
+                # as value or from pubkey
+                modulis = [all_variables.get(parts[i]) or variables[parts[i]].params['n'] 
+                           for i in range(1, 7, 2)]
+                ciphertexts = [all_variables[parts[i]] for i in range(2, 7, 2)]
+                result = attacks.rsa_e3_broadcast(modulis, ciphertexts)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide 3 pairs of (RSA public key, ciphertext).')
+
+        elif cmd.startswith('rsa-unpadded-recovery '):
+            parts = cmd.split()
+            try:
+                pubkey = variables[parts[1]]
+                oracle_path = all_variables[parts[2]]
+                result = attacks.rsa_unpadded_recovery(pubkey, oracle_path)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide RSA object (with public key and ciphertext included) and path to decryption oracle.')
+        
+        elif cmd.startswith('rsa-e3-forge-signature '):
+            parts = cmd.split()
+            hashes = {
+                'sha1': SHA1,
+                'md4': MD4,
+            }
+            try:
+                algo = variables[parts[1]]
+                hash_algorithm = hashes[parts[2]]
+                result = attacks.rsa_e3_forge_signature(algo, hash_algorithm, variant=1)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+                
+            except:
+                traceback.print_exc()
+                log.err('You must provide RSA object (with public key and plaintext included) and hash function name.')
+        ####################################
+        # Special cryptopals commands
+        ####################################
+        elif cmd.startswith('cp-42 '):
+            parts = cmd.split()
+            try:
+                privkey = variables[parts[1]]
+                signature = all_variables[parts[2]]
+                if privkey.verify(signature, bleichenbacher=True):
+                    log.ok('Signature is valid.')
+                else:
+                    log.warn('Signature is invalid.')
+            except:
+                traceback.print_exc()
+                log.err('You must provide asymmetrical algorithm object and signature to verify.')
+
+        ######################################
+        # constant value OR bad command
+        ######################################
         else:
-            log.warn('Unknown command.')
-            log.err(cmd)
-############
+            if variable_name:
+                v = Variable(cmd, constant=True)
+                update_variable(variable_name, v)
+                log.info(variable_name, '=', v.short())
+            else:
+                log.warn('Unknown command.')
+                log.err(cmd)
+    ############
 
+
+if __name__ == '__main__':
+    try:
+        main()
+    except SystemExit:
+        pass
