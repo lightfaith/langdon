@@ -33,6 +33,17 @@ def unhexadecimal(stream):
     return b''.join(b'%c' % int(stream[i:i+2], 16) 
                     for i in range(0, len(stream), 2))
 
+def gray(data):
+    return bytes([b ^ (b >> 1) for b in data])
+
+def ungray(data):
+    def ungray_byte(b):
+        b = b ^ (b >> 4)
+        b = b ^ (b >> 2)
+        b = b ^ (b >> 1)
+        return b
+    return bytes([ungray_byte(b) for b in data])
+
 def histogram(data):
     byte_counts = [0 for _ in range(256)]
     for byte in data:

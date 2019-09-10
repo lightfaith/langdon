@@ -75,6 +75,8 @@ Usage: {2}{0}{4}                          {3}# interactive mode{4}
        {4}{1}{4}                          {3}#  or `{0} --hex -`{4}
        {2}{0} --bin <file>{4}             {3}# convert to bin   (A -> 01000001){4}
        {2}{0} --unbin <file>{4}           {3}# convert from bin (01000001 -> A){4}
+       {2}{0} --gray <file>{4}            {3}# convert to 8b Gray code (Hello -> lWZZX){4}
+       {2}{0} --ungray <file>{4}          {3}# convert from 8b Gray code (lWZZX -> Hello){4}
        {2}{0} --entropy <file>{4}         {3}# compute entropy{4}
        {2}{0} --histogram <file>{4}       {3}# show byte histogram{4}
        {2}{0} --random <count>{4}         {3}# generate <count> random bytes{4}
@@ -95,12 +97,18 @@ Usage: {2}{0}{4}                          {3}# interactive mode{4}
     elif sys.argv[1] in ('unbin', '--unbin'):
         data = get_data_from_argv_or_stdin(sys.argv[2:])
         prynt(unbinary(data))
-    if sys.argv[1] in ('hex', '--hex'):
+    elif sys.argv[1] in ('hex', '--hex'):
         data = get_data_from_argv_or_stdin(sys.argv[2:])
         prynt(hexadecimal(data))
     elif sys.argv[1] in ('unhex', '--unhex'):
         data = get_data_from_argv_or_stdin(sys.argv[2:])
         prynt(unhexadecimal(data))
+    elif sys.argv[1] in ('gray', '--gray'):
+        data = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(gray(data))
+    elif sys.argv[1] in ('ungray', '--ungray'):
+        data = get_data_from_argv_or_stdin(sys.argv[2:])
+        prynt(ungray(data))
     elif sys.argv[1] in ('entropy', '--entropy'):
         data = get_data_from_argv_or_stdin(sys.argv[2:])
         prynt(entropy(data))
@@ -348,6 +356,8 @@ You can use some of these common functions:
     {command}concat a b{color} - concatenate multiple variables
     {command}substring <variable> <start> <length>{color} - get a substring
     {command}hexdump a{color} - show hexdump of data
+    {command}gray a{color} - convert data into 8b Gray code
+    {command}ungray a{color} - convert data from 8b Gray code
     {command}timestamp [<datetime>]{color} - get timestamp of current/specified datetime
     {command}sleep <seconds>{color} - sleep for a while
     {command}modexp m e n{color} - compute m^e mod n
@@ -736,6 +746,30 @@ problems. Use {command}analyze a{color} to analyze specific variable/algorithm o
                 except:
                     #traceback.print_exc()
                     pass # probably not Variable
+
+    elif cmd.startswith('gray'):
+        v = cmd[5:].strip()
+        try:
+            result = gray(all_variables[v].as_raw())
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must specify a variable.')
+
+    elif cmd.startswith('ungray'):
+        v = cmd[7:].strip()
+        try:
+            result = ungray(all_variables[v].as_raw())
+            if variable_name:
+                update_variable(variable_name, result)
+            else:
+                output.append(Variable(result))
+        except:
+            traceback.print_exc()
+            log.err('You must specify a variable.')
 
     elif cmd.startswith('encrypt '):
         v = cmd[8:].strip()

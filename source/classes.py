@@ -302,6 +302,35 @@ class Variable:
         output.append(log.info('Length (B):       ', len(self.as_raw()), offset=output_offset, stdout=False))
         output.append(log.info('Unique byte count:', ubc, ubc_hints.get(ubc) or '', offset=output_offset, stdout=False))
         output.append(log.info('Entropy:          ', ent, entropy_hint, offset=output_offset, stdout=False))
+        # short key XOR detection
+        repeating_lengths = {}
+        for size in range(2, 17):
+            #print('size', size)
+            for pattern in find_repeating_patterns(self.value, min_size=size):
+                #print(' found new pattern:', pattern)
+                if not repeating_lengths.get(size):
+                    repeating_lengths[size] = []
+                to_add = [y for x in pattern for y in range(x, x + size-2+1)]
+                #print('to add', to_add)
+                repeating_lengths[size].extend(to_add)
+        #print('rl:', repeating_lengths)
+        used = []
+        candidates = []
+        for length in sorted(repeating_lengths.keys(), reverse=True):
+            #print('dealing with', length)
+            to_add = [x for x in repeating_lengths[length] if x not in used]
+            #print(' to_add:', to_add)
+            if to_add:
+                candidates.append(length)
+                used.extend(to_add)
+        #print('rl count:', {k:len(v) for k,v in repeating_lengths.items()})
+        #print('rl to len:', {k:len(v)/len(self.value) for k,v in repeating_lengths.items()})
+        #print('rl to len wei:', {k:len(v)/len(self.value)/2/(k-1) for k,v in repeating_lengths.items()})
+        #TODO not accurate; find proper metric
+
+        for candidate in sorted(candidates):
+            output.append(log.warn('Repeating patterns of blocksize={0} found, this could be XOR ciphertext with keysize={0}.'.format(candidate), offset=output_offset, stdout=False))
+                
         # ECB detection
         if find_repeating_patterns(self.value, min_size=16):
             output.append(log.warn('Repeating patterns of blocksize=16 found, this could be AES-ECB ciphertext.', offset=output_offset, stdout=False))
@@ -352,7 +381,10 @@ class Variable:
             except:
                 continue
         if type(preferred) == bytes:
-            return str(preferred)[3:-2]
+            try:
+                return preferred.decode()
+            except UnicodeDecodeError:
+                return str(preferred)[3:-2]
         return preferred
         
     def __str__(self):
@@ -465,7 +497,7 @@ Analogically, you can provide ciphertext and get plaintext instead.
                C1      C2                  P1      P2       {color}
                Encryption                  Decryption
 
-In ECB mode, every block is encrypted/decrypted independently. This allows multiple attack approaches. ECB mode should NOT be used anywhere for security purposes.
+In ECB mode, every block is encrypted/decrypted independently, which is very insecure. It means 2 equivalent plaintext blocks are encrypted in to 2 equivalent ciphertext blocks (Google for 'ECB Penguin' to see the problem). ECB mode should NOT be used anywhere for security purposes.
 
 Repeating 128b blocks in ciphertext usually reveal that ECB mode is used. If an attacker has control of the plaintext and is able to observe resulting ciphertext, he can submit long string of identical characters. In ciphertext, this will result in repeating 128b blocks.
 
@@ -693,7 +725,7 @@ The issue is obvious - if you use same nonce and same key, you receive same keys
          P2 = C2 ^ K          | ^ P1
     P1 ^ P2 = P1 ^ C2 ^ K
     P1 ^ P2 = C1 ^ K ^ C2 ^ K
-    P1 ^ P2 = C1 ^ C2         # and ECB Tux's cousin is here
+    P1 ^ P2 = C1 ^ C2         # and ECB Penguin's cousin is here
 
 If captured enough ciphertexts, you transpose them (so each transposition is XORed with single byte), then XOR it with brute force and use frequency analysis to get the best. Run:{command}
 c1 = ...
@@ -930,9 +962,70 @@ class XOR(SymmetricCipher):
     @staticmethod
     def help():
         return SymmetricCipher.help() + """
-{bold}XOR{unbold}
+{color}{bold}XOR{unbold}
+XOR (also known as exclusive disjunction) is a binary operation fundamental to modern cryptography. XOR operates on bit level and can be used as stream symmetric cipher. It works as follows:{schema}
 
-""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+    A B | A^B
+    ---------
+    0 0 |  0
+    0 1 |  1
+    1 0 |  1
+    1 1 |  0 {color}
+
+In human words, XOR shows whether 2 given bits are different.
+
+XOR has truly incredible properties:
+
+    commutativity - order of operands is not relevant (A ^ B = B ^ A),
+    associativity - if multiple operations are performed, their order is not relevant
+                    (A ^ (B ^ C)) = ((A ^ B) ^ C),
+    XOR's inverse operation is XOR again (A = B ^ C; B = A ^ C; C = A ^ B),
+    A ^ A = 0,
+    A ^ 0 = A.
+
+With complete control of one operand, we are able to change any input into arbitrary output. This property is abused in bitflipping attacks. 
+
+    A         |A t t a c k   a t   d a w n .
+    A (hex)   |41747461636b206174206461776e2e
+    B         |06151a060d0a4d4107541d0d124f0f
+    A^B (hex) |47616e676e616d207374796c652121
+    A^B       |G a n g n a m   s t y l e ! !
+
+It is viable to use random data as keystream and XOR it with plaintext to get ciphertext. This is so-called One-Time Password, and for a reason. See what happens if same key is used more than once:
+         C1 = P1 ^ K
+         C2 = P2 ^ K          | ^ C1
+    C1 ^ C2 = P1 ^ K ^ P2 ^ K
+    C1 ^ C2 = P1 ^ P2
+
+P1 ^ P2 is not secure at all. First of all, if we can guess alphabets used in plaintext, we greatly reduce number of possible combinations. Rule of thumb is: XORed Gray-coded bytes of similar value give result with very few binary 1's. Furthermore, an effect similar to ECB Penguin can be observed (especially in XOR of 2 BMP images).
+
+XOR key must also be sufficiently long, ideally of plaintext's length. Short keys allow quick bruteforce (especially because key length can be discovered). Short key can create repeating patterns.
+
+{bold}XOR detection{unbold}
+
+If single-byte XOR key is used, total and chunk entropies do not change (it is about 0.5 for ASCII text). In histogram, columns would show same frequencies as normally, but shuffled in unusual fashion.
+
+Entropy gets bigger as key length increases and histogram gets 'flatter'. For smaller key lengths, repeating patterns may be observed.
+
+Also, if we can expect the plaintext has long streams of \\x00 bytes (e.g. executable files), we can see the key itself on those spots. If key is some phrase, this is very obvious.
+
+{bold}Discovering key length{unbold}
+
+Repeating patterns
+Hamming distance
+Chi test
+
+
+{bold}Frequency analysis{unbold}
+
+
+
+{clear}""".format(color=log.COLOR_DARK_GREEN,
+                  clear=log.COLOR_NONE,
+                  schema=log.COLOR_RED,
+                  command=log.COLOR_BROWN,
+                  bold=log.COLOR_BOLD, 
+                  unbold=log.COLOR_UNBOLD).splitlines()
 
     def detail(self):
         try:
