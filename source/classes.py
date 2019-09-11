@@ -261,6 +261,8 @@ class Variable:
         # value as hex number/stream
         try:
             to_unhex = value[2:] if value.startswith('0x') else value
+            if len(to_unhex) % 2 == 1:
+                to_unhex = '0' + to_unhex
             self.value = unhexadecimal(to_unhex)
             #self.value = int_to_bytes(int(value, 16))
             self.preferred_form = self.as_hex
@@ -1988,12 +1990,16 @@ class DSA(AsymmetricCipher):
         q = self.params['q'].as_int()
 
         x = int(random.random() * q)
-        x = 639776855520502551978446603169788674930181500707 #TODO remove
         self.params['x'] = Variable(x)
         # compute public key
         # actually public key is (p, q, g, y)
         y = pow(g, x, p)
         self.params['y'] = Variable(y)
+
+        # overwrite private/public parts, discard computed ones
+        for k in ('x', 'y'):
+            if k in self.params.keys() and k in kwargs.keys():
+                self.params[k] = Variable(kwargs[k])
         
 
     @staticmethod
@@ -2038,7 +2044,6 @@ class DSA(AsymmetricCipher):
                 k = self.params['k'].as_int()
             except:
                 k = int(random.random() * q)
-            k = 1141404811836914209968618955172610433380501446563 # TODO remove
             r = pow(g, k, p) % q
             if r == 0:
                 continue

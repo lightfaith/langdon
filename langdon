@@ -824,6 +824,10 @@ def main():
 
         elif cmd.startswith('verify '):
             parts = cmd.split()
+            hashes = {
+                'sha1': SHA1,
+                'md4': MD4
+            }
             try:
                 privkey = variables[parts[1]]
                 signature = all_variables[parts[2]]
