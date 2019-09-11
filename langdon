@@ -827,7 +827,11 @@ def main():
             try:
                 privkey = variables[parts[1]]
                 signature = all_variables[parts[2]]
-                if privkey.verify(signature):
+                try:
+                    hash_algorithm = hashes[parts[3].lower()]
+                except:
+                    hash_algorithm = None # deduced automatically
+                if privkey.verify(signature, hash_algorithm):
                     log.ok('Signature is valid.')
                 else:
                     log.warn('Signature is invalid.')
@@ -1634,6 +1638,20 @@ def main():
             except:
                 traceback.print_exc()
                 log.err('You must provide RSA object (with public key and plaintext included) and hash function name.')
+        
+        elif cmd.startswith('DSA'):
+            try:
+                params = parse_algorithm_params(cmd[3:], variables)
+                result = DSA(**params)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+
+            except:
+                traceback.print_exc()
+                log.err('Specify known parameters and variables holding the values.')
+
         ####################################
         # Special cryptopals commands
         ####################################

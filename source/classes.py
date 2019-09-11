@@ -396,6 +396,8 @@ class Variable:
             return str(preferred)
         return preferred
 
+    def __repr__(self):
+        return str(self)
 
 #############################################
 
@@ -1245,7 +1247,7 @@ class MersenneTwister32(MersenneTwister):
     def randfloat(self):
         return self.randint() / ((1 << self.params['w']) - 1)
     
-    def analyze(self, output_offset=0, interactive=False): # AES analysis
+    def analyze(self, output_offset=0, interactive=False): # Mersenne Twister analysis
         # TODO
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
@@ -1324,7 +1326,7 @@ class MersenneTwister64(RNG):
     def randfloat(self):
         return self.randint() / ((1 << self.params['w']) - 1)
 
-    def analyze(self, output_offset=0, interactive=False): # AES analysis
+    def analyze(self, output_offset=0, interactive=False): # Mersenne Twister analysis
         # TODO
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
@@ -1482,7 +1484,7 @@ class SHA1(Hash):
         #debug('final state:', ['0x%x' % hh for hh in self.tmp['h']])
         return result
 
-    def analyze(self, output_offset=0, interactive=False): # AES analysis
+    def analyze(self, output_offset=0, interactive=False): # SHA1 analysis
         # TODO
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
@@ -1592,7 +1594,7 @@ class MD4(Hash):
         self.params['digest'] = Variable(result)
         return result
 
-    def analyze(self, output_offset=0, interactive=False): # AES analysis
+    def analyze(self, output_offset=0, interactive=False): # MD4 analysis
         # TODO
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
@@ -1647,7 +1649,7 @@ class DH(AsymmetricCipher):
 """.format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
 
     
-    def analyze(self, output_offset=0, interactive=False): # AES analysis
+    def analyze(self, output_offset=0, interactive=False): # DH analysis
         # TODO
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
@@ -1724,7 +1726,7 @@ class SRPClient(AsymmetricCipher):
                                         self.params['N'].as_int()))
         debug('Client computed session key:', self.params['S'])
     
-    def analyze(self, output_offset=0, interactive=False): # AES analysis
+    def analyze(self, output_offset=0, interactive=False): # SRP Client analysis
         # TODO
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
@@ -1804,12 +1806,13 @@ class SRPServer(AsymmetricCipher):
             return True
         return False
 
-    def analyze(self, output_offset=0, interactive=False): # AES analysis
+    def analyze(self, output_offset=0, interactive=False): # SRP Server analysis
         # TODO
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
         output += self.analyze_params(output_offset, interactive)
         return output
+
 
 
 class RSA(AsymmetricCipher):
@@ -1897,7 +1900,7 @@ class RSA(AsymmetricCipher):
         return result
 
 
-    def verify(self, signature, bleichenbacher=False):
+    def verify(self, signature, hash_algorithm, bleichenbacher=False):
         decrypted = Variable(pow(signature.as_int(),
                                  self.params['e'].as_int(),
                                  self.params['n'].as_int()))
@@ -1913,12 +1916,15 @@ class RSA(AsymmetricCipher):
         asn_and_hash = decrypted.as_raw()[len(fs) + 2:]
         #debug('asn and hash:', asn_and_hash)
         
-        # get hash type from DigestInfo
-        try:
-            hash_algorithm = Hash.get_algorithm_from_digest_info(asn_and_hash)(data=self.params['plaintext'])
-        except:
-            debug('Unknown ASN.1 DigestInfo.')
-            return False
+        if hash_algorithm:
+            hash_algorithm = hash_algorithm(data=self.params['plaintext'])
+        else:
+            # get hash type from DigestInfo
+            try:
+                hash_algorithm = Hash.get_algorithm_from_digest_info(asn_and_hash)(data=self.params['plaintext'])
+            except:
+                debug('Unknown ASN.1 DigestInfo.')
+                return False
 
         # get correct hash, verify given hash has no garbage after it
         hash_offset = len(fs) + 2 + len(hash_algorithm.params['digest_info'].as_raw())
@@ -1946,7 +1952,7 @@ class RSA(AsymmetricCipher):
 
 
         
-    def analyze(self, output_offset=0, interactive=False): # AES analysis
+    def analyze(self, output_offset=0, interactive=False): # RSA analysis
         # TODO
         output = []
         output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
@@ -1954,3 +1960,121 @@ class RSA(AsymmetricCipher):
         return output
 
 
+class DSA(AsymmetricCipher):
+    def __init__(self, **kwargs):
+        super().__init__('DSA()')
+        self.params = {
+            'l': Variable(1024), # TODO use 3072, 256 as default 
+            'n': Variable(160),  # after pqg generation is implemented
+            'p': Variable(0x800000000000000089e1855218a0e7dac38136ffafa72eda7859f2171e25e65eac698c1702578b07dc2a1076da241c76c62d374d8389ea5aeffd3226a0530cc565f3bf6b50929139ebeac04f48c3c84afb796d61e5a4f9a8fda812ab59494232c7d2b4deb50aa18ee9e132bfa85ac4374d7f9091abc3d015efc871a584471bb1),
+            'q': Variable(0xf4f47f05794b256174bba6e9b396a7707e563c5b),
+            'g': Variable(0x5958c9d3898b224b12672c0b98e06c60df923cb8bc999d119458fef538b8fa4046c8db53039db620c094c9fa077ef389b5322a559946a71903f990f1f7e0e025e2d7f7cf494aff1a0470f5b64c36b625a097f1651fe775323556fe00b3608c887892878480e99041be601a62166ca6894bdd41a7054ec89f756ba9fc95302291),
+            'plaintext': None,
+            'ciphertext': None,
+            'x': None,
+            'y': None,
+        }
+        # apply defined values
+        for k, v in kwargs.items():
+            if k in self.params.keys():
+                self.params[k] = Variable(v)
+
+        # TODO implement automatic parameter generation
+        # using l and n as bit lengths for p and q, respectively
+
+        # generate private key
+        g = self.params['g'].as_int()
+        p = self.params['p'].as_int()
+        q = self.params['q'].as_int()
+
+        x = int(random.random() * q)
+        x = 639776855520502551978446603169788674930181500707 #TODO remove
+        self.params['x'] = Variable(x)
+        # compute public key
+        # actually public key is (p, q, g, y)
+        y = pow(g, x, p)
+        self.params['y'] = Variable(y)
+        
+
+    @staticmethod
+    def help():
+        return AsymmetricCipher.help() + """
+{bold}DSA{unbold}
+
+""".format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
+
+    def encrypt(self):
+        log.warn('DSA cannot be used for encryption/decryption.')
+        return b''
+
+    def decrypt(self):
+        log.warn('DSA cannot be used for encryption/decryption.')
+        return b''
+
+    def sign(self, hash_algorithm):
+        n = self.params['n'].as_int()
+        p = self.params['p'].as_int()
+        q = self.params['q'].as_int()
+        g = self.params['g'].as_int()
+        x = self.params['x'].as_int()
+        plaintext = self.params['plaintext']
+
+        hash_instance = hash_algorithm(data=plaintext)
+        #try:
+        #    # constant value
+        #    digest_info = hash_instance.params['digest_info'].as_raw()
+        #except:
+        #    log.err('Hashing algorithm is not supported (unknown digest_info).')
+        #    return None
+        h = Variable(hash_instance.hash()).as_int()
+
+        # signature
+        r = 0
+        s = 0
+        while s == 0:
+            # generate signature key
+            try:
+                # user-defined value
+                k = self.params['k'].as_int()
+            except:
+                k = int(random.random() * q)
+            k = 1141404811836914209968618955172610433380501446563 # TODO remove
+            r = pow(g, k, p) % q
+            if r == 0:
+                continue
+            s = invmod(k, q) * (h + x * r) % q
+        return (r << n) + s # concatenated
+        
+    def verify(self, signature, hash_algorithm):
+        if not hash_algorithm:
+            log.err('You must specify hash algorithm.')
+            return False
+
+        n = self.params['n'].as_int()
+        p = self.params['p'].as_int()
+        q = self.params['q'].as_int()
+        g = self.params['g'].as_int()
+        y = self.params['y'].as_int()
+
+        
+        signature = signature.as_int()
+        r = signature >> n
+        s = signature & ((1 << n) - 1)
+        if not 0 < r < q or not 0 < s < q:
+            return False
+
+        hash_instance = hash_algorithm(data=self.params['plaintext'])
+        h = Variable(hash_instance.hash()).as_int()
+
+        w = invmod(s, q)
+        u1 = (h * w) % q
+        u2 = (r * w) % q
+        v = ((pow(g, u1, p) * pow(y, u2, p)) % p) % q
+        return v == r
+
+    def analyze(self, output_offset=0, interactive=False): # DSA analysis
+        # TODO
+        output = []
+        output.append(log.err('Analysis not implemented for', self.name, offset=output_offset, stdout=False))
+        output += self.analyze_params(output_offset, interactive)
+        return output
