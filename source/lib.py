@@ -82,7 +82,8 @@ def prynt(*args, end='\n'):
         except:
             print(*args, end=end)
     else:
-        sys.stdout.buffer.write(b' '.join(arg.encode() for arg in args))
+        sys.stdout.buffer.write(
+            b' '.join(arg.encode() if type(arg) == str else arg for arg in args))
 
 
 def quit_string(x):

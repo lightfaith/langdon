@@ -66,7 +66,7 @@ def main():
         if sys.argv[1] in ('-h', '--help'):
             print(
                 """
-    Usage: {2}{0}{4}                          {3}# interactive mode{4}
+ Usage: {2}{0}{4}                          {3}# interactive mode{4}
         {2}{0} --hex <file>{4}             {3}# convert to hex   (ABCD -> 41424344){4}
         {2}{0} --unhex <file>{4}           {3}# convert from hex (41424344 -> ABCD){4}
         {4}{1}{4}                          {3}# also from stdin,{4}
@@ -534,7 +534,7 @@ def main():
                 filename = parts[1]
                 formats = {
                     'raw': lambda x: x.as_raw(),
-                    'int': lambda x: x.as_int(),
+                    'int': lambda x: b'%d' % x.as_int(),
                     'hex': lambda x: x.as_hex(),
                     'bin': lambda x: x.as_binary(),
                     'escaped': lambda x: x.as_escaped(),
@@ -1655,6 +1655,28 @@ def main():
             except:
                 traceback.print_exc()
                 log.err('Specify known parameters and variables holding the values.')
+
+        elif cmd.startswith('dsa_private_from_key '):
+            parts = cmd.split()
+            hashes = {
+                'sha1': SHA1,
+                'md4': MD4,
+            }
+            try:
+                algo = variables[parts[1]]
+                k = all_variables[parts[2]]
+                signature = all_variables[parts[3]]
+                hash_algorithm = hashes[parts[4]]
+                result = attacks.dsa_private_from_key(algo, k, signature, hash_algorithm)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+
+            except:
+                traceback.print_exc()
+                log.err(
+                    'You must provide DSA object (with public key and plaintext included), signature key, signature and hash function name.')
 
         ####################################
         # Special cryptopals commands

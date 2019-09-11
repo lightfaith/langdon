@@ -785,4 +785,23 @@ def rsa_e3_forge_signature(rsa, hash_algorithm, variant=1):
     else:
         log.err('Unsupported variant.')
         return None
+
+def dsa_private_from_key(dsa, k, signature, hash_algorithm):
+    n = dsa.params['n'].as_int()
+    p = dsa.params['p'].as_int()
+    q = dsa.params['q'].as_int()
+    g = dsa.params['g'].as_int()
+    y = dsa.params['y'].as_int()
+    dsa.params['k'] = k
+    k = k.as_int()
+    signature = signature.as_int()
+
+    r = signature >> n
+    s = signature & ((1 << n) - 1)
+
+    hash_instance = hash_algorithm(data=dsa.params['plaintext'])
+    h = Variable(hash_instance.hash()).as_int()
+    x = (((s * k) - h) * invmod(r, q)) % q
+    dsa.params['x'] = Variable(x)
+    return x
 #####
