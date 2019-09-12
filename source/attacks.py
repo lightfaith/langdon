@@ -827,4 +827,15 @@ def dsa_nonce_recovery(dsa1, rs1, dsa2, rs2, hash_algorithm):
     #print('s2', s2)
     k = ((m1 - m2) % q * invmod((s1 - s2) % q, q)) % q
     return k
+
+def dsa_magic_signature(dsa):
+    n = dsa.params['n'].as_int()
+    p = dsa.params['p'].as_int()
+    q = dsa.params['q'].as_int()
+    y = dsa.params['y'].as_int()
+
+    z = 1 # can be arbitrary
+    r = pow(y, z, p) % q
+    s = invmod(r, z) % q
+    return (r << n) + s  # concatenated
 #####

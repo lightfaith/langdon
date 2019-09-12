@@ -2025,6 +2025,9 @@ class DSA(AsymmetricCipher):
         x = self.params['x'].as_int()
         plaintext = self.params['plaintext']
 
+        if g == 0:
+            log.err('The g parameter cannot be zero!')
+            return 0
         hash_instance = hash_algorithm(data=plaintext)
         #try:
         #    # constant value

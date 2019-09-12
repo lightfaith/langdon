@@ -1656,7 +1656,7 @@ def main():
                 traceback.print_exc()
                 log.err('Specify known parameters and variables holding the values.')
 
-        elif cmd.startswith('dsa_private_from_nonce '):
+        elif cmd.startswith('dsa-private-from-nonce '):
             parts = cmd.split()
             hashes = {
                 'sha1': SHA1,
@@ -1679,7 +1679,7 @@ def main():
                 log.err(
                     'You must provide DSA object (with public key and plaintext included), signature key, signature and hash function name.')
 
-        elif cmd.startswith('dsa_nonce_recovery '):
+        elif cmd.startswith('dsa-nonce-recovery '):
             parts = cmd.split()
             hashes = {
                 'sha1': SHA1,
@@ -1721,6 +1721,19 @@ def main():
                 log.err(
                     'You must provide hash algorithm type and at least 2 pairs of (DSA algorithm, signature).')
 
+        elif cmd.startswith('dsa-magic-signature'):
+            parts = cmd.split()
+            try:
+                algo = variables[parts[1]]
+                if algo.params['g'].as_int() % algo.params['p'].as_int() != 1:
+                    raise AttributeError
+                result = attacks.dsa_magic_signature(algo)
+                if variable_name:
+                        update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                log.err('You must provide DSA public key with message. The g parameter must be 1 mod p.')
         ####################################
         # Special cryptopals commands
         ####################################
