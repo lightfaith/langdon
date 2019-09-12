@@ -786,7 +786,8 @@ def rsa_e3_forge_signature(rsa, hash_algorithm, variant=1):
         log.err('Unsupported variant.')
         return None
 
-def dsa_private_from_key(dsa, k, signature, hash_algorithm):
+
+def dsa_private_from_nonce(dsa, k, signature, hash_algorithm):
     n = dsa.params['n'].as_int()
     p = dsa.params['p'].as_int()
     q = dsa.params['q'].as_int()
@@ -804,4 +805,26 @@ def dsa_private_from_key(dsa, k, signature, hash_algorithm):
     x = (((s * k) - h) * invmod(r, q)) % q
     dsa.params['x'] = Variable(x)
     return x
+
+def dsa_nonce_recovery(dsa1, rs1, dsa2, rs2, hash_algorithm):
+    """
+    Nonce can be recovered if 2 messages have been signed with
+    same private key with same nonce (x, k, p, q, g, n are same)
+    """
+    n = dsa1.params['n'].as_int()
+    q = dsa1.params['q'].as_int()
+
+    hash1 = hash_algorithm(data=dsa1.params['plaintext'])
+    hash2 = hash_algorithm(data=dsa2.params['plaintext'])
+    m1 = Variable(hash1.hash()).as_int()
+    m2 = Variable(hash2.hash()).as_int()
+    s1 = rs1 & ((1 << n) - 1)
+    s2 = rs2 & ((1 << n) - 1)
+
+    print('m1', m1)
+    print('m2', m1)
+    print('s1', s1)
+    print('s2', s2)
+    k = ((m1 - m2) % q * invmod((s1 - s2) % q, q)) % q
+    return k
 #####

@@ -1656,7 +1656,7 @@ def main():
                 traceback.print_exc()
                 log.err('Specify known parameters and variables holding the values.')
 
-        elif cmd.startswith('dsa_private_from_key '):
+        elif cmd.startswith('dsa_private_from_nonce '):
             parts = cmd.split()
             hashes = {
                 'sha1': SHA1,
@@ -1667,7 +1667,8 @@ def main():
                 k = all_variables[parts[2]]
                 signature = all_variables[parts[3]]
                 hash_algorithm = hashes[parts[4]]
-                result = attacks.dsa_private_from_key(algo, k, signature, hash_algorithm)
+                result = attacks.dsa_private_from_nonce(
+                    algo, k, signature, hash_algorithm)
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
@@ -1677,6 +1678,48 @@ def main():
                 traceback.print_exc()
                 log.err(
                     'You must provide DSA object (with public key and plaintext included), signature key, signature and hash function name.')
+
+        elif cmd.startswith('dsa_nonce_recovery '):
+            parts = cmd.split()
+            hashes = {
+                'sha1': SHA1,
+                'md4': MD4,
+            }
+            try:
+                result = 0
+                hash_algorithm = hashes[parts[1]]
+                algos = [variables[p] for p in parts[2::2]]
+                signatures = [variables[p] for p in parts[3::2]]
+                zipped = list(zip(algos, signatures))
+                for i in range(0, len(zipped) - 1):
+                    for j in range(i+1, len(zipped)):
+                        algo1, signature1 = zipped[i]
+                        algo2, signature2 = zipped[j]
+                        # if signatures have same r, they have same k
+                        r1 = signature1.as_int() >> algo1.params['n'].as_int()
+                        r2 = signature2.as_int() >> algo2.params['n'].as_int()
+                        if r1 != r2:
+                            continue
+                        k = Variable(attacks.dsa_nonce_recovery(algo1, signature1.as_int(), algo2, signature2.as_int(), hash_algorithm))
+                        x1 = attacks.dsa_private_from_nonce(
+                            algo1, k, signature1, hash_algorithm)
+                        x2 = attacks.dsa_private_from_nonce(
+                            algo2, k, signature2, hash_algorithm)
+                        log.ok('Found k for pair %d and %d: %d' % (i, j, k.as_int()))
+                        # x1 and x2 should be equal
+                        log.ok('  Corresponding private key is', x1)
+                        result = k
+                        
+                
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+
+            except:
+                traceback.print_exc()
+                log.err(
+                    'You must provide hash algorithm type and at least 2 pairs of (DSA algorithm, signature).')
 
         ####################################
         # Special cryptopals commands
