@@ -793,8 +793,8 @@ def dsa_private_from_nonce(dsa, k, signature, hash_algorithm):
     q = dsa.params['q'].as_int()
     g = dsa.params['g'].as_int()
     y = dsa.params['y'].as_int()
-    dsa.params['k'] = k
-    k = k.as_int()
+    dsa.params['k'] = Variable(k)
+    k = dsa.params['k'].as_int()
     signature = signature.as_int()
 
     r = signature >> n
@@ -821,10 +821,10 @@ def dsa_nonce_recovery(dsa1, rs1, dsa2, rs2, hash_algorithm):
     s1 = rs1 & ((1 << n) - 1)
     s2 = rs2 & ((1 << n) - 1)
 
-    print('m1', m1)
-    print('m2', m1)
-    print('s1', s1)
-    print('s2', s2)
+    #print('m1', m1)
+    #print('m2', m1)
+    #print('s1', s1)
+    #print('s2', s2)
     k = ((m1 - m2) % q * invmod((s1 - s2) % q, q)) % q
     return k
 #####

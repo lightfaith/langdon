@@ -1700,7 +1700,7 @@ def main():
                         r2 = signature2.as_int() >> algo2.params['n'].as_int()
                         if r1 != r2:
                             continue
-                        k = Variable(attacks.dsa_nonce_recovery(algo1, signature1.as_int(), algo2, signature2.as_int(), hash_algorithm))
+                        k = attacks.dsa_nonce_recovery(algo1, signature1.as_int(), algo2, signature2.as_int(), hash_algorithm)
                         x1 = attacks.dsa_private_from_nonce(
                             algo1, k, signature1, hash_algorithm)
                         x2 = attacks.dsa_private_from_nonce(
@@ -1736,6 +1736,37 @@ def main():
             except:
                 traceback.print_exc()
                 log.err('You must provide asymmetrical algorithm object and signature to verify.')
+
+        elif cmd.startswith('cp-43 '):
+            parts = cmd.split()
+            hashes = {
+                'sha1': SHA1,
+                'md4': MD4,
+            }
+            try:
+                algo = variables[parts[1]]
+                signature = all_variables[parts[2]]
+                hash_algorithm = hashes[parts[3]]
+                for k in range(1, 65536):
+                    result = attacks.dsa_private_from_nonce(
+                        algo, k, signature, hash_algorithm)
+                    signature2 = algo.sign(hash_algorithm)
+                    if k % 1000 == 0:
+                        print(k)
+                    if k == 16575:
+                        _ = 1
+                    if signature.as_int() == signature2:
+                        log.ok('Found k: %d' % k)
+                        break
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+
+            except:
+                traceback.print_exc()
+                log.err(
+                    'You must provide DSA object (with public key and plaintext included), signature key, signature and hash function name.')
 
         ######################################
         # constant value OR bad command
