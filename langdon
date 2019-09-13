@@ -1734,6 +1734,21 @@ def main():
                     output.append(Variable(result))
             except:
                 log.err('You must provide DSA public key with message. The g parameter must be 1 mod p.')
+        
+        elif cmd.startswith('rsa-parity '):
+            try:
+                parts = cmd.split()
+                oracle_path = variables[parts[1]]
+                ciphertext = all_variables[parts[2]]
+                public = variables[parts[3]]
+                result = attacks.rsa_parity(oracle_path, ciphertext, public)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide path to oracle and a ciphertext.')
         ####################################
         # Special cryptopals commands
         ####################################

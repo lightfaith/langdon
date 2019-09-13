@@ -838,4 +838,33 @@ def dsa_magic_signature(dsa):
     r = pow(y, z, p) % q
     s = invmod(r, z) % q
     return (r << n) + s  # concatenated
+
+    
+def rsa_parity(oracle_path, ciphertext, public):
+    result = b''
+    ciphertext = ciphertext.as_int()
+    n = public.params['n'].as_int()
+    # encrypt 2 to get multiplier for ciphertext
+    public.params['plaintext'] = Variable(2)
+    multiplier = public.encrypt()
+    
+    lower_bound = 0
+    upper_bound = n
+    #print('ciphertext', ciphertext)
+    #print('multiplier', multiplier)
+    
+    iter_count = math.ceil(math.log(n, 2))
+    for _ in range(iter_count):
+        ciphertext = (ciphertext * multiplier) % n
+        oracle = Oracle(oracle_path, {0: Variable(ciphertext).as_raw()}, lambda i,r,o,e,kw: True)
+        oracle.start()
+        oracle.join()
+        if oracle.matching[0].output == b'1':
+            lower_bound = (lower_bound + upper_bound) // 2
+        else:
+            upper_bound = (lower_bound + upper_bound) // 2
+        #print(Variable(upper_bound).as_raw())
+    return upper_bound
+
+
 #####
