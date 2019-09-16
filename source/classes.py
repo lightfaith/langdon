@@ -89,13 +89,15 @@ class OracleResult:
     """
     Simple object for Oracle data passing.
     """
-    def __init__(self, payload_id, ret, output, error):
+    #def __init__(self, payload_id, ret, output, error):
+    def __init__(self, payload_id, output):
         self.payload_id = payload_id
-        self.ret = ret
+        #self.ret = ret
         self.output = output
-        self.error = error
+        #self.error = error
 
-class Oracle(threading.Thread):
+
+class ExternalOracle(threading.Thread):
     """
     Runs given program (oracle) for given payloads providing one argument.
 
@@ -163,7 +165,7 @@ class Oracle(threading.Thread):
         #print('payload:', payload)
         #for line in hexdump(payload):
         #    print(line)
-        oracle = Oracle(oracle_path,
+        oracle = ExternalOracle(oracle_path,
                         {0: (payload.as_raw() 
                              if isinstance(payload, Variable) 
                              else payload)},
@@ -186,7 +188,7 @@ class Variable:
     """
     def __init__(self, value, constant=False):
         self.preferred_form = self.as_escaped
-
+        #pdb.set_trace()
         # instance of variable
         if isinstance(value, Variable):
             self.value = value.value

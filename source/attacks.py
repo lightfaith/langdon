@@ -86,7 +86,7 @@ def break_xor(data, language, keysize=None):
     return result
 
 
-def ecb_chosen_plaintext(oracle_path):
+def ecb_chosen_plaintext(oracle):
     """
     ECB Chosen Plaintext Attack
     (Cryptopals 2.12, 2.14)
@@ -103,11 +103,13 @@ def ecb_chosen_plaintext(oracle_path):
     debug('Looking for starting offset and block size...')
     for prepend_len in range(16, 129):
         prepend = b'A' * prepend_len
-        oracle = Oracle(oracle_path, {0: prepend}, lambda i,r,o,e,kw: True)
-        oracle.start()
-        oracle.join()
+        #oracle = Oracle(oracle_path, {0: prepend}, lambda i,r,o,e,kw: True)
+        #oracle.start()
+        #oracle.join()
+        oracle.run(prepend)
         ciphertext = oracle.matching[0].output
         patterns = find_repeating_patterns(ciphertext)
+        oracle.reset()
         if patterns:
             blocksize = patterns[0][1] - patterns[0][0]
             relative_start_offset = (blocksize - (prepend_len - 2 * patterns[0][0])) % blocksize # offset from left block align
@@ -148,14 +150,18 @@ def ecb_chosen_plaintext(oracle_path):
                 # get reference cipher string
                 reference_payload = start_padding + b'A' * offset
                 #print('reference payload:', reference_payload)
+                '''
                 oracle = Oracle(oracle_path,
                                 {0: reference_payload},
                                 lambda i,r,o,e,kw: True)
                 oracle.start()
                 oracle.join()
+                '''
+                oracle.run(reference_payload)
                 reference_index = block_counter * blocksize
                 #print('reference index:', reference_index)
-                reference = oracle.matching[0].output[reference_index:reference_index+blocksize]
+                reference = oracle.matching[0].output[reference_index:reference_index + blocksize]
+                oracle.reset()
                 if not reference:
                     # end of ciphertext
                     debug('No reference, this is the end.')
@@ -163,6 +169,7 @@ def ecb_chosen_plaintext(oracle_path):
                     break
                 #debug('Reference:', reference)
                 # try all bytes instead of first text byte
+                '''
                 payloads = {byte_index: (start_padding
                                          + b'A' * offset
                                          + plaintext
@@ -172,8 +179,10 @@ def ecb_chosen_plaintext(oracle_path):
                 oracle_count = 8
                 #workload = (len(payloads) // oracle_count
                 #            + (1 if len(payloads) % oracle_count != 0 else 0))
+                
                 datasets = [{k:v for k,v in list(payloads.items())[i::oracle_count]}
                             for i in range(oracle_count)]
+                
                 oracles = [Oracle(oracle_path,
                                   #{k:v for k,v in 
                                   # list(payloads.items())[i*workload:(i+1)*workload]},
@@ -185,6 +194,8 @@ def ecb_chosen_plaintext(oracle_path):
                                   reference_index=reference_index,
                                   blocksize=blocksize)
                            for i in range(oracle_count)]
+                
+                
                 #debug(oracles)
                 new_byte_found = False
                 for oracle in oracles:
@@ -201,6 +212,25 @@ def ecb_chosen_plaintext(oracle_path):
                             break
                         plaintext += b'%c' % oracle.matching[0].payload_id
                         new_byte_found = True
+                '''
+                payloads = [(start_padding
+                             + b'A' * offset
+                             + plaintext
+                             + b'%c' % byte_index)
+                            for byte_index in range(256)]
+                oracle.run(*payloads,
+                           thread_count=8,
+                           condition=(lambda i, o, kw:
+                                      (o[kw['reference_index']:kw['reference_index']
+                                        + kw['blocksize']] == kw['reference'])),
+                           reference=reference,
+                           reference_index=reference_index,
+                           blocksize=blocksize)
+                new_byte_found = False
+                if oracle.matching:
+                    plaintext += b'%c' % oracle.matching[0].payload_id
+                    new_byte_found = True
+                oracle.reset()
                 if not new_byte_found:
                     debug('Oracles failed to find single answer, trying next block.')
                     break
@@ -435,7 +465,7 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
             oracles = [Oracle(oracle_path,
                               {k:v for k,v in payloads.items()
                                if k // (len(payloads)/oracle_count) == i},
-                              lambda i,r,o,e,kw: (r == 0))
+                              lambda i,o,e,kw: (r == 0))
                        for i in range(oracle_count)]
             for oracle in oracles:
                 oracle.start()

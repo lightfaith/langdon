@@ -2,6 +2,7 @@
 """
 Langdon - cryptographical framework
 """
+import importlib
 import os
 import pdb
 import pydoc
@@ -903,11 +904,29 @@ def main():
                 else:
                     output.append(Variable(result))
 
-        elif cmd.startswith('oracle '):
+        elif cmd.startswith('oracle '):  # load internal oracle
+            path = cmd[7:].strip().replace('/', '.').rstrip('.py')
+            try:
+                oracle_class = getattr(importlib.import_module(path), 'Oracle')
+                oracle = oracle_class()
+                # update manually, so we don't have to deal with dynamic import problems
+                variables[variable_name] = oracle
+            except:
+                traceback.print_exc()
+                log.err('You must provide path to valid Oracle script.')
+
+        elif cmd.startswith('run '):
             try:
                 _, oracle_path, payload = cmd.split()
-                result = Oracle.once(all_variables[payload], 
-                                     all_variables[oracle_path])
+                try:
+                    # run Internal Oracle
+                    oracle = variables[oracle_path]
+                    result = oracle.run(all_variables[payload])
+                except:
+                    traceback.print_exc()
+                    # run External Oracle
+                    result = ExternalOracle.once(all_variables[payload], 
+                                         all_variables[oracle_path])
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
@@ -1182,9 +1201,10 @@ def main():
                 log.err('Specify known parameters and variables holding the values.')
 
         elif cmd.startswith('ecb-chosen-plaintext '):
-            oracle_path = cmd.rpartition(' ')[2]
-            if oracle_path in all_variables.keys():
-                result = attacks.ecb_chosen_plaintext(all_variables[oracle_path])
+            #oracle_path = cmd.rpartition(' ')[2]
+            oracle_name = cmd.rpartition(' ')[2]
+            if oracle_name in variables.keys():
+                result = attacks.ecb_chosen_plaintext(variables[oracle_name])
                 if variable_name:
                     update_variable(variable_name, result)
                 else:

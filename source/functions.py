@@ -245,8 +245,8 @@ def oracle_send(payload, oracle_path):
     result = oracle.matching[0].output
     return result
     '''
-    from source.classes import Oracle
-    return Oracle.once(payload, oracle_path)
+    from source.classes import ExternalOracle
+    return ExternalOracle.once(payload, oracle_path)
 
 def pkcs7_pad(data, blocksize=16):
     """
