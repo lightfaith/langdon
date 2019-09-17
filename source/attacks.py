@@ -301,7 +301,7 @@ def ecb_cut_paste(e_oracle, d_oracle, expected, desired, payload=None):
         return reordered
 
 
-def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
+def cbc_bitflipping(e_oracle, d_oracle, target_block, desired):
     """
     CBC bitflipping
     (Cryptopals 2.16)
@@ -317,7 +317,9 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
     common_match = 0
     previous_encrypted = b''
     for payload_length in range(8, 129):
-        encrypted = Oracle.once(b'A' * payload_length, e_oracle_path)
+        #encrypted = Oracle.once(b'A' * payload_length, e_oracle_path)
+        encrypted = e_oracle.oneshot(b'A' * payload_length)
+
         if previous_encrypted:
             match = len([0 for i in range(len(encrypted)) if encrypted[i] == previous_encrypted[i]])
             if not common_match:
@@ -336,11 +338,14 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
     debug('Trying sample payload.')
     payload = b'thisishalloween'
     debug('Payload:', payload)
-    encrypted = Oracle.once(payload, e_oracle_path)
+    #encrypted = Oracle.once(payload, e_oracle_path)
+    encrypted = e_oracle.oneshot(payload)
+
     original_e_blocks = chunks(encrypted, blocksize)
     debug('Encrypted blocks:', original_e_blocks)
 
-    decrypted = Oracle.once(encrypted, d_oracle_path)
+    #decrypted = Oracle.once(encrypted, d_oracle_path)
+    decrypted = d_oracle.oneshot(encrypted)
     original_d_blocks = chunks(decrypted, blocksize)
     debug('Decrypted:', decrypted)
     debug('Decrypted blocks:', original_d_blocks)
@@ -370,7 +375,8 @@ def cbc_bitflipping(e_oracle_path, d_oracle_path, target_block, desired):
                   + [fake_block]
                   + original_e_blocks[target_block:])
     debug('New blocks:', new_blocks)
-    decrypted = Oracle.once(b''.join(new_blocks), d_oracle_path)
+    #decrypted = Oracle.once(b''.join(new_blocks), d_oracle_path)
+    decrypted = d_oracle.oneshot(b''.join(new_blocks))
     return decrypted
 
 

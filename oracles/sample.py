@@ -14,7 +14,8 @@ class Oracle():
     payload to allow multithreading.
     """
 
-    def __init__(self):
+    def __init__(self, filename=''):
+        self.filename = filename
         self.threads = []
         self.matching = []
         """
@@ -49,6 +50,16 @@ class Oracle():
         for t in self.threads:
             t.join()
             self.matching.extend(t.matching)
+
+    def oneshot(self, *args, thread_count=1, condition=lambda i, o, kw: True, break_on_success=False, **kwargs):
+        self.run(*args, thread_count=thread_count, condition=condition,
+                 break_on_success=break_on_success, **kwargs)
+        result = self.matching[0].output
+        self.reset()
+        return result
+
+    def short(self):
+        return 'Oracle(%s)' % self.filename
 
 
 class OracleThread(Thread):

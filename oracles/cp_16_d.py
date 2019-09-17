@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 """
-Encryption Oracle for Cryptopals 2.13 - ECB cut&paste attack
+Decryption Oracle for Cryptopals 2.16 - CBC bitflipping attack
 
-The oracle returns AES ECB ciphertext of 'email=...&uid=10&role=user' where
-email value is controlled by user. The value is sanitized, 
-so no &s, ;s or =s are allowed.
+The oracle decrypts given message and is used for validation. 
 
-Langdon is able to use ECB cut&paste attack to change the role to admin.
+Langdon is able to alter the ciphertext so, after decryption,
+one block will be destroyed and the following block will hold
+any value.
 """
 from threading import Thread
 from source.classes import *
@@ -24,6 +24,13 @@ class Oracle():
         self.filename = filename
         self.threads = []
         self.matching = []
+        """
+        specify global args here that should be same for all runs
+        even when the oracle is reset
+        """
+        self.immortal_args = {
+        }
+        """"""
 
     def reset(self, **kwargs):
         self.threads = []
@@ -37,6 +44,9 @@ class Oracle():
         # separate payloads
         payloads = [list(enumerate(args))[i::thread_count]
                     for i in range(thread_count)]
+        # add immortal args
+        for k, v in self.immortal_args.items():
+            kwargs[k] = v
         # run threads
         self.threads = [OracleThread(payloads[i], condition=condition, break_on_success=break_on_success,
                                      peers=self.threads, **kwargs) for i in range(thread_count)]
@@ -79,11 +89,11 @@ class OracleThread(Thread):
 
         """
         here belongs code for first run only
+        this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['message'] = Variable(
-            'email=%s&uid=10&role=user', constant=True)
         self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
+        self.params['iv'] = Variable('0x0000000000000000')
         """"""
 
     def run(self):
@@ -95,13 +105,12 @@ class OracleThread(Thread):
             here belongs code for every single iteration
             'output' variable should be set somehow
             """
-            payload = Variable(
-                self.params['message'].as_raw() % Variable(payload).as_raw())
-
+            payload = Variable(payload)
             key = self.params['key']
-            aes = AES(mode='ecb', plaintext=payload, key=key)
-            aes.encrypt()
-            output = aes.params['ciphertext'].as_raw()
+            iv = self.params['iv']
+            aes = AES(mode='cbc', ciphertext=payload, key=key, iv=iv)
+            aes.decrypt()
+            output = aes.params['plaintext'].as_raw()
             """"""
             # use result if condition matches
             if self.condition(payload_id, output, self.kwargs):
@@ -130,3 +139,39 @@ if __name__ == '__main__':
         main()
     except SystemExit:
         pass
+
+'''
+#!/usr/bin/python3
+
+import sys
+import os
+import subprocess
+import base64 
+
+try:
+    data = sys.argv[1]
+except:
+    print('[-] Usage: %s <base64>' % sys.argv[0])
+    sys.exit(1)
+
+result_file = '/tmp/p'
+payload = b"""
+c = base64:%s
+iv = 0x0000000000000000
+key = 'YELLOW SUBMARINE'
+aes = AES mode=cbc iv=iv key=key ciphertext=c
+p = decrypt aes
+export p %s
+""" % (data.encode(), result_file.encode())
+
+p = subprocess.Popen('./langdon',
+                     shell=True,
+                     stdin=subprocess.PIPE,
+                     stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL)
+p.stdin.write(payload)
+p.stdin.close()
+p.wait()
+with open(result_file, 'rb') as f:
+    sys.stdout.buffer.write(base64.b64encode(f.read()))
+'''

@@ -20,7 +20,8 @@ class Oracle():
     payload to allow multithreading.
     """
 
-    def __init__(self):
+    def __init__(self, filename=''):
+        self.filename = filename
         self.threads = []
         self.matching = []
         """
@@ -57,7 +58,16 @@ class Oracle():
         for t in self.threads:
             t.join()
             self.matching.extend(t.matching)
-        a = 1
+
+    def oneshot(self, *args, thread_count=1, condition=lambda i, o, kw: True, break_on_success=False, **kwargs):
+        self.run(*args, thread_count=thread_count, condition=condition,
+                 break_on_success=break_on_success, **kwargs)
+        result = self.matching[0].output
+        self.reset()
+        return result
+
+    def short(self):
+        return 'Oracle(%s)' % self.filename
 
 
 class OracleThread(Thread):
@@ -133,23 +143,3 @@ if __name__ == '__main__':
         main()
     except SystemExit:
         pass
-
-'''
-#!/bin/bash
-[ -f /tmp/prepend ] || dd if=/dev/urandom bs=1 count=$(( ( RANDOM % 20 )  + 1 )) of=/tmp/prepend
-
-payload="
-prepend = file:/tmp/prepend
-payload = base64:$1
-secret = YLLUMINATI
-p = concat prepend payload secret
-key = 'YELLOW SUBMARINE'
-aes = AES mode=ecb plaintext=p key=key
-c = encrypt aes
-export c /tmp/c_$$
-"
-
-./langdon <<< "$payload" &> /dev/null
-base64 -w 0 /tmp/c_$$
-
-'''

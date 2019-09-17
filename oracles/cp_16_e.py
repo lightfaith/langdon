@@ -1,12 +1,14 @@
 #!/usr/bin/python3
 """
-Encryption Oracle for Cryptopals 2.13 - ECB cut&paste attack
+Encryption Oracle for Cryptopals 2.16 - CBC bitflipping attack
 
-The oracle returns AES ECB ciphertext of 'email=...&uid=10&role=user' where
-email value is controlled by user. The value is sanitized, 
-so no &s, ;s or =s are allowed.
+The oracle encrypts message in the form
+cooking%%20MCs;userdata=...;comment2=%%20like%%20a%%20pound%%20of%%20bacon
+where userdata is provided by user. 
 
-Langdon is able to use ECB cut&paste attack to change the role to admin.
+Langdon is able to alter the ciphertext so, after decryption,
+one block will be destroyed and the following block will hold
+any value.
 """
 from threading import Thread
 from source.classes import *
@@ -24,6 +26,13 @@ class Oracle():
         self.filename = filename
         self.threads = []
         self.matching = []
+        """
+        specify global args here that should be same for all runs
+        even when the oracle is reset
+        """
+        self.immortal_args = {
+        }
+        """"""
 
     def reset(self, **kwargs):
         self.threads = []
@@ -37,6 +46,9 @@ class Oracle():
         # separate payloads
         payloads = [list(enumerate(args))[i::thread_count]
                     for i in range(thread_count)]
+        # add immortal args
+        for k, v in self.immortal_args.items():
+            kwargs[k] = v
         # run threads
         self.threads = [OracleThread(payloads[i], condition=condition, break_on_success=break_on_success,
                                      peers=self.threads, **kwargs) for i in range(thread_count)]
@@ -79,11 +91,13 @@ class OracleThread(Thread):
 
         """
         here belongs code for first run only
+        this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['message'] = Variable(
-            'email=%s&uid=10&role=user', constant=True)
+        self.params['format'] = Variable(
+            'cooking%%20MCs;userdata=%s;comment2=%%20like%%20a%%20pound%%20of%%20bacon', constant=True)
         self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
+        self.params['iv'] = Variable('0x0000000000000000')
         """"""
 
     def run(self):
@@ -95,11 +109,12 @@ class OracleThread(Thread):
             here belongs code for every single iteration
             'output' variable should be set somehow
             """
+            payload = Variable(payload)
             payload = Variable(
-                self.params['message'].as_raw() % Variable(payload).as_raw())
-
+                self.params['format'].as_raw() % payload.as_raw())
             key = self.params['key']
-            aes = AES(mode='ecb', plaintext=payload, key=key)
+            iv = self.params['iv']
+            aes = AES(mode='cbc', plaintext=payload, key=key, iv=iv)
             aes.encrypt()
             output = aes.params['ciphertext'].as_raw()
             """"""
