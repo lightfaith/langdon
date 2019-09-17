@@ -380,7 +380,7 @@ def cbc_bitflipping(e_oracle, d_oracle, target_block, desired):
     return decrypted
 
 
-def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):    
+def cbc_padding(ciphertext, oracle, blocksize, iv=None):    
     """
     CBC Padding Oracle Attack
 
@@ -421,7 +421,8 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
 
             # prepare payloads for bruteforce
             valid_padding_byte = -1
-            payloads = {}
+            #payloads = {}
+            payloads = []
             for bf_byte in range(256):
                 # prepare fake previous block - start with zeros
                 fake_prev = b'\x00' * (blocksize - len(block_plaintext) - 1)
@@ -437,8 +438,10 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
                                              if previous_block
                                              else 0))
                 # add the block and test it
-                payloads[bf_byte] = fake_prev + block
+                #payloads[bf_byte] = fake_prev + block
+                payloads.append(fake_prev + block)
             # bruteforce the padding
+            '''
             oracle_count = 1 # use this for debug
             oracle_count = 8 # use this for speed
             oracles = [Oracle(oracle_path,
@@ -446,13 +449,18 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
                                if k // (len(payloads)/oracle_count) == i},
                               lambda i,o,e,kw: (r == 0))
                        for i in range(oracle_count)]
+            
             for oracle in oracles:
                 oracle.start()
             for oracle in oracles:
                 oracle.join()
                 if oracle.matching:
                     valid_padding_byte = oracle.matching[0].payload_id
-
+            '''
+            oracle.run(*payloads, thread_count=1, condition=lambda i,o,kw: bool(o))
+            if oracle.matching:
+                valid_padding_byte = oracle.matching[0].payload_id
+            oracle.reset()
             if valid_padding_byte == -1:
                 debug('Failed to find valid padding byte!')
                 break
@@ -471,7 +479,7 @@ def cbc_padding(ciphertext, oracle_path, blocksize, iv=None):
     #    print('Final plaintext:', (b''.join(final_plaintexts[::-1])).decode())
     #except:
     #    print('Final plaintext:', b''.join(final_plaintexts[::-1]))
-    return b''.join(final_plaintexts[::-1])
+    return pkcs7_unpad(b''.join(final_plaintexts[::-1]))
 
 def brute_timestamp_seed(rng, value, value_offset, reference_ts):
     """

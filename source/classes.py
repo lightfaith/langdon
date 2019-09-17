@@ -917,7 +917,8 @@ ctr-bitflipping e_oracle d_oracle offset payload
             try:
                 plaintext = pkcs7_unpad(padded)
             except:
-                traceback.print_exc()
+                plaintext = ''
+                #traceback.print_exc()
         self.params['plaintext'] = Variable(plaintext)
         return self.params['plaintext']
 

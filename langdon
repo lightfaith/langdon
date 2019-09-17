@@ -1255,19 +1255,19 @@ def main():
             try:
                 try:
                     try:
-                        _, ciphertext, oracle_path, blocksize, iv = cmd.split()
+                        _, ciphertext, oracle_name, blocksize, iv = cmd.split()
                         blocksize = int(blocksize)
                     except:
-                        _, ciphertext, oracle_path, blocksize = cmd.split()
+                        _, ciphertext, oracle_name, blocksize = cmd.split()
                         iv = None
                         blocksize = int(blocksize)
                 except:
-                    _, ciphertext, oracle_path = cmd.split()
+                    _, ciphertext, oracle_name = cmd.split()
                     iv = None
                     blocksize = 16
                 
                 result = attacks.cbc_padding(all_variables[ciphertext], 
-                                             all_variables[oracle_path], 
+                                             variables[oracle_name],
                                              blocksize,
                                              all_variables.get(iv))
                 if variable_name:
@@ -1276,7 +1276,7 @@ def main():
                     output.append(Variable(result))
             except:
                 traceback.print_exc()
-                log.err('You must specify ciphertext, oracle path and optional blocksize.')
+                log.err('You must specify ciphertext, oracle and optional blocksize.')
 
         elif cmd.startswith('ctr-fixed-nonce '):
             try:
