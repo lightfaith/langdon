@@ -1,6 +1,12 @@
 #!/usr/bin/python3
 """
+Oracle for Cryptopals 2.14 - ECB chosen plaintext attack
 
+The oracle concatenates given payload with secret value (self.params['secret']),
+like CP 2.12. Moreover, random data is prepended. Oracle then returns AES ECB 
+ciphertext of the payload.
+
+Langdon is able to recover the secret just by altering provided payload.
 """
 from threading import Thread
 from source.classes import *
@@ -22,6 +28,8 @@ class Oracle():
         even when the oracle is reset
         """
         self.immortal_args = {
+            'prepend': Variable(b''.join(int_to_bytes(random.randint(0, 256))
+                                         for i in range(random.randint(0, 10))))
         }
         """"""
 
@@ -49,6 +57,7 @@ class Oracle():
         for t in self.threads:
             t.join()
             self.matching.extend(t.matching)
+        a = 1
 
 
 class OracleThread(Thread):
@@ -69,15 +78,14 @@ class OracleThread(Thread):
         self.break_on_success = break_on_success
         self.peers = peers
         self.kwargs = kwargs
-
         """
         here belongs code for first run only
-        this is rerun after oracle reset()
         constant Variables should be created here
         """
         self.params['secret'] = Variable(
             'base64:Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK', constant=True)
         self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
+
         """"""
 
     def run(self):
@@ -90,7 +98,8 @@ class OracleThread(Thread):
             'output' variable should be set somehow
             """
             payload = Variable(payload)
-            payload = Variable(payload.as_raw() +
+            payload = Variable(self.kwargs['prepend'].as_raw() +
+                               payload.as_raw() +
                                self.params['secret'].as_raw())
             key = self.params['key']
             aes = AES(mode='ecb', plaintext=payload, key=key)
@@ -124,3 +133,23 @@ if __name__ == '__main__':
         main()
     except SystemExit:
         pass
+
+'''
+#!/bin/bash
+[ -f /tmp/prepend ] || dd if=/dev/urandom bs=1 count=$(( ( RANDOM % 20 )  + 1 )) of=/tmp/prepend
+
+payload="
+prepend = file:/tmp/prepend
+payload = base64:$1
+secret = YLLUMINATI
+p = concat prepend payload secret
+key = 'YELLOW SUBMARINE'
+aes = AES mode=ecb plaintext=p key=key
+c = encrypt aes
+export c /tmp/c_$$
+"
+
+./langdon <<< "$payload" &> /dev/null
+base64 -w 0 /tmp/c_$$
+
+'''
