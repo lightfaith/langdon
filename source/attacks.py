@@ -150,13 +150,6 @@ def ecb_chosen_plaintext(oracle):
                 # get reference cipher string
                 reference_payload = start_padding + b'A' * offset
                 #print('reference payload:', reference_payload)
-                '''
-                oracle = Oracle(oracle_path,
-                                {0: reference_payload},
-                                lambda i,r,o,e,kw: True)
-                oracle.start()
-                oracle.join()
-                '''
                 oracle.run(reference_payload)
                 reference_index = block_counter * blocksize
                 #print('reference index:', reference_index)
@@ -168,51 +161,8 @@ def ecb_chosen_plaintext(oracle):
                     done = True
                     break
                 #debug('Reference:', reference)
+                
                 # try all bytes instead of first text byte
-                '''
-                payloads = {byte_index: (start_padding
-                                         + b'A' * offset
-                                         + plaintext
-                                         + b'%c' % byte_index)
-                            for byte_index in range(256)}
-                
-                oracle_count = 8
-                #workload = (len(payloads) // oracle_count
-                #            + (1 if len(payloads) % oracle_count != 0 else 0))
-                
-                datasets = [{k:v for k,v in list(payloads.items())[i::oracle_count]}
-                            for i in range(oracle_count)]
-                
-                oracles = [Oracle(oracle_path,
-                                  #{k:v for k,v in 
-                                  # list(payloads.items())[i*workload:(i+1)*workload]},
-                                  datasets[i],
-                                  (lambda i,r,o,e,kw:
-                                   (o[kw['reference_index']:kw['reference_index']
-                                      + kw['blocksize']] == kw['reference'])),
-                                  reference=reference,
-                                  reference_index=reference_index,
-                                  blocksize=blocksize)
-                           for i in range(oracle_count)]
-                
-                
-                #debug(oracles)
-                new_byte_found = False
-                for oracle in oracles:
-                    oracle.start()
-                for oracle in oracles:
-                    oracle.join()
-                    if oracle.matching:
-                        if new_byte_found:
-                            #another matching byte? we are decrypting
-                            #static block!
-                            #repair the damage and move on
-                            plaintext = plaintext[:-1]
-                            new_byte_found = False
-                            break
-                        plaintext += b'%c' % oracle.matching[0].payload_id
-                        new_byte_found = True
-                '''
                 payloads = [(start_padding
                              + b'A' * offset
                              + plaintext
@@ -244,7 +194,7 @@ def ecb_chosen_plaintext(oracle):
         return pkcs7_unpad(plaintext)
 
 
-def ecb_cut_paste(e_oracle_path, d_oracle_path, expected, desired, payload=None):
+def ecb_cut_paste(e_oracle, d_oracle, expected, desired, payload=None):
     """
     ECB cut-and-paste
     (Cryptopals 2.13)
@@ -261,7 +211,11 @@ def ecb_cut_paste(e_oracle_path, d_oracle_path, expected, desired, payload=None)
     """
     # find blocksize
     blocksize_payload = b'A' * 129
-    encrypted = Oracle.once(blocksize_payload, e_oracle_path)
+    #encrypted = Oracle.once(blocksize_payload, e_oracle_path)
+    e_oracle.run(blocksize_payload)
+    encrypted = e_oracle.matching[0].output
+    e_oracle.reset()
+
     patterns = find_repeating_patterns(encrypted)
     if not patterns:
         log.err('No patterns present -> probably not ECB.')
@@ -269,7 +223,11 @@ def ecb_cut_paste(e_oracle_path, d_oracle_path, expected, desired, payload=None)
         blocksize = patterns[0][1] - patterns[0][0]
         debug('Determined blocksize:', blocksize)
         
-        decrypted = Oracle.once(encrypted, d_oracle_path)
+        #decrypted = Oracle.once(encrypted, d_oracle_path)
+        d_oracle.run(encrypted)
+        decrypted = d_oracle.matching[0].output
+        d_oracle.reset()
+        
         # determine payload offset
         debug('Determining payload offset...')
         payload_offset = decrypted.index(blocksize_payload)
@@ -289,8 +247,15 @@ def ecb_cut_paste(e_oracle_path, d_oracle_path, expected, desired, payload=None)
 
         # find expected value offset
         debug('Using', payload, 'as payload, len:', len(payload))
-        encrypted = Oracle.once(payload, e_oracle_path)
-        decrypted = Oracle.once(encrypted, d_oracle_path)
+        #encrypted = Oracle.once(payload, e_oracle_path)
+        #decrypted = Oracle.once(encrypted, d_oracle_path)
+        e_oracle.run(payload)
+        encrypted = e_oracle.matching[0].output
+        e_oracle.reset()
+        d_oracle.run(encrypted)
+        decrypted = d_oracle.matching[0].output
+        d_oracle.reset()
+
         debug('Decrypted message:', decrypted)
         debug('Decrypted chunks:', [decrypted[i:i+blocksize]
                                     for i in range(0, len(decrypted), blocksize)])
@@ -308,7 +273,11 @@ def ecb_cut_paste(e_oracle_path, d_oracle_path, expected, desired, payload=None)
                    + payload[start_payload_padding:])
         debug('Using', payload, 'as final payload, len:', len(payload))
 
-        encrypted = Oracle.once(payload, e_oracle_path)
+        #encrypted = Oracle.once(payload, e_oracle_path)
+        e_oracle.run(payload)
+        encrypted = e_oracle.matching[0].output
+        e_oracle.reset()
+
         encrypted_chunks = [encrypted[i:i+blocksize]
                             for i in range(0, len(encrypted), blocksize)]
         # drop the expected chunk, put desired chunk in the place
@@ -320,7 +289,11 @@ def ecb_cut_paste(e_oracle_path, d_oracle_path, expected, desired, payload=None)
         del encrypted_chunks[fake_block_index]
 
         reordered = b''.join(encrypted_chunks)
-        decrypted = Oracle.once(reordered, d_oracle_path)
+        #decrypted = Oracle.once(reordered, d_oracle_path)
+        d_oracle.run(reordered)
+        decrypted = d_oracle.matching[0].output
+        d_oracle.reset()
+
         debug('Decrypted message:', decrypted)
         debug('Decrypted chunks:', [decrypted[i:i+blocksize]
                                     for i in range(0, len(decrypted), blocksize)])

@@ -1,7 +1,10 @@
 #!/usr/bin/python3
+"""
+
+"""
+from threading import Thread
 from source.classes import *
 from source.functions import *
-from threading import Thread
 
 
 class Oracle():
@@ -22,17 +25,17 @@ class Oracle():
     def terminate(self):
         for t in self.threads:
             t.terminate = True
-            # TODO join? probably not...
 
     def run(self, *args, thread_count=1, condition=lambda i, o, kw: True, break_on_success=False, **kwargs):
         # separate payloads
         payloads = [list(enumerate(args))[i::thread_count]
-                    for i in range(thread_count)]  # TODO or dict?
+                    for i in range(thread_count)]
         # run threads
         self.threads = [OracleThread(payloads[i], condition=condition, break_on_success=break_on_success,
                                      peers=self.threads, **kwargs) for i in range(thread_count)]
         for t in self.threads:
             t.start()
+        # collect results
         for t in self.threads:
             t.join()
             self.matching.extend(t.matching)
@@ -57,25 +60,24 @@ class OracleThread(Thread):
         self.peers = peers
         self.kwargs = kwargs
 
-        # here belongs code for first run only
+        """
+        here belongs code for first run only
+        constant Variables should be created here
+        """
         self.params['secret'] = Variable(
             'base64:Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK', constant=True)
         self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
-        #####
-    '''
-    def reset(self, **kwargs):
-        self.run_count = 0
-        self.matching = []
-        self.terminate = False
-    '''
+        """"""
 
     def run(self):
-        # if not self.run_count:
-        #    self.init(**kwargs)
+        # run code for each payload
         for payload_id, payload in self.payloads:
             if self.terminate:
                 break
-            # here belongs code for every single iteration
+            """
+            here belongs code for every single iteration
+            'output' variable should be set somehow
+            """
             payload = Variable(payload)
             payload = Variable(payload.as_raw() +
                                self.params['secret'].as_raw())
@@ -83,22 +85,27 @@ class OracleThread(Thread):
             aes = AES(mode='ecb', plaintext=payload, key=key)
             aes.encrypt()
             output = aes.params['ciphertext'].as_raw()
-            #####
+            """"""
+            # use result if condition matches
             if self.condition(payload_id, output, self.kwargs):
                 self.matching.append(OracleResult(payload_id, output))
+                # decide whether to stop
                 if self.break_on_success:
                     # signal other oracles to terminate
                     if self.peers:
                         for peer in self.peers:
                             peer.terminate = True
                     break
-        #self.run_count += 1
 
 
 def main():
     oracle = Oracle()
-    oracle.run(payload=b'')
+    """
+    specify test code here, run with python3 -m oracles.<module_name>
+    """
+    oracle.run('Hello')
     print(oracle.matching)
+    """"""
 
 
 if __name__ == '__main__':

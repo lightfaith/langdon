@@ -921,7 +921,9 @@ def main():
                 try:
                     # run Internal Oracle
                     oracle = variables[oracle_path]
-                    result = oracle.run(all_variables[payload])
+                    oracle.run(all_variables[payload])
+                    result = oracle.matching[0].output if oracle.matching else b''
+                    oracle.reset()
                 except:
                     traceback.print_exc()
                     # run External Oracle
@@ -1215,18 +1217,15 @@ def main():
         elif cmd.startswith('ecb-cut-paste '):
             try:
                 try:
-                    _, e_oracle_path, d_oracle_path, expected, desired, payload = cmd.split()
-                    result = attacks.ecb_cut_paste(all_variables[e_oracle_path],
-                                                   all_variables[d_oracle_path],
-                                                   all_variables[expected],
-                                                   all_variables[desired],
-                                                   all_variables[payload])
+                    _, e_oracle_name, d_oracle_name, expected, desired, payload = cmd.split()
                 except:
-                    _, e_oracle_path, d_oracle_path, expected, desired = cmd.split()
-                    result = attacks.ecb_cut_paste(all_variables[e_oracle_path],
-                                                   all_variables[d_oracle_path],
-                                                   all_variables[expected],
-                                                   all_variables[desired])
+                    _, e_oracle_name, d_oracle_name, expected, desired = cmd.split()
+                    payload = None
+                result = attacks.ecb_cut_paste(variables[e_oracle_name],
+                                                variables[d_oracle_name],
+                                                all_variables[expected],
+                                                all_variables[desired],
+                                                all_variables[payload] if payload else None)
                     
                 if variable_name:
                     update_variable(variable_name, result)
