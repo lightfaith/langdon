@@ -589,7 +589,7 @@ def ctr_random_access(oracle_path, plaintext):
     return result
 '''
 
-def ctr_bitflipping(e_oracle_path, d_oracle_path, offset, desired):
+def ctr_bitflipping(e_oracle, d_oracle, offset, desired):
     """
     CTR bitflipping
 
@@ -603,10 +603,13 @@ def ctr_bitflipping(e_oracle_path, d_oracle_path, offset, desired):
     debug('Trying sample payload.')
     payload = b'thisishalloween'
     debug('Payload:', payload)
-    encrypted = Oracle.once(payload, e_oracle_path)
+    #encrypted = Oracle.once(payload, e_oracle_path)
+    encrypted = e_oracle.oneshot(payload)
+
     #original_e_blocks = chunks(encrypted, blocksize)
     #debug('Encrypted blocks:', original_e_blocks)
-    decrypted = Oracle.once(encrypted, d_oracle_path)
+    #decrypted = Oracle.once(encrypted, d_oracle_path)
+    decrypted = d_oracle.oneshot(encrypted)
     #original_d_blocks = chunks(decrypted, blocksize)
     debug('Decrypted:', decrypted)
     #debug('Decrypted blocks:', original_d_blocks)
@@ -633,22 +636,25 @@ def ctr_bitflipping(e_oracle_path, d_oracle_path, offset, desired):
     fake_block = xor(desired, keystream)
 
     fake = encrypted[:offset] + fake_block + encrypted[offset + len(fake_block):]
-    decrypted = Oracle.once(fake, d_oracle_path)
+    #decrypted = Oracle.once(fake, d_oracle_path)
+    decrypted = d_oracle.oneshot(fake)
     return decrypted
 
-def cbc_chosen_ciphertext(oracle_path, ciphertext):
+def cbc_chosen_ciphertext(oracle, ciphertext):
     blocksize = 16
     ciphertext = ciphertext.as_raw()
     encrypted_chunks = chunks(ciphertext, blocksize)
     if len(encrypted_chunks) < 3:
         log.err('Message is too short.')
-    decrypted = Oracle.once(ciphertext, oracle_path)
+    #decrypted = Oracle.once(ciphertext, oracle_path)
+    decrypted = oracle.oneshot(ciphertext)
     debug('Decrypted:', decrypted)
     fake = b''.join([encrypted_chunks[0],
                      b'\x00' * blocksize,
                      encrypted_chunks[0]])
     debug('Fake:', fake)
-    decrypted = Oracle.once(fake, oracle_path)
+    #decrypted = Oracle.once(fake, oracle_path)
+    decrypted = oracle.oneshot(fake)
     decrypted_chunks = chunks(decrypted, blocksize)
     debug('Decrypted:', decrypted_chunks)
     return xor(decrypted_chunks[0], decrypted_chunks[2])

@@ -1295,9 +1295,9 @@ def main():
 
         elif cmd.startswith('ctr-bitflipping '):
             try:
-                _, e_oracle_path, d_oracle_path, target_offset, payload = cmd.split()
-                result = attacks.ctr_bitflipping(all_variables[e_oracle_path], 
-                                                 all_variables[d_oracle_path], 
+                _, e_oracle_name, d_oracle_name, target_offset, payload = cmd.split()
+                result = attacks.ctr_bitflipping(variables[e_oracle_name], 
+                                                 variables[d_oracle_name],
                                                  all_variables[target_offset],
                                                  all_variables[payload])
                 if variable_name:
@@ -1311,9 +1311,9 @@ def main():
         elif cmd.startswith('cbc-chosen-ciphertext '):
             parts = cmd.split()
             try:
-                oracle_path = all_variables[parts[1]]
+                oracle = variables[parts[1]]
                 ciphertext = all_variables[parts[2]]
-                result = attacks.cbc_chosen_ciphertext(oracle_path, ciphertext)
+                result = attacks.cbc_chosen_ciphertext(oracle, ciphertext)
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
