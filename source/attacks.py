@@ -660,7 +660,7 @@ def cbc_chosen_ciphertext(oracle, ciphertext):
     return xor(decrypted_chunks[0], decrypted_chunks[2])
 
 
-def hash_extension(algorithm, original, original_hash, append, oracle_path):
+def hash_extension(algorithm, original, original_hash, append, oracle):
     """
     We try to create MAC of new data replacing key with arbitrary characters.
     The hash state will be restored from provided digest -> key is not needed.
@@ -678,17 +678,18 @@ def hash_extension(algorithm, original, original_hash, append, oracle_path):
         forged_digest = h.hash(bits_len=((key_length + len(forged_data)) * 8))
         #debug('   Forged digest:', forged_digest)
 
-        o = Oracle(oracle_path, {0: forged_digest+forged_data}, lambda i,r,o,e,kw: True)
-        o.start()
-        o.join()
-        
-        if o.matching[0].ret == 0:
+        #o = Oracle(oracle_path, {0: forged_digest+forged_data}, lambda i,r,o,e,kw: True)
+        #o.start()
+        #o.join()
+        equal = oracle.oneshot(forged_data, forged_digest)
+        #if o.matching[0].ret == 0:
+        if equal:
             debug('  Oracle approves!', forged_digest)
             return forged_digest
         else:
             #debug('  oracle error:', o.matching[0].error)
             pass
-    return None
+    return ''
 
 
 def timing_leak(oracle_path, threshold, slowest, alphabet):

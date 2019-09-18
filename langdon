@@ -1470,9 +1470,9 @@ def main():
                 original = all_variables[parts[2]]
                 digest = all_variables[parts[3]]
                 append = all_variables[parts[4]]
-                oracle_path = variables[parts[5]]
+                oracle = variables[parts[5]]
                 
-                result = attacks.hash_extension(algorithm, original, digest, append, oracle_path)
+                result = attacks.hash_extension(algorithm, original, digest, append, oracle)
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
