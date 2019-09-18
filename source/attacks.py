@@ -692,7 +692,7 @@ def hash_extension(algorithm, original, original_hash, append, oracle):
     return ''
 
 
-def timing_leak(oracle_path, threshold, slowest, alphabet):
+def timing_leak(oracle, threshold, slowest, alphabet):
     """
     Often the code is written in such manner that when problem occurs,
     the function is terminated prematurely. With time measuring it may be 
@@ -709,30 +709,36 @@ def timing_leak(oracle_path, threshold, slowest, alphabet):
     while True:
         debug('Actual secret:', secret)
         # try each byte
-        oracles = [Oracle(oracle_path, 
-                          {i: secret + bytes([i])}, 
-                          lambda i,r,o,e,kw: True) 
-                   for i in alphabet]
-        for oracle in oracles:
-            oracle.start()
-            oracle.join()
+        payloads = [secret + bytes([i]) for i in alphabet]
+        #oracles = [Oracle(oracle_path, 
+        #                  {i: secret + bytes([i])}, 
+        #                  lambda i,r,o,e,kw: True) 
+        #           for i in alphabet]
+        #for oracle in oracles:
+        #    oracle.start()
+        #    oracle.join()
             #debug('key:', oracle.payloads.keys())
             #debug('error:', oracle.matching[0].error)
         # found correct value? return
-        finished = [o for o in oracles if o.matching[0].ret == 0]
+        oracle.run(*payloads, thread_count=int(math.sqrt(len(alphabet))))
+        finished = [m for m in oracle.matching if m.output == 'success']
         if finished:
-            secret = list(finished[0].payloads.values())[0]
+            #secret = list(finished[0].payloads.values())[0]
+            secret = payloads[finished[0].payload_id]
             debug('Oracle succeeded with', secret)
             return secret
+        # pair payloads to results
+        paired = [(payloads[match.payload_id], match) for match in oracle.matching]
         # use slowest/fastest payload
-        timed = sorted(oracles, key=lambda x: x.time, reverse=slowest)
-        best_diff = abs(timed[1].time - timed[0].time)
-        debug('  Time difference between 2 best (0x%02x, 0x%02x) is %f'
-              % (list(timed[0].payloads.keys())[0], 
-                 list(timed[1].payloads.keys())[0],
-                 best_diff))
+        
+        timed = sorted(paired, key=lambda x: x[1].time, reverse=slowest)
+        best_diff = abs(timed[1][1].time - timed[0][1].time)
+        #debug('  Time difference between 2 best (0x%02x, 0x%02x) is %f'
+        #      % (list(timed[0].payloads.keys())[0], 
+        #         list(timed[1].payloads.keys())[0],
+        #         best_diff))
         if best_diff >= threshold:
-            secret = list(timed[0].payloads.values())[0]
+            secret = timed[0][0]
         else:
             debug('  Threshold not met, trying again...')
 

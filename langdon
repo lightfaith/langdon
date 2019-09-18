@@ -986,7 +986,7 @@ def main():
         elif cmd.startswith('timing-leak '):
             parts = cmd.split()
             try:
-                oracle_path = all_variables[parts[1]]
+                oracle = variables[parts[1]]
                 threshold = float(parts[2])
                 try:
                     slowest = (parts[3] == 'slowest')
@@ -994,14 +994,14 @@ def main():
                     slowest = True
                 try:
                     alphabet = set(all_variables[parts[4]].as_raw())
-                except KeyError:
+                except IndexError:
                     log.warn('Alphabet not defined, using all possible byte values.')
                     alphabet = range(256)
                 except:
                     traceback.print_exc()
                     alphabet = range(256)
 
-                result = attacks.timing_leak(oracle_path, threshold, slowest, alphabet)
+                result = attacks.timing_leak(oracle, threshold, slowest, alphabet)
                 if variable_name:
                     update_variable(variable_name, result)
                 else:

@@ -90,11 +90,12 @@ class OracleResult:
     Simple object for Oracle data passing.
     """
     #def __init__(self, payload_id, ret, output, error):
-    def __init__(self, payload_id, output):
+    def __init__(self, payload_id, output, time=None):
         self.payload_id = payload_id
         #self.ret = ret
         self.output = output
         #self.error = error
+        self.time = time
 
 
 class ExternalOracle(threading.Thread):

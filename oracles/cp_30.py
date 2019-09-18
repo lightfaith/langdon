@@ -1,5 +1,10 @@
 #!/usr/bin/python3
 """
+Oracle for Cryptopals 4.30 - MD4 length extension attack
+
+Oracle computes MAC of given data and key and compares resulting
+digest against given mac value.
+
 
 """
 from threading import Thread
@@ -86,41 +91,27 @@ class OracleThread(Thread):
         this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['secret'] = Variable(
-            'base64:Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK', constant=True)
         self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
         """"""
 
     def run(self):
         # run code for each payload
-        for payload_id, payload in self.payloads:
-            if self.terminate:
-                break
-            start = time.time()
-            """
-            here belongs code for every single iteration
-            'output' variable should be set somehow
-            """
-            payload = Variable(payload)
-            payload = Variable(payload.as_raw() +
-                               self.params['secret'].as_raw())
-            key = self.params['key']
-            aes = AES(mode='ecb', plaintext=payload, key=key)
-            aes.encrypt()
-            output = aes.params['ciphertext'].as_raw()
-            """"""
-            end = time.time()
-            # use result if condition matches
-            if self.condition(payload_id, output, self.kwargs):
-                self.matching.append(OracleResult(
-                    payload_id, output, end - start))
-                # decide whether to stop
-                if self.break_on_success:
-                    # signal other oracles to terminate
-                    if self.peers:
-                        for peer in self.peers:
-                            peer.terminate = True
-                    break
+        """
+        here belongs code for every single iteration
+        'output' variable should be set somehow
+        """
+        _, payload = self.payloads[0]
+        _, mac = self.payloads[1]
+        payload = Variable(payload)
+        mac = Variable(mac).as_raw()
+        key = self.params['key']
+        md = MD4(data=payload, key=key)
+        new_mac = md.mac()
+        output = (mac == new_mac)
+        """"""
+        # use result if condition matches
+        if self.condition(0, output, self.kwargs):
+            self.matching.append(OracleResult(0, output))
 
 
 def main():

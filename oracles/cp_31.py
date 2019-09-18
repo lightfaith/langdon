@@ -9,7 +9,7 @@ from source.functions import *
 
 class Oracle():
     """
-    This class is exposed for attacks, but actually 
+    This class is exposed for attacks, but actually
     everything is done in OracleThread. Oracle just separates
     payload to allow multithreading.
     """
@@ -70,7 +70,7 @@ class OracleThread(Thread):
 
     def __init__(self, payloads, condition, break_on_success=False, peers=None, ** kwargs):
         Thread.__init__(self)
-        #self.run_count = 0
+        # self.run_count = 0
         self.params = {}
         self.matching = []
         self.terminate = False
@@ -86,12 +86,19 @@ class OracleThread(Thread):
         this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['secret'] = Variable(
-            'base64:Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK', constant=True)
         self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
+        self.params['plaintext'] = Variable('file:/tmp/p', constant=True)
         """"""
 
     def run(self):
+         # load previously known data
+        plaintext = self.params['plaintext']
+
+        # get real hash (use hex form to speed up)
+        key = self.params['key']
+        sha = SHA1(data=plaintext, key=key)
+        real_hash = Variable(sha.hmac()).as_hex().encode()
+
         # run code for each payload
         for payload_id, payload in self.payloads:
             if self.terminate:
@@ -101,13 +108,20 @@ class OracleThread(Thread):
             here belongs code for every single iteration
             'output' variable should be set somehow
             """
-            payload = Variable(payload)
-            payload = Variable(payload.as_raw() +
-                               self.params['secret'].as_raw())
-            key = self.params['key']
-            aes = AES(mode='ecb', plaintext=payload, key=key)
-            aes.encrypt()
-            output = aes.params['ciphertext'].as_raw()
+
+            # compare real hash to given value
+            hash_guess = Variable(payload).as_raw()
+            output = 'success'
+            for i in range(max(len(real_hash), len(hash_guess))):
+                try:
+                    if real_hash[i] != hash_guess[i]:
+                        output = 'fail'
+                        break
+                except:
+                    output = 'fail'
+                    break
+                time.sleep(0.05)
+
             """"""
             end = time.time()
             # use result if condition matches
@@ -138,3 +152,61 @@ if __name__ == '__main__':
         main()
     except SystemExit:
         pass
+
+'''
+#!/usr/bin/python3
+"""
+
+"""
+import os
+import sys
+import base64
+import subprocess
+import itertools
+import time
+
+# sys.stderr.buffer.write(sys.argv[1].encode())
+try:
+    data = sys.argv[1]
+except:
+    print('[-] Usage: %s <base64>' % sys.argv[0], file=sys.stderr)
+    sys.exit(2)
+
+# target_file = '/etc/passwd'
+target_file = '/tmp/p'
+tmp_file = '/tmp/h'
+# get correct SHA1 for file
+payload = b"""
+f = file:%s
+key = 'YELLOW SUBMARINE'
+s = SHA1 data=f key=key
+h = hmac s
+export h %s hex
+""" % (target_file.encode(), tmp_file.encode())
+p = subprocess.Popen('./langdon',
+                     shell=True,
+                     stdin=subprocess.PIPE,
+                     stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL)
+p.stdin.write(payload)
+p.stdin.close()
+p.wait()
+
+# test byte by byte
+with open(tmp_file, 'rb') as f:
+    correct = f.read()
+    # sys.stderr.buffer.write(b'Correct: ' + correct)
+guessed = base64.b64decode(sys.argv[1])
+if len(guessed) > len(correct):
+    sys.exit(0)
+for i in range(len(correct)):
+    try:
+        if guessed[i] != correct[i]:
+            sys.exit(1)
+    except: # end of one of the string
+        sys.exit(1)
+    time.sleep(0.05)
+
+# succeeded!
+sys.exit(0)
+'''

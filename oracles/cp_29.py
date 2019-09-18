@@ -100,6 +100,7 @@ class OracleThread(Thread):
         here belongs code for every single iteration
         'output' variable should be set somehow
         """
+
         _, payload = self.payloads[0]
         _, mac = self.payloads[1]
         payload = Variable(payload)
