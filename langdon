@@ -1367,7 +1367,7 @@ def main():
             parts = cmd.split()
             value = None
             value_offset = 0
-            reference_ts = None
+            reference_ts = Variable(datetime.timestamp(datetime.now()))
             try:
                 mt = parts[1]
                 value = all_variables[parts[2]]
@@ -1380,6 +1380,7 @@ def main():
                 if len(parts) == 5:
                     # also reference timestamp is given
                     reference_ts = all_variables[parts[4]]
+                
                 result = attacks.brute_timestamp_seed(mt, value, value_offset, reference_ts.as_int())
                 if variable_name:
                     update_variable(variable_name, result)
