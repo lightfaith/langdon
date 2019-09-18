@@ -710,16 +710,6 @@ def timing_leak(oracle, threshold, slowest, alphabet):
         debug('Actual secret:', secret)
         # try each byte
         payloads = [secret + bytes([i]) for i in alphabet]
-        #oracles = [Oracle(oracle_path, 
-        #                  {i: secret + bytes([i])}, 
-        #                  lambda i,r,o,e,kw: True) 
-        #           for i in alphabet]
-        #for oracle in oracles:
-        #    oracle.start()
-        #    oracle.join()
-            #debug('key:', oracle.payloads.keys())
-            #debug('error:', oracle.matching[0].error)
-        # found correct value? return
         oracle.run(*payloads, thread_count=int(math.sqrt(len(alphabet))))
         finished = [m for m in oracle.matching if m.output == 'success']
         if finished:
@@ -733,10 +723,6 @@ def timing_leak(oracle, threshold, slowest, alphabet):
         
         timed = sorted(paired, key=lambda x: x[1].time, reverse=slowest)
         best_diff = abs(timed[1][1].time - timed[0][1].time)
-        #debug('  Time difference between 2 best (0x%02x, 0x%02x) is %f'
-        #      % (list(timed[0].payloads.keys())[0], 
-        #         list(timed[1].payloads.keys())[0],
-        #         best_diff))
         if best_diff >= threshold:
             secret = timed[0][0]
         else:
