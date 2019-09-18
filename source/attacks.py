@@ -745,7 +745,7 @@ def rsa_e3_broadcast(modulis, ciphertexts):
     result = root(x, len(ciphertexts))
     return result
 
-def rsa_unpadded_recovery(pubkey, oracle_path):
+def rsa_unpadded_recovery(pubkey, oracle):
     """
     Oracle is expected to successfuly decrypt the given ciphertext, but
     only once (imagine some replay protection).
@@ -760,7 +760,8 @@ def rsa_unpadded_recovery(pubkey, oracle_path):
 
     s = random.randint(2, n - 1)
     fake_ciphertext = Variable((ciphertext * pow(s, e, n)) % n)
-    fake_plaintext = Variable(Oracle.once(fake_ciphertext.as_raw(), oracle_path)).as_int()
+    #fake_plaintext = Variable(Oracle.once(fake_ciphertext.as_raw(), oracle_path)).as_int()
+    fake_plaintext = Variable(oracle.oneshot(fake_ciphertext.as_raw())).as_int()
     result = Variable((fake_plaintext * invmod(s, n)) % n)
     # TODO test with padded...
     pubkey.params['plaintext'] = result
@@ -856,8 +857,7 @@ def dsa_magic_signature(dsa):
     return (r << n) + s  # concatenated
 
     
-def rsa_parity(oracle_path, ciphertext, public):
-    result = b''
+def rsa_parity(oracle, ciphertext, public):
     ciphertext = ciphertext.as_int()
     n = public.params['n'].as_int()
     # encrypt 2 to get multiplier for ciphertext
@@ -872,14 +872,17 @@ def rsa_parity(oracle_path, ciphertext, public):
     iter_count = math.ceil(math.log(n, 2))
     for _ in range(iter_count):
         ciphertext = (ciphertext * multiplier) % n
-        oracle = Oracle(oracle_path, {0: Variable(ciphertext).as_raw()}, lambda i,r,o,e,kw: True)
-        oracle.start()
-        oracle.join()
-        if oracle.matching[0].output == b'1':
+        #oracle = Oracle(oracle_path, {0: Variable(ciphertext).as_raw()}, lambda i,r,o,e,kw: True)
+        #oracle.start()
+        #oracle.join()
+        #lsb = oracle.oneshot(Variable(ciphertext).as_raw())
+        lsb = oracle.oneshot(ciphertext)
+        #if oracle.matching[0].output == b'1':
+        if lsb == b'1':
             lower_bound = (lower_bound + upper_bound) // 2
         else:
             upper_bound = (lower_bound + upper_bound) // 2
-        #print(Variable(upper_bound).as_raw())
+        debug(Variable(upper_bound).as_raw())
     return upper_bound
 
 

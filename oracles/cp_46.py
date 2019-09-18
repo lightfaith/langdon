@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 """
-Oracle for Cryptopals 4.31 - Timing leak
+Oracle for Cryptopals 6.46 - RSA parity
 
-Oracle precomputes hash of given data and then does a byte-by-byte
-comparison with provided value. Loop has sleep to emulate
-timing leak vulnerability.
+Oracle decrypts given ciphertext and just returns value 
+of the last bit, that is 0 = even, 1 = odd.
+
+Langdon is able to recover original plaintext.
 """
 from threading import Thread
 from source.classes import *
@@ -74,7 +75,7 @@ class OracleThread(Thread):
 
     def __init__(self, payloads, condition, break_on_success=False, peers=None, ** kwargs):
         Thread.__init__(self)
-        # self.run_count = 0
+        #self.run_count = 0
         self.params = {}
         self.matching = []
         self.terminate = False
@@ -90,19 +91,11 @@ class OracleThread(Thread):
         this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
-        self.params['plaintext'] = Variable('file:/tmp/p', constant=True)
+        self.params['d'] = Variable('file:/tmp/d', constant=True)
+        self.params['n'] = Variable('file:/tmp/n', constant=True)
         """"""
 
     def run(self):
-         # load previously known data
-        plaintext = self.params['plaintext']
-
-        # get real hash (use hex form to speed up)
-        key = self.params['key']
-        sha = SHA1(data=plaintext, key=key)
-        real_hash = Variable(sha.hmac()).as_hex().encode()
-
         # run code for each payload
         for payload_id, payload in self.payloads:
             if self.terminate:
@@ -112,21 +105,12 @@ class OracleThread(Thread):
             here belongs code for every single iteration
             'output' variable should be set somehow
             """
-
-            # compare real hash to given value
-            hash_guess = Variable(payload).as_raw()
-            output = 'success'
-            for i in range(max(len(real_hash), len(hash_guess))):
-                try:
-                    if real_hash[i] != hash_guess[i]:
-                        output = 'fail'
-                        break
-                except:
-                    output = 'fail'
-                    break
-                time.sleep(0.05)
-                # time.sleep(0.005)
-
+            d = self.params['d']
+            n = self.params['n']
+            payload = Variable(payload)
+            rsa = RSA(ciphertext=payload, d=d, n=n)
+            p = rsa.decrypt()
+            output = b'0' if p % 2 == 0 else b'1'
             """"""
             end = time.time()
             # use result if condition matches

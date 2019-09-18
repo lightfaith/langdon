@@ -1635,8 +1635,8 @@ def main():
             parts = cmd.split()
             try:
                 pubkey = variables[parts[1]]
-                oracle_path = all_variables[parts[2]]
-                result = attacks.rsa_unpadded_recovery(pubkey, oracle_path)
+                oracle = variables[parts[2]]
+                result = attacks.rsa_unpadded_recovery(pubkey, oracle)
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
@@ -1726,7 +1726,7 @@ def main():
                             algo1, k, signature1, hash_algorithm)
                         x2 = attacks.dsa_private_from_nonce(
                             algo2, k, signature2, hash_algorithm)
-                        log.ok('Found k for pair %d and %d: %d' % (i, j, k.as_int()))
+                        log.ok('Found k for pair %d and %d: %d' % (i, j, k))
                         # x1 and x2 should be equal
                         log.ok('  Corresponding private key is', x1)
                         result = k
@@ -1759,10 +1759,10 @@ def main():
         elif cmd.startswith('rsa-parity '):
             try:
                 parts = cmd.split()
-                oracle_path = variables[parts[1]]
+                oracle = variables[parts[1]]
                 ciphertext = all_variables[parts[2]]
                 public = variables[parts[3]]
-                result = attacks.rsa_parity(oracle_path, ciphertext, public)
+                result = attacks.rsa_parity(oracle, ciphertext, public)
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
@@ -1778,7 +1778,7 @@ def main():
             try:
                 privkey = variables[parts[1]]
                 signature = all_variables[parts[2]]
-                if privkey.verify(signature, bleichenbacher=True):
+                if privkey.verify(signature, None, bleichenbacher=True):
                     log.ok('Signature is valid.')
                 else:
                     log.warn('Signature is invalid.')
