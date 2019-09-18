@@ -1,14 +1,14 @@
 #!/usr/bin/python3
 """
-Encryption Oracle for Cryptopals 2.16 - CBC bitflipping attack
+Encryption Oracle for Cryptopals 4.26 - CTR bitflipping attack
 
 The oracle encrypts message in the form
 cooking%%20MCs;userdata=...;comment2=%%20like%%20a%%20pound%%20of%%20bacon
-where userdata is provided by user and it is sanitized. 
+where userdata is provided by user and it is sanitized.
 
 Langdon is able to alter the ciphertext so, after decryption,
-one block will be destroyed and the following block will hold
-any value.
+plaintext will hold any value.
+
 """
 from threading import Thread
 from source.classes import *
@@ -96,8 +96,8 @@ class OracleThread(Thread):
         """
         self.params['format'] = Variable(
             'cooking%%20MCs;userdata=%s;comment2=%%20like%%20a%%20pound%%20of%%20bacon', constant=True)
+        self.params['nonce'] = Variable('1337', constant=True)
         self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
-        self.params['iv'] = Variable('0x0000000000000000')
         """"""
 
     def run(self):
@@ -113,8 +113,8 @@ class OracleThread(Thread):
             payload = Variable(
                 self.params['format'].as_raw() % payload.as_raw().replace(b'=', b'--').replace(b';', b',.'))
             key = self.params['key']
-            iv = self.params['iv']
-            aes = AES(mode='cbc', plaintext=payload, key=key, iv=iv)
+            nonce = self.params['nonce']
+            aes = AES(mode='ctr', plaintext=payload, key=key, nonce=nonce)
             aes.encrypt()
             output = aes.params['ciphertext'].as_raw()
             """"""
