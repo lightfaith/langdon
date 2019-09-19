@@ -1834,6 +1834,7 @@ class RSA(AsymmetricCipher):
             'bits': Variable(1024), # p,q bits length
             'plaintext': None,
             'ciphertext': None,
+            'padding': False,       # PKCS #1v1.5 TODO True by default?
         }
         #pdb.set_trace()
         # apply defined values
@@ -1868,8 +1869,16 @@ class RSA(AsymmetricCipher):
 """.format(bold=log.COLOR_BOLD, unbold=log.COLOR_UNBOLD).splitlines()
 
     def encrypt(self):
+        if self.params['padding']:
+            # TODO random
+            #padding_string = Random.new().read(key_byte_length - 3 - len(binary_data))
+            # TODO check padding_string for no zeros?
+            padding_string = b'/\xaa\xe3X\x03h\xa2m\xe8\x88P\x05\xf6\xfcCE\xfb$'
+            plaintext = Variable(b'\x00\x02' + padding_string + b'\x00' + self.params['plaintext'].as_raw()).as_int()
+        else:
+            plaintext = self.params['plaintext'].as_int()
         try:
-            result = pow(self.params['plaintext'].as_int(),
+            result = pow(plaintext,
                          self.params['e'].as_int(),
                          self.params['n'].as_int())
             self.params['ciphertext'] = Variable(result)
@@ -1878,6 +1887,7 @@ class RSA(AsymmetricCipher):
             traceback.print_exc()
     
     def decrypt(self):
+        # TODO unpad if needed
         try:
             result = pow(self.params['ciphertext'].as_int(),
                          self.params['d'].as_int(),
@@ -1888,6 +1898,7 @@ class RSA(AsymmetricCipher):
             traceback.print_exc()
 
     def sign(self, hash_algorithm):
+        # TODO some padding applies?
         hash_instance = hash_algorithm(data=self.params['plaintext'])
         try:
             digest_info = hash_instance.params['digest_info'].as_raw() # constant value

@@ -218,8 +218,14 @@ def parse_algorithm_params(command, variables):
             if algo in variables.keys() and param in variables[algo].params.keys():
                 result[k] = variables[algo].params[param]
         else:
-            if k in ('mode',): # beacuse of AES mode=cbc
+            # allow specific keywords to not create variables
+            # beacuse of AES mode=cbc, optional RSA padding etc.
+            if k in ('mode'): 
                 result[k] = v
+            elif v == 'True':
+                result[k] = True
+            elif v == 'False':
+                result[k] = False
             else:
                 try: # as int
                     from source.classes import Variable
@@ -274,6 +280,7 @@ def pkcs7_unpad(data):
         if padding != padding_value:
             raise ValueError('Invalid bytes in the padding.')
     return data[:-padding_value]
+
 
 def ecb_suspect(data, blocksize=16):
     """

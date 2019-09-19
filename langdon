@@ -1770,6 +1770,21 @@ def main():
             except:
                 traceback.print_exc()
                 log.err('You must provide path to oracle and a ciphertext.')
+        
+        elif cmd.startswith('rsa-padding '):
+            try:
+                parts = cmd.split()
+                oracle = variables[parts[1]]
+                ciphertext = all_variables[parts[2]]
+                public = variables[parts[3]]
+                result = attacks.rsa_padding(oracle, ciphertext, public)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide path to oracle and a ciphertext.')
         ####################################
         # Special cryptopals commands
         ####################################

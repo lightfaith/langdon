@@ -886,4 +886,91 @@ def rsa_parity(oracle, ciphertext, public):
     return upper_bound
 
 
+def rsa_padding(oracle, ciphertext, public):
+    #public.params['d'] = Variable('file:/tmp/d', constant=True)
+    #public.params['n'] = Variable('file:/tmp/n', constant=True)
+    #public.params['e'] = Variable(3)
+
+    def ceil(a, b):
+        return (a + b - 1) // b
+        
+    ciphertext = ciphertext.as_int()
+    e = public.params['e'].as_int()
+    n = public.params['n'].as_int()
+    k = ceil(public.params['bits'].as_int(), 8)
+    bb = 2 ** (8 * (k - 2))
+    c0 = ciphertext
+
+    intervals = [(2*bb, 3*bb-1)]
+    # Phase 1: compute m0
+    if not oracle.oneshot(c0) == b'0':    
+        while True:
+            s = random.randint(0, n - 1)
+            c0 = (ciphertext * pow(s, e, n)) % n
+            if oracle.oneshot(c0) == b'0':
+                break
+    i = 1
+    while True:
+        # Phase 2a: Start search
+        if i == 1:
+            s = ceil(n, 3 * bb)
+            while True:
+                c = (c0 * pow(s, e, n)) % n
+                if oracle.oneshot(c) == b'0':
+                    break
+                s += 1
+        
+        # Phase 2b: searching in more intervals
+        elif len(intervals) > 1:
+            while True:
+                s += 1
+                c = (c0 * pow(s, e, n)) % n
+                if oracle.oneshot(c) == b'0':
+                    break
+        
+        # Phase 2c: searching in one interval
+        elif len(intervals) == 1:
+            a, b = intervals[0]
+            if a == b:
+                return b'\x00' + int_to_bytes(a)
+            r = ceil(2*(b*s - 2*bb), n)
+            s = ceil(2 * bb + r * n, b)
+            
+            while True:
+                c = (c0 * pow(s, e, n)) % n
+                if oracle.oneshot(c) == b'0':
+                    break
+                s += 1
+                if s > (3 * bb + r * n) // a:
+                    r += 1
+                    s = ceil((2 * bb + r * n), b)
+        
+        # Phase 3: Narrowing the set of solutions
+        intervals_new = []
+        for a, b in intervals:
+            min_r = ceil(a * s - 3 * bb + 1, n)
+            max_r = (b * s - 2 * bb) // n
+            
+            for r in range(min_r, max_r + 1):
+                l = max(a, ceil(2 * bb + r * n, s))
+                u = min(b, (3 * bb - 1 + r * n) // s)
+                if l > u:
+                    raise Exception('RSA Error: L > U')
+                # add new interval
+                overlap_found = False
+                for j, (x, y) in enumerate(intervals_new):
+                    if not (y < l or x > u):
+                        overlap_found = True
+                        x_new = min(l, x)
+                        y_new = max(u, y)
+                        intervals_new[j] = (x_new, y_new)
+                if not overlap_found:
+                    intervals_new.append((l, u))
+                
+        if not intervals_new:
+            raise Exception('RSA Error: No new intervals')
+        intervals = intervals_new
+        i += 1
+
+
 #####
