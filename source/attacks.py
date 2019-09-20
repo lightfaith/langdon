@@ -903,34 +903,59 @@ def rsa_padding(oracle, ciphertext, public):
 
     intervals = [(2*bb, 3*bb-1)]
     # Phase 1: compute m0
-    if not oracle.oneshot(c0) == b'0':    
+    if oracle.oneshot(c0) != b'0':
+        debug('Phase 1: Finding valid s')  
         while True:
             s = random.randint(0, n - 1)
             c0 = (ciphertext * pow(s, e, n)) % n
             if oracle.oneshot(c0) == b'0':
                 break
     i = 1
+    bulk_size = 1000
     while True:
         # Phase 2a: Start search
         if i == 1:
+            debug('Phase 2a: Search started')
+            # go in bulks
             s = ceil(n, 3 * bb)
             while True:
-                c = (c0 * pow(s, e, n)) % n
-                if oracle.oneshot(c) == b'0':
+                ss = range(s, s + bulk_size)
+                cs = [(c0 * pow(s, e, n)) % n for s in ss]
+                #c = (c0 * pow(s, e, n)) % n
+                #if oracle.oneshot(c) == b'0':
+                oracle.run(*cs, thread_count=8, condition=lambda i, o, kw: o == b'0')
+                if oracle.matching:
+                    s = list(ss)[oracle.matching[0].payload_id]
+                    c = cs[oracle.matching[0].payload_id]
+                    oracle.reset()
+                    debug('Phase 2a: Search finished, s = %d.' % s)
                     break
-                s += 1
+                #s += 1
+                s += bulk_size
+                oracle.reset()
         
         # Phase 2b: searching in more intervals
         elif len(intervals) > 1:
+            debug('Phase 2b: Interval count: %d' % (len(intervals)))
             while True:
-                s += 1
-                c = (c0 * pow(s, e, n)) % n
-                if oracle.oneshot(c) == b'0':
+                ss = range(s + 1, s + bulk_size + 1)
+                cs = [(c0 * pow(s, e, n)) % n for s in ss]
+                oracle.run(*cs, thread_count=8,
+                           condition=lambda i, o, kw: o == b'0')
+                if oracle.matching:
+                #if oracle.oneshot(c) == b'0':
+                    s = list(ss)[oracle.matching[0].payload_id]
+                    c = cs[oracle.matching[0].payload_id]
+                    oracle.reset()
+                    debug('Phase 2b: Search finished, s = %d.' % s)
                     break
+                s += bulk_size
+                oracle.reset()
         
         # Phase 2c: searching in one interval
         elif len(intervals) == 1:
             a, b = intervals[0]
+            debug('Phase 2c: 1 interval, distance %d' % (hamming(gray(Variable(a).as_raw()), gray(Variable(b).as_raw()))))
             if a == b:
                 return b'\x00' + int_to_bytes(a)
             r = ceil(2*(b*s - 2*bb), n)

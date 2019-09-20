@@ -863,9 +863,10 @@ def main():
                     except:
                         pass
                 # generate number/bytes
+
                 if args.get('count'):
-                    result = b''.join(int_to_bytes(random.randint(args['start'], args['end'])) or b'\x00' 
-                                      for i in range(args['count']))
+                    result = random_stream(args['start'], args['end'], args['count'])
+                    
                 else:
                     result = random.randint(args['start'], args['end'])
                 # save / prepare for output
@@ -927,9 +928,11 @@ def main():
                     oracle.reset()
                 except:
                     traceback.print_exc()
+                    '''
                     # run External Oracle
                     result = ExternalOracle.once(all_variables[payload], 
                                          all_variables[oracle_path])
+                    '''
                 if variable_name:
                     update_variable(variable_name, result)
                 else:

@@ -97,7 +97,7 @@ class OracleResult:
         #self.error = error
         self.time = time
 
-
+'''
 class ExternalOracle(threading.Thread):
     """
     Runs given program (oracle) for given payloads providing one argument.
@@ -180,6 +180,7 @@ class ExternalOracle(threading.Thread):
             debug('Oracle has some error output:', oracle.matching[0].error)
         result = oracle.matching[0].output
         return result
+'''
 
 ####################################################
 class Variable:
@@ -1831,10 +1832,10 @@ class RSA(AsymmetricCipher):
             'et': None,             # totient(p, q)
             'e': Variable(65537),   # public key
             'd': None,              # private key
-            'bits': Variable(1024), # p,q bits length
+            'bits': Variable(1024), # n bit length
             'plaintext': None,
             'ciphertext': None,
-            'padding': False,       # PKCS #1v1.5 TODO True by default?
+            'padding': False,       # PKCS #1v1.5
         }
         #pdb.set_trace()
         # apply defined values
@@ -1846,8 +1847,8 @@ class RSA(AsymmetricCipher):
         failed = False
         while True: # in loop cause e and et might not yield d
             if not any(self.params[x] for x in ('p', 'q', 'n', 'et')) or failed:
-                self.params['p'] = Variable(prime(self.params['bits'].as_int()))
-                self.params['q'] = Variable(prime(self.params['bits'].as_int()))
+                self.params['p'] = Variable(prime(self.params['bits'].as_int() // 2))
+                self.params['q'] = Variable(prime(self.params['bits'].as_int() // 2))
                 self.params['n'] = Variable(self.params['p'].as_int() * self.params['q'].as_int())
                 self.params['et'] = Variable((self.params['p'].as_int() - 1) 
                                              * (self.params['q'].as_int() - 1))
@@ -1873,7 +1874,8 @@ class RSA(AsymmetricCipher):
             # TODO random
             #padding_string = Random.new().read(key_byte_length - 3 - len(binary_data))
             # TODO check padding_string for no zeros?
-            padding_string = b'/\xaa\xe3X\x03h\xa2m\xe8\x88P\x05\xf6\xfcCE\xfb$'
+            #padding_string = b'/\xaa\xe3X\x03h\xa2m\xe8\x88P\x05\xf6\xfcCE\xfb$'
+            padding_string = random_bytes(self.params['bits'].as_int() // 8 - 3 - len(self.params['plaintext'].as_raw()))
             plaintext = Variable(b'\x00\x02' + padding_string + b'\x00' + self.params['plaintext'].as_raw()).as_int()
         else:
             plaintext = self.params['plaintext'].as_int()
@@ -1887,11 +1889,11 @@ class RSA(AsymmetricCipher):
             traceback.print_exc()
     
     def decrypt(self):
-        # TODO unpad if needed
         try:
             result = pow(self.params['ciphertext'].as_int(),
                          self.params['d'].as_int(),
                          self.params['n'].as_int())
+            # TODO remove padding
             self.params['plaintext'] = Variable(result)
             return result
         except:

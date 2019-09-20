@@ -4,6 +4,7 @@ General functions used by main script, classes and attacks.
 """
 import re
 import math
+import random
 import traceback
 import time
 from struct import pack, unpack
@@ -182,6 +183,12 @@ def debruijn(length, unique_length=3, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef
     g = gen(*params)
     return ''.join([alphabet[next(g) % len(alphabet)] for _ in range(length)])
 
+def random_stream(start, end, count):
+    return b''.join(int_to_bytes(random.randint(start, end)) or b'\x00'
+                    for i in range(count))
+
+def random_bytes(count):
+    return random_stream(0, 255, count)
 
 def parse_int(value, variable_pool):
     result = None

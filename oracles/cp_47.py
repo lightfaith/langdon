@@ -29,8 +29,14 @@ class Oracle():
         specify global args here that should be same for all runs
         even when the oracle is reset
         """
+        d = Variable('file:/tmp/d', constant=True)
+        n = Variable('file:/tmp/n', constant=True)
+        e = Variable('file:/tmp/e', constant=True)
         self.immortal_args = {
+            'rsa': RSA(d=d, n=n, e=e),
+            'desired_byte_count': len(n.as_raw()) - 1,
         }
+
         """"""
 
     def reset(self, **kwargs):
@@ -77,7 +83,7 @@ class OracleThread(Thread):
 
     def __init__(self, payloads, condition, break_on_success=False, peers=None, ** kwargs):
         Thread.__init__(self)
-        #self.run_count = 0
+        # self.run_count = 0
         self.params = {}
         self.matching = []
         self.terminate = False
@@ -93,12 +99,9 @@ class OracleThread(Thread):
         this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['d'] = Variable('file:/tmp/d', constant=True)
-        self.params['n'] = Variable('file:/tmp/n', constant=True)
         """"""
 
     def run(self):
-        desired_byte_count = 31
         # run code for each payload
         for payload_id, payload in self.payloads:
             if self.terminate:
@@ -108,13 +111,16 @@ class OracleThread(Thread):
             here belongs code for every single iteration
             'output' variable should be set somehow
             """
-            d = self.params['d']
-            n = self.params['n']
+            # d = self.params['d']
+            # n = self.params['n']
+            # e = self.params['e']
             payload = Variable(payload)
-            rsa = RSA(ciphertext=payload, d=d, n=n)
+            # rsa = RSA(ciphertext=payload, d=d, n=n, e=e)
+            rsa = self.kwargs['rsa']
+            rsa.params['ciphertext'] = payload
             p = Variable(rsa.decrypt()).as_raw()
             output = b'0' if p[0] == 0x02 and len(
-                p) == desired_byte_count else b'1'
+                p) == self.kwargs['desired_byte_count'] else b'1'
             """"""
             end = time.time()
             # use result if condition matches
