@@ -116,13 +116,28 @@ def test_rsa():
     assert d.as_int(
     ) == 0x36dac66ba8bdaa1b544f06533e1b04d23b5975921a28cfce78bb3df3bd406ec1
 
+    # encryption
     public = RSA(
         bits=256, e=private.params['e'], n=private.params['n'], plaintext=p39)
 
     c39 = public.encrypt()
     assert c39.as_int() == 53779880165025059198454389358253711722430753239099356646772671915590232634693
+    # decryption
     private.params['ciphertext'] = c39
     assert private.decrypt().as_raw() == p39.as_raw()
+
+    # sign, verify
+    p = Variable(b"I'm gonna swing from the chandelier!")
+    rsa = RSA(bits=2048, e=e, plaintext=p)
+    signature = rsa.sign(SHA1)
+    assert rsa.verify(signature, SHA1)
+
+
+def test_dsa():
+    p43 = Variable(b'Hello World!')
+    dsa = DSA(plaintext=p43)
+    signature = dsa.sign(SHA1)
+    assert dsa.verify(signature, SHA1)
 
 
 if __name__ == '__main__':

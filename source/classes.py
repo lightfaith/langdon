@@ -1870,14 +1870,14 @@ class RSA(AsymmetricCipher):
             pq_generated = False   
             while True:
                 if n:
-                    if p:
+                    if p and not q:
                         q = n // p
-                    elif q:
+                    elif q and not p:
                         p = n // q
                 elif et:
-                    if p:
+                    if p and not q:
                         q = et / (p - 1) + 1
-                    elif q:
+                    elif q and not p:
                         p = et / (q - 1) + 1
                 else:
                     if not p:
@@ -1970,10 +1970,11 @@ class RSA(AsymmetricCipher):
                          + b'\x00'
                          + digest_info
                          + h.as_raw())
+        # TODO \xffs do not work for short plaintext, how to deal with that?
         result = pow(block.as_int(),
                      self.params['d'].as_int(),
                      self.params['n'].as_int())
-        return result
+        return Variable(result)
 
 
     def verify(self, signature, hash_algorithm, bleichenbacher=False):
@@ -2125,7 +2126,7 @@ class DSA(AsymmetricCipher):
             if r == 0:
                 continue
             s = invmod(k, q) * (h + x * r) % q
-        return (r << n) + s # concatenated
+        return Variable((r << n) + s) # concatenated
         
     def verify(self, signature, hash_algorithm):
         if not hash_algorithm:
