@@ -1843,24 +1843,81 @@ class RSA(AsymmetricCipher):
             if k in self.params.keys():
                 self.params[k] = Variable(v)
 
-        #debug('Filling undefined values...')
-        failed = False
-        while True: # in loop cause e and et might not yield d
-            if not any(self.params[x] for x in ('p', 'q', 'n', 'et')) or failed:
-                self.params['p'] = Variable(prime(self.params['bits'].as_int() // 2))
-                self.params['q'] = Variable(prime(self.params['bits'].as_int() // 2))
-                self.params['n'] = Variable(self.params['p'].as_int() * self.params['q'].as_int())
-                self.params['et'] = Variable((self.params['p'].as_int() - 1) 
-                                             * (self.params['q'].as_int() - 1))
-            # try to compute private key
-            if self.params['e'] and self.params['et']:
-                d = invmod(self.params['e'].as_int(), self.params['et'].as_int())
-                if d:
-                    self.params['d'] = Variable(d)
-                    break
-                failed = True
-            else:
+        # generate and validate parameters
+        p = self.params['p'].as_int() if self.params.get('p') else None
+        q = self.params['q'].as_int() if self.params.get('q') else None
+        n = self.params['n'].as_int() if self.params.get('n') else None
+        et = self.params['et'].as_int() if self.params.get('et') else None
+        e = self.params['e'].as_int() if self.params.get('e') else None
+        d = self.params['d'].as_int() if self.params.get('d') else None
+        
+        if d and e and n:
+            # priv, pub
+            # ok, just check at the end
+            pass
+        elif e and n:
+            # pub, can encrypt and verify
+            # ok, just check at the end
+            pass
+        elif d and n:
+            # priv, can decrypt and sign
+            # ok, just check at the end
+            pass
+        else:
+            # no valid config, generate missing
+            # generate p, q (use what is given)
+            debug('Generating undefined values...')
+            pq_generated = False   
+            while True:
+                if n:
+                    if p:
+                        q = n // p
+                    elif q:
+                        p = n // q
+                elif et:
+                    if p:
+                        q = et / (p - 1) + 1
+                    elif q:
+                        p = et / (q - 1) + 1
+                else:
+                    if not p:
+                        p = prime(self.params['bits'].as_int() // 2)
+                        pq_generated = True
+                    if not q:
+                        q = prime(self.params['bits'].as_int() // 2)
+                        pq_generated = True
+                
+                # compute n, et (use what is given)
+                if not n:
+                    n = p * q
+                if not et:
+                    et = (p - 1) * (q - 1)
+                
+                # compute d
+                if not d:
+                    d = invmod(e, et)
+                # try again if invalid
+                if pq_generated and not d:
+                    p = self.params['p'].as_int() if self.params.get('p') else None
+                    q = self.params['q'].as_int() if self.params.get('q') else None
+                    n = self.params['n'].as_int() if self.params.get('n') else None
+                    et = self.params['et'].as_int() if self.params.get('et') else None
+                    continue
                 break
+            
+        # parameter assertion
+        if (p and q and p * q != n or
+            p and q and (p - 1) * (q - 1) != et or
+            e and et and invmod(e, et) != d):
+            log.err('Invalid RSA configuration (parameters do not match).')
+        else:
+            self.params['p'] = Variable(p) if p else None
+            self.params['q'] = Variable(q) if q else None
+            self.params['n'] = Variable(n) if n else None
+            self.params['et'] = Variable(et) if et else None
+            self.params['d'] = Variable(d) if d else None
+            self.params['e'] = Variable(e) if e else None
+
 
     @staticmethod
     def help():
@@ -1884,7 +1941,7 @@ class RSA(AsymmetricCipher):
                          self.params['e'].as_int(),
                          self.params['n'].as_int())
             self.params['ciphertext'] = Variable(result)
-            return result
+            return self.params['ciphertext']
         except:
             traceback.print_exc()
     
@@ -1895,7 +1952,7 @@ class RSA(AsymmetricCipher):
                          self.params['n'].as_int())
             # TODO remove padding
             self.params['plaintext'] = Variable(result)
-            return result
+            return self.params['plaintext']
         except:
             traceback.print_exc()
 

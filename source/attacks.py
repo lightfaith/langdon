@@ -862,7 +862,7 @@ def rsa_parity(oracle, ciphertext, public):
     n = public.params['n'].as_int()
     # encrypt 2 to get multiplier for ciphertext
     public.params['plaintext'] = Variable(2)
-    multiplier = public.encrypt()
+    multiplier = public.encrypt().as_int()
     
     lower_bound = 0
     upper_bound = n

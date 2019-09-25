@@ -110,7 +110,7 @@ class OracleThread(Thread):
             n = self.params['n']
             payload = Variable(payload)
             rsa = RSA(ciphertext=payload, d=d, n=n)
-            output = rsa.decrypt()
+            output = rsa.decrypt().as_int()
             """"""
             end = time.time()
             # use result if condition matches
