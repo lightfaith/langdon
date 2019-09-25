@@ -1970,7 +1970,7 @@ class RSA(AsymmetricCipher):
                          + b'\x00'
                          + digest_info
                          + h.as_raw())
-        # TODO \xffs do not work for short plaintext, how to deal with that?
+        # TODO there are no \xffs for short plaintext, how to deal with that?
         result = pow(block.as_int(),
                      self.params['d'].as_int(),
                      self.params['n'].as_int())
@@ -1983,6 +1983,7 @@ class RSA(AsymmetricCipher):
                                  self.params['n'].as_int()))
         debug('decrypted:', decrypted.as_raw())
         # remove the padding
+        # TODO no ffs for short messages, how to deal with that?
         padding_match = re.match(b'\x01(\xff+)\x00', decrypted.as_raw())
         if not padding_match:
             debug('Incorrect padding.')
