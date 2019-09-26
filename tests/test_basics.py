@@ -15,10 +15,12 @@ def test_hexadecimal():
 
 
 def test_gray():
-    # TODO what is correct?
-    assert gray(b'Hello World!') == b'lWZZX0|XKZV1'
-    assert gray(b'A\xff') == b'a\x00'
-    assert ungray(b'a\x00') == b'A\xff'
+    assert gray(b'\x01\x00') == b'\x01\x80'
+    assert gray(b'\x059') == b'\x07\xa5'
+    assert gray(b'\x07[\xcd\x15') == b'\x04\xf6+\x9f'
+    assert ungray(b'\x01\x80') == b'\x01\x00'
+    assert ungray(b'\x07\xa5') == b'\x059'
+    assert ungray(b'\x04\xf6+\x9f') == b'\x07[\xcd\x15'
 
 
 def test_statistics():
