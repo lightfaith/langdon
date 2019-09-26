@@ -128,8 +128,8 @@ def test_rsa():
 
     # sign, verify
     p = Variable(b"I'm gonna swing from the chandelier!")
-    rsa = RSA(bits=2048, e=e, plaintext=p)
-    #rsa = RSA(bits=2048, e=e, plaintext=p39)
+    #rsa = RSA(bits=2048, e=e, plaintext=p)
+    rsa = RSA(bits=2048, e=e, plaintext=p39)
     signature = rsa.sign(SHA1)
     assert rsa.verify(signature, SHA1)
 

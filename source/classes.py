@@ -1911,12 +1911,12 @@ class RSA(AsymmetricCipher):
             e and et and invmod(e, et) != d):
             log.err('Invalid RSA configuration (parameters do not match).')
         else:
-            self.params['p'] = Variable(p) if p else None
-            self.params['q'] = Variable(q) if q else None
-            self.params['n'] = Variable(n) if n else None
+            self.params['p']  = Variable(p)  if p  else None
+            self.params['q']  = Variable(q)  if q  else None
+            self.params['n']  = Variable(n)  if n  else None
             self.params['et'] = Variable(et) if et else None
-            self.params['d'] = Variable(d) if d else None
-            self.params['e'] = Variable(e) if e else None
+            self.params['d']  = Variable(d)  if d  else None
+            self.params['e']  = Variable(e)  if e  else None
 
 
     @staticmethod
@@ -1928,8 +1928,6 @@ class RSA(AsymmetricCipher):
 
     def encrypt(self):
         if self.params['padding']:
-            # TODO random
-            #padding_string = Random.new().read(key_byte_length - 3 - len(binary_data))
             # TODO check padding_string for no zeros?
             #padding_string = b'/\xaa\xe3X\x03h\xa2m\xe8\x88P\x05\xf6\xfcCE\xfb$'
             padding_string = random_bytes(self.params['bits'].as_int() // 8 - 3 - len(self.params['plaintext'].as_raw()))
@@ -1957,7 +1955,6 @@ class RSA(AsymmetricCipher):
             traceback.print_exc()
 
     def sign(self, hash_algorithm):
-        # TODO some padding applies?
         hash_instance = hash_algorithm(data=self.params['plaintext'])
         try:
             digest_info = hash_instance.params['digest_info'].as_raw() # constant value
@@ -1966,11 +1963,10 @@ class RSA(AsymmetricCipher):
             return None
         h = Variable(hash_instance.hash())
         block = Variable(b'\x00\x01'
-                         + b'\xff' * (len(self.params['plaintext'].as_raw()) - len(digest_info) - 3)
+                         + b'\xff' * max(8, len(self.params['plaintext'].as_raw()) - len(digest_info) - 3)
                          + b'\x00'
                          + digest_info
                          + h.as_raw())
-        # TODO there are no \xffs for short plaintext, how to deal with that?
         result = pow(block.as_int(),
                      self.params['d'].as_int(),
                      self.params['n'].as_int())
@@ -1983,7 +1979,6 @@ class RSA(AsymmetricCipher):
                                  self.params['n'].as_int()))
         debug('decrypted:', decrypted.as_raw())
         # remove the padding
-        # TODO no ffs for short messages, how to deal with that?
         padding_match = re.match(b'\x01(\xff+)\x00', decrypted.as_raw())
         if not padding_match:
             debug('Incorrect padding.')
@@ -2012,7 +2007,7 @@ class RSA(AsymmetricCipher):
             return False
         
         # check plaintext length vs padding
-        if not bleichenbacher and len(fs) != len(self.params['plaintext'].as_raw()) - len(hash_algorithm.params['digest_info'].as_raw()) - 3:
+        if not bleichenbacher and len(fs) != max(8, len(self.params['plaintext'].as_raw()) - len(hash_algorithm.params['digest_info'].as_raw()) - 3):
             debug('Incorrect padding length.')
             return False
 
