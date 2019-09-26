@@ -89,98 +89,10 @@ class OracleResult:
     """
     Simple object for Oracle data passing.
     """
-    #def __init__(self, payload_id, ret, output, error):
-    def __init__(self, payload_id, output, time=None):
+    def __init__(self, payload_id, output, duration=None):
         self.payload_id = payload_id
-        #self.ret = ret
         self.output = output
-        #self.error = error
-        self.time = time
-
-'''
-class ExternalOracle(threading.Thread):
-    """
-    Runs given program (oracle) for given payloads providing one argument.
-
-    Internally, the argument is encoded as Base64 to prevent problems.
-    
-    Desired results (selected by validate argument) are stored in self.matching
-    list as OracleResults.
-    The validate argument takes form of 
-    (lambda id,return_value,output,error,**kwargs: bool).
-
-    Payloads are given in dictionary, so they can be processed as threads.
-    
-    Oracle can terminate on first matching result.
-
-    Time of the oracle processing is measured and stored in self.time.
-    """
-    def __init__(
-            self, 
-            oracle_path, 
-            payloads, 
-            validate, 
-            break_on_success=True,
-            **kwargs):
-        threading.Thread.__init__(self)
-        self.oracle_path = oracle_path
-        self.payloads = payloads
-        #print('Payloads:', payloads.keys())
-        self.matching = []
-        self.validate = validate
-        self.break_on_success = break_on_success
-        self.kwargs = kwargs
-        self.time = None
-        
-    def run(self):
-        """
-        Sends payloads to given oracle, successful results 
-        (validated by self.validate() function) are stored in 
-        self.matching.
-
-        The payload is internally base64-encoded.
-        Oracle output is expected to be base64-encoded.
-        """
-        start = time.time()
-        for payload_id, payload in self.payloads.items():
-            #debug('Oracle testing 0x%02x' % payload_id, payload)
-            payload_based = base64.b64encode(payload).decode()
-            #print('based payload:', payload_based)
-            r, o, e = run_command('%s "%s"' % (self.oracle_path, 
-                                               payload_based))
-            #print('result:', r, o, e)
-            o = base64.b64decode(o)
-            if self.validate(payload_id, r, o, e, self.kwargs):
-                #debug('Payload 0x%02x matches condition!' % payload_id)
-                self.matching.append(OracleResult(payload_id, r, o, e))
-                if self.break_on_success:
-                    break
-        self.time = time.time() - start
-
-    @staticmethod
-    def once(payload, oracle_path):
-        """
-        Quick method to run an oracle with given payload and receive output.
-        """
-        #print('RUNNING', oracle_path)
-        #print('payload:', payload)
-        #for line in hexdump(payload):
-        #    print(line)
-        oracle = ExternalOracle(oracle_path,
-                        {0: (payload.as_raw() 
-                             if isinstance(payload, Variable) 
-                             else payload)},
-                        lambda i,r,o,e,kw: True)
-        oracle.start()
-        oracle.join()
-        #debug('once result:', oracle.matching[0].output)
-        #for line in hexdump(oracle.matching[0].output):
-        #    print(line)
-        if oracle.matching[0].error:
-            debug('Oracle has some error output:', oracle.matching[0].error)
-        result = oracle.matching[0].output
-        return result
-'''
+        self.time = duration
 
 ####################################################
 class Variable:
@@ -363,7 +275,6 @@ class Variable:
 
     def as_escaped(self):
         #  \xAA values
-        #return ''.join('\\x%02x' % c for c in self.value)
         return ''.join(chr(c) if chr(c) in string.printable else ('\\x%02x' % c) for c in self.value)
 
     def as_base64(self):
@@ -920,7 +831,6 @@ ctr-bitflipping e_oracle d_oracle offset payload
                 plaintext = pkcs7_unpad(padded)
             except:
                 plaintext = ''
-                #traceback.print_exc()
         self.params['plaintext'] = Variable(plaintext)
         return self.params['plaintext']
 
@@ -1402,11 +1312,9 @@ class Hash(Algorithm):
                 break
             hashes = new_hashes
         hashes.remove(Hash)
-        #print('Got all implemented hashes:', hashes)
         for h in hashes:
             try:
                 if digest_info.startswith(h().params['digest_info'].as_raw()):
-                    #print('Winner is', h)
                     return h
             except:
                 pass
@@ -1454,8 +1362,6 @@ class SHA1(Hash):
 
     def hash(self, data_modifier=lambda x: x.params['data'].as_raw(), bits_len=0):
         data = self.pad(data_modifier(self), bits_len)
-        #debug('  Hashing data of len', len(data))
-        #debug('   Hashing padded:', data)
         for chunk in chunks(data, 64):
             w = [0] * 80
             for i in range(16):
@@ -1485,10 +1391,9 @@ class SHA1(Hash):
                 a = temp
             self.tmp['h'] = [(hx + val) & 0xffffffff 
                              for hx,val in zip(self.tmp['h'], (a, b, c, d, e))]
-        #print('SHA1 values:', ['%08x' % hx for hx in h], end=' ')
+        
         result = b''.join(b'%c' % b for hx in self.tmp['h'] for b in pack('>I', hx)) # TODO immediately as Variable?
         self.params['digest'] = Variable(result)
-        #debug('final state:', ['0x%x' % hh for hh in self.tmp['h']])
         return result
 
     def analyze(self, output_offset=0, interactive=False): # SHA1 analysis
@@ -1531,7 +1436,6 @@ class MD4(Hash):
         data += b'\x80'
         data += bytes((56 - len(data) % 64) % 64)
         data += pack('<Q', bits_len)
-        #debug('   appending bits_len', bits_len)
         return data
    
     def restore(self, digest):
@@ -1539,15 +1443,11 @@ class MD4(Hash):
 
     def hash(self, data_modifier=lambda x: x.params['data'].as_raw(), bits_len=0):
         data = data_modifier(self)
-        #debug('  Hashing data of len', len(data))
-        #debug('   Hashing padded:', data)
         if not bits_len:
             bits_len = len(data) * 8
         ff = lambda x, y, z: ((x & y) | (~x & z))
         gg = lambda x, y, z: ((x & y) | (x & z) | (y & z))
         hh = lambda x, y, z: x ^ y ^ z
-
-        #print('DEFAULT:', hexadecimal(b''.join(b'%c' % b for x in h for b in pack('<I', x))))
 
         last_chunk_altered = False
         order = [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15]
@@ -1555,12 +1455,8 @@ class MD4(Hash):
             if len(data) < 64 and not last_chunk_altered:
                 data = self.pad(data, bits_len=bits_len)
                 last_chunk_altered = True
-            #print('after padding (len %d):' % len(payload))
-            #print(payload)
-            #print()
 
             chunk = data[:64]
-            #debug('chunk', chunk, len(chunk))
             xx = list(unpack('<16I', chunk))
             a, b, c, d = self.tmp['h']
             for i in range(16):
@@ -1837,7 +1733,6 @@ class RSA(AsymmetricCipher):
             'ciphertext': None,
             'padding': False,       # PKCS #1v1.5
         }
-        #pdb.set_trace()
         # apply defined values
         for k, v in kwargs.items():
             if k in self.params.keys():
@@ -1929,7 +1824,6 @@ class RSA(AsymmetricCipher):
     def encrypt(self):
         if self.params['padding']:
             # TODO check padding_string for no zeros?
-            #padding_string = b'/\xaa\xe3X\x03h\xa2m\xe8\x88P\x05\xf6\xfcCE\xfb$'
             padding_string = random_bytes(self.params['bits'].as_int() // 8 - 3 - len(self.params['plaintext'].as_raw()))
             plaintext = Variable(b'\x00\x02' + padding_string + b'\x00' + self.params['plaintext'].as_raw()).as_int()
         else:
@@ -1985,9 +1879,7 @@ class RSA(AsymmetricCipher):
             return False
 
         fs = padding_match.groups(1)[0]
-        #debug('Fs:', fs)
         asn_and_hash = decrypted.as_raw()[len(fs) + 2:]
-        #debug('asn and hash:', asn_and_hash)
         
         if hash_algorithm:
             hash_algorithm = hash_algorithm(data=self.params['plaintext'])
@@ -2100,12 +1992,6 @@ class DSA(AsymmetricCipher):
             log.err('The g parameter cannot be zero!')
             return 0
         hash_instance = hash_algorithm(data=plaintext)
-        #try:
-        #    # constant value
-        #    digest_info = hash_instance.params['digest_info'].as_raw()
-        #except:
-        #    log.err('Hashing algorithm is not supported (unknown digest_info).')
-        #    return None
         h = Variable(hash_instance.hash()).as_int()
 
         # signature

@@ -928,11 +928,6 @@ def main():
                     oracle.reset()
                 except:
                     traceback.print_exc()
-                    '''
-                    # run External Oracle
-                    result = ExternalOracle.once(all_variables[payload], 
-                                         all_variables[oracle_path])
-                    '''
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
@@ -1126,6 +1121,7 @@ def main():
                     output.append(Variable(result))
             else:
                 log.err('You must provide existing variable as argument.')
+        
         ######################################
         # XOR
         ######################################
