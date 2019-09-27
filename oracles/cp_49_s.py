@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 """
-Oracle for Cryptopals 4.31 - Timing leak
+Signature oracle for Cryptopals 6.49 - CBC-MAC
 
-Oracle precomputes hash of given data and then does a byte-by-byte
-comparison with provided value. Loop has sleep to emulate
-timing leak vulnerability.
+Oracle takes given plaintext and, if it starts with 'from=1&',
+returns its CBC-MAC value.
+
+
 """
 from threading import Thread
 from source.classes import *
@@ -26,8 +27,13 @@ class Oracle():
         specify global args here that should be same for all runs
         even when the oracle is reset
         """
+        key = Variable(b'YELLOW SUBMARINE')
+        iv = Variable('0x00000000000000000000000000000000')
+
         self.immortal_args = {
+            'aes': AES(mode='cbc', key=key, iv=iv),
         }
+
         """"""
 
     def reset(self, **kwargs):
@@ -90,19 +96,10 @@ class OracleThread(Thread):
         this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
-        self.params['plaintext'] = Variable('file:/tmp/p', constant=True)
         """"""
 
     def run(self):
-         # load previously known data
-        plaintext = self.params['plaintext']
-
-        # get real hash (use hex form to speed up)
-        key = self.params['key']
-        sha = SHA1(data=plaintext, key=key)
-        real_hash = Variable(sha.hmac()).as_hex().encode()
-
+        aes = self.kwargs['aes']
         # run code for each payload
         for payload_id, payload in self.payloads:
             if self.terminate:
@@ -112,21 +109,12 @@ class OracleThread(Thread):
             here belongs code for every single iteration
             'output' variable should be set somehow
             """
-
-            # compare real hash to given value
-            hash_guess = Variable(payload).as_raw()
-            output = b'success'
-            for i in range(max(len(real_hash), len(hash_guess))):
-                try:
-                    if real_hash[i] != hash_guess[i]:
-                        output = b'fail'
-                        break
-                except:
-                    output = b'fail'
-                    break
-                time.sleep(0.05)
-                # time.sleep(0.005)
-
+            aes.params['plaintext'] = payload
+            if payload.as_raw().startswith(b'from=1&'):
+                output = aes.mac()
+            else:
+                log.err("Invalid transfer request, won't sign this abomination!")
+                output = b''
             """"""
             end = time.time()
             # use result if condition matches

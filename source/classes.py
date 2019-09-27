@@ -490,6 +490,7 @@ If you are not able to create a decryption oracle, Langdon cannot compute offset
                Encryption                  Decryption            
 
 In CBC mode, blocks are no longer independent. In encryption, plaintext for given block is first XORed with ciphertext of previous block. For first block, a value known as Initialization Vector is used. IV should be different for every message sent, and in CBC it also must be upredictable at encryption time (unlike SSLv2, where last ciphertext block of last message has been used as the IV for new message). After encryption, the IV can be made public (often prepended to the ciphertext).
+Because all blocks are entangled, AES-CBC can be used to create fixed-length authentication code - last ciphertext block is resulting MAC (while IV is usually set to 0).
 
 {bold}CBC bitflipping{unbold}
 
@@ -854,6 +855,28 @@ ctr-bitflipping e_oracle d_oracle offset payload
                 print(line)
         return xor(source, b''.join(blocks)[:len(source)])
 
+    def mac(self):
+        mode = self.params['mode']
+        if mode == 'cbc':
+            plaintext = self.params['plaintext'].as_raw()
+            key = self.params['key'].as_raw()
+            iv = self.params['iv'].as_raw()
+            blocksize = int(self.params['blocksize'])
+            
+            cipher = AESCipher.new(key, AESCipher.MODE_ECB)
+            padded = pkcs7_pad(plaintext)
+            blocks = [padded[i:i+blocksize] 
+                  for i in range(0, len(padded), blocksize)]
+            previous_block = iv
+
+            for block in blocks:
+                xored = xor(block, previous_block)
+                previous_block = cipher.encrypt(xored)
+            return Variable(previous_block)
+
+        else:
+            log.err('Mode %s cannot be used for MAC.' % mode)
+            return Variable(b'')
 
     def analyze(self, output_offset=0, interactive=False): # AES analysis
         # TODO

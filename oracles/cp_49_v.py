@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 """
-Oracle for Cryptopals 4.31 - Timing leak
+Verification oracle for Cryptopals 6.49 - CBC-MAC
 
-Oracle precomputes hash of given data and then does a byte-by-byte
-comparison with provided value. Loop has sleep to emulate
-timing leak vulnerability.
+Oracle takes attributes - (plaintext, CBC-MAC) or (plaintext, IV, CBC-MAC)
+and validates the signature.
+
+
 """
 from threading import Thread
 from source.classes import *
@@ -26,8 +27,13 @@ class Oracle():
         specify global args here that should be same for all runs
         even when the oracle is reset
         """
+        key = Variable(b'YELLOW SUBMARINE')
+        iv = Variable('0x00000000000000000000000000000000')
+
         self.immortal_args = {
+            'aes': AES(mode='cbc', key=key, iv=iv),
         }
+
         """"""
 
     def reset(self, **kwargs):
@@ -90,56 +96,26 @@ class OracleThread(Thread):
         this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
-        self.params['plaintext'] = Variable('file:/tmp/p', constant=True)
         """"""
 
     def run(self):
-         # load previously known data
-        plaintext = self.params['plaintext']
+        start = time.time()
+        aes = self.kwargs['aes']
 
-        # get real hash (use hex form to speed up)
-        key = self.params['key']
-        sha = SHA1(data=plaintext, key=key)
-        real_hash = Variable(sha.hmac()).as_hex().encode()
+        plaintext = self.payloads[0][1]
+        aes.params['plaintext'] = plaintext
 
-        # run code for each payload
-        for payload_id, payload in self.payloads:
-            if self.terminate:
-                break
-            start = time.time()
-            """
-            here belongs code for every single iteration
-            'output' variable should be set somehow
-            """
+        if len(self.payloads) == 2:
+            mac = self.payloads[1][1].as_raw()
+        else:
+            iv = self.payloads[1][1]
+            mac = self.payloads[2][1].as_raw()
+            aes.params['iv'] = iv
 
-            # compare real hash to given value
-            hash_guess = Variable(payload).as_raw()
-            output = b'success'
-            for i in range(max(len(real_hash), len(hash_guess))):
-                try:
-                    if real_hash[i] != hash_guess[i]:
-                        output = b'fail'
-                        break
-                except:
-                    output = b'fail'
-                    break
-                time.sleep(0.05)
-                # time.sleep(0.005)
-
-            """"""
-            end = time.time()
-            # use result if condition matches
-            if self.condition(payload_id, output, self.kwargs):
-                self.matching.append(OracleResult(
-                    payload_id, output, end - start))
-                # decide whether to stop
-                if self.break_on_success:
-                    # signal other oracles to terminate
-                    if self.peers:
-                        for peer in self.peers:
-                            peer.terminate = True
-                    break
+        output = b'success' if aes.mac().as_raw() == mac else b'fail'
+        end = time.time()
+        self.matching.append(OracleResult(
+            0, output, end - start))
 
 
 def main():

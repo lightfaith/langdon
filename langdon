@@ -844,8 +844,8 @@ def main():
                 traceback.print_exc()
                 log.err('You must provide asymmetrical algorithm object (with public key and plaintext included) and signature to verify.')
 
-        elif cmd.startswith('hexdump '):
-            v = cmd[8:].strip()
+        elif cmd.startswith(('hexdump ', 'hd ')):
+            v = cmd.partition(' ')[2].strip()
             try:
                 for line in hexdump(all_variables[v].as_raw()):
                     output.append(line)
@@ -919,11 +919,11 @@ def main():
 
         elif cmd.startswith('run '):
             try:
-                _, oracle_path, payload = cmd.split()
+                _, oracle_path, *payloads = cmd.split()
                 try:
                     # run Internal Oracle
                     oracle = variables[oracle_path]
-                    oracle.run(all_variables[payload])
+                    oracle.run(*[all_variables[p] for p in payloads])
                     result = oracle.matching[0].output if oracle.matching else b''
                     oracle.reset()
                 except:
@@ -1443,6 +1443,9 @@ def main():
             method, _, v = cmd.partition(' ')
             try:
                 variables[v].reset()
+            except:
+                pass
+            try:
                 if method == 'hash':
                     result = variables[v].hash()
                 elif method == 'mac':
@@ -1777,6 +1780,21 @@ def main():
                 ciphertext = all_variables[parts[2]]
                 public = variables[parts[3]]
                 result = attacks.rsa_padding(oracle, ciphertext, public)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide path to oracle and a ciphertext.')
+        
+        elif cmd.startswith('cbc-mac-length-extension '):
+            try:
+                parts = cmd.split()
+                valid_plaintext = all_variables[parts[1]]
+                valid_mac = all_variables[parts[2]]
+                append = all_variables[parts[3]]
+                result = attacks.cbc_mac_length_extension(valid_plaintext, valid_mac, append)
                 if variable_name:
                     update_variable(variable_name, result)
                 else:

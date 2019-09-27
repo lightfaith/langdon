@@ -997,5 +997,15 @@ def rsa_padding(oracle, ciphertext, public):
         intervals = intervals_new
         i += 1
 
+def cbc_mac_length_extension(valid_message, valid_mac, append):
+    # https://github.com/ashutosh1206/Crypton/tree/master/Message-Authentication-Code/Attack-Length-Extension-CBC-MAC
+    valid_message = valid_message.as_raw()
+    valid_mac = valid_mac.as_raw()
+    append = append.as_raw()
+    forged = (pkcs7_pad(valid_message) +
+              xor(valid_mac, append[:16]) +
+              append[16:])
+    return forged
+
 
 #####
