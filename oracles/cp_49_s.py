@@ -5,7 +5,7 @@ Signature oracle for Cryptopals 6.49 - CBC-MAC
 Oracle takes given plaintext and, if it starts with 'from=1&',
 returns its CBC-MAC value.
 
-
+With IV controlled by attacker, CBC-MAC result can be same for arbitrary P1.
 """
 from threading import Thread
 from source.classes import *
@@ -39,6 +39,9 @@ class Oracle():
     def reset(self, **kwargs):
         self.threads = []
         self.matching = []
+
+    def detail(self):
+        print(__doc__)
 
     def terminate(self):
         for t in self.threads:

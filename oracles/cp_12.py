@@ -32,6 +32,9 @@ class Oracle():
             t.terminate = True
             # TODO join? probably not...
 
+    def detail(self):
+        print(__doc__)
+
     def run(self, *args, thread_count=1, condition=lambda i, o, kw: True, break_on_success=False, **kwargs):
         # separate payloads
         payloads = [list(enumerate(args))[i::thread_count]

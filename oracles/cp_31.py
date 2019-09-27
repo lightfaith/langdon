@@ -34,6 +34,9 @@ class Oracle():
         self.threads = []
         self.matching = []
 
+    def detail(self):
+        print(__doc__)
+
     def terminate(self):
         for t in self.threads:
             t.terminate = True

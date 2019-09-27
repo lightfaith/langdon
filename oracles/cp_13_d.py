@@ -27,6 +27,14 @@ class Oracle():
         self.threads = []
         self.matching = []
 
+    def detail(self):
+            print("""
+Decryption Oracle for Cryptopals 2.13 - ECB cut&paste attack
+
+The oracle returns AES ECB plaintext of given ciphertext. This is for 
+attack validation.    
+""")
+
     def terminate(self):
         for t in self.threads:
             t.terminate = True

@@ -1801,7 +1801,7 @@ def main():
                     output.append(Variable(result))
             except:
                 traceback.print_exc()
-                log.err('You must provide path to oracle and a ciphertext.')
+                log.err('You must provide valid plaintext and corresponding MAC and a value to append.')
         ####################################
         # Special cryptopals commands
         ####################################
