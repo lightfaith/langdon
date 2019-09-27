@@ -1794,7 +1794,11 @@ def main():
                 valid_plaintext = all_variables[parts[1]]
                 valid_mac = all_variables[parts[2]]
                 append = all_variables[parts[3]]
-                result = attacks.cbc_mac_length_extension(valid_plaintext, valid_mac, append)
+                try:
+                    iv = all_variables[parts[4]]
+                except:
+                    iv = Variable(b'\x00')
+                result = attacks.cbc_mac_length_extension(valid_plaintext, valid_mac, append, iv)
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
