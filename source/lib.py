@@ -148,8 +148,8 @@ def chunks(data, chunksize):
     return [data[i:i+chunksize] for i in range(0, len(data), chunksize)]
 
 
-def rotate_left(value, shift):
-    return ((value << shift) & 0xffffffff) | (value >> (32 - shift))
+def rotate_left(value, shift, bits=32):
+    return ((value << shift) & (2**bits - 1)) | (value >> (bits - shift))
 
 
 def root(x, n):

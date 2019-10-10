@@ -96,13 +96,13 @@ def main():
             prynt(binary(data))
         elif sys.argv[1] in ('unbin', '--unbin'):
             data = get_data_from_argv_or_stdin(sys.argv[2:])
-            prynt(unbinary(data))
+            prynt(unbinary(re.sub(b'^0b', b'', data.strip())))
         elif sys.argv[1] in ('hex', '--hex'):
             data = get_data_from_argv_or_stdin(sys.argv[2:])
             prynt(hexadecimal(data))
         elif sys.argv[1] in ('unhex', '--unhex'):
             data = get_data_from_argv_or_stdin(sys.argv[2:])
-            prynt(unhexadecimal(data))
+            prynt(unhexadecimal(re.sub(b'^0x', b'', data.strip())))
         elif sys.argv[1] in ('gray', '--gray'):
             data = get_data_from_argv_or_stdin(sys.argv[2:])
             prynt(gray(data))
@@ -522,7 +522,23 @@ def main():
             for k, v in variables.items():
                 output.append('%*s  %s' % (k_len, k, v.short()))
             continue
-                
+
+        elif cmd.startswith(('var ', 'vars ', 'variables ')):
+            output_type = cmd.split()[1]
+            get_type = {
+                'int': lambda v: v.as_int(),
+                'bin': lambda v: v.as_binary(),
+                'hex': lambda v: v.as_hex(),
+                'raw': lambda v: v.as_raw(),
+                'base64': lambda v: v.as_base64(),
+                'escaped': lambda v: v.as_escaped(),
+            }
+            k_len = max([0] + [len(k) for k in variables.keys()])
+            for k, v in variables.items():
+                output.append('%*s  %s' % (k_len, k, get_type[output_type](v)))
+            continue
+
+            
         if cmd.startswith('export '):
             parts = cmd[7:].split()
             format_f = None
@@ -1008,6 +1024,29 @@ def main():
                 traceback.print_exc()
                 log.err('You must provide oracle path, optional slowest/fastest flag and optional alphabet.')
             
+        elif cmd.startswith('compression-leak '):
+            parts = cmd.split()
+            try:
+                oracle = variables[parts[1]]
+                prepended = all_variables[parts[2]]
+                try:
+                    alphabet = set(all_variables[parts[3]].as_raw())
+                except IndexError:
+                    log.warn('Alphabet not defined, using all possible byte values.')
+                    alphabet = range(256)
+                except:
+                    traceback.print_exc()
+                    alphabet = range(256)
+
+                result = attacks.compression_leak(oracle, prepended, alphabet)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide oracle path, prepended string and optional alphabet.')
+            
         elif cmd.startswith('modexp '):
             parts = cmd.split()
             args = {}
@@ -1166,7 +1205,7 @@ def main():
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
-                    output.append(result)
+                    output.append(result.params['plaintext'])
             except:
                 traceback.print_exc()
                 log.err('You must define variable, language and optional keysize.')
@@ -1853,6 +1892,21 @@ def main():
                 log.err(
                     'You must provide DSA object (with public key and plaintext included), signature key, signature and hash function name.')
 
+        elif cmd.startswith('tc19 '):
+            parts = cmd.split()
+            try:
+                data = all_variables[parts[1]].as_raw()
+                value = int(parts[2])
+                result = bytes(rotate_left(d, value, 8) for d in data)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err(
+                    'You must provide data and value to ROT.')
+            
         ######################################
         # constant value OR bad command
         ######################################

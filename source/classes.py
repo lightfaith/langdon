@@ -849,10 +849,10 @@ ctr-bitflipping e_oracle d_oracle offset payload
         """
         blocks = [cipher.encrypt(bytes(bytearray(pack('<Q', nonce))
                                        + bytearray(pack('<Q', block_counter))))
-                  for block_counter in range((len(source) // 16) + 1)]
-        for b in blocks:
-            for line in hexdump(b):
-                print(line)
+                  for block_counter in range(len(source) // 16 + 1)]
+        #for b in blocks:
+        #    for line in hexdump(b):
+        #        print(line)
         return xor(source, b''.join(blocks)[:len(source)])
 
     def mac(self):

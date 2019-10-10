@@ -26,7 +26,8 @@ def binary(data):
 def unbinary(data):
     if isinstance(data, str):
         data = data.encode()
-    data = b'0' * ((8 - len(data) % 8) % 8) + data
+    padding_length = ((8 - len(data) % 8) % 8)
+    data = b'0' * padding_length + data
     return bytes([int(c, 2) for c in chunks(data, 8)])
 
 

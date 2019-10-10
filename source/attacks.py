@@ -729,6 +729,44 @@ def timing_leak(oracle, threshold, slowest, alphabet):
             debug('  Threshold not met, trying again...')
 
 
+def compression_leak(oracle, prepended, alphabet):
+    """
+    
+    The function prepares the payload by testing all possible byte values,
+    then using the one that is, according to the oracle, compressed best.
+
+    Payload is sent to oracle. When 'success' is returned, the attack is 
+    considered complete.
+    """
+    secret = b''
+    #debug('Timing leak alphabet:', alphabet)
+    while True:
+        debug('Actual secret:', secret)
+        # try each byte
+        payloads = [prepended.as_raw() + secret + bytes([i]) for i in alphabet]
+        oracle.run(*payloads, thread_count=int(math.sqrt(len(alphabet))))
+        finished = [m for m in oracle.matching if m.output == 'success'] # TODO won't happend, think of another condition
+        if finished:
+            #secret = list(finished[0].payloads.values())[0]
+            secret = payloads[finished[0].payload_id]
+            debug('Oracle succeeded with', secret)
+            return secret
+        # pair payloads to results
+        paired = [(payloads[match.payload_id], match)
+                  for match in oracle.matching]
+        # use slowest/fastest payload
+
+        timed = sorted(paired, key=lambda x: int(x[1].output))
+        # TODO for some reason valid part may have worse padding...
+        if True:#if int(timed[0][1].output) < int(timed[1][1].output):
+            new_byte = timed[0][0][-1]
+            secret += bytes([new_byte])
+        else:
+            log.warn('No obvious candidate.')
+            break
+    return secret
+        
+
 def rsa_e3_broadcast(modulis, ciphertexts):
     """
     Best explanation: https://www.youtube.com/watch?v=nrgGU2mUum4
