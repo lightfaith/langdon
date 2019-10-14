@@ -1209,6 +1209,20 @@ def main():
             else:
                 log.err('No such variable.')
 
+
+        elif cmd.startswith('sliding-xor '):
+            parts = cmd.split()
+            try:
+                v1 = all_variables[parts[1]].as_raw()
+                v2 = all_variables[parts[2]].as_raw()
+                longer = v1 if len(v1) > len(v2) else v2
+                shorter = v1 if len(v1) < len(v2) else v2
+                for i in range(abs(len(v1) - len(v2))+1):
+                    debug(i, xor(shorter, longer[i:i+len(shorter)]))
+            except:
+                log.err('You must provide two variables.')
+            
+
         elif cmd.startswith('break-xor '):
             try:
                 parts = cmd.split()
