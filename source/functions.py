@@ -26,6 +26,9 @@ def binary(data):
 def unbinary(data):
     if isinstance(data, str):
         data = data.encode()
+    data = data.strip()
+    if data.startswith(b'0b'):
+        data = data[2:]
     padding_length = ((8 - len(data) % 8) % 8)
     data = b'0' * padding_length + data
     return bytes([int(c, 2) for c in chunks(data, 8)])
@@ -35,9 +38,14 @@ def hexadecimal(data):
     return b''.join(b'%02x' % c for c in data)
 
 
-def unhexadecimal(stream):
-    return b''.join(b'%c' % int(stream[i:i+2], 16)
-                    for i in range(0, len(stream), 2))
+def unhexadecimal(data):
+    if isinstance(data, str):
+        data = data.encode()
+    data = data.strip()
+    if data.startswith(b'0x'):
+        data = data[2:]
+    return b''.join(b'%c' % int(data[i:i+2], 16)
+                    for i in range(0, len(data), 2))
 
 
 def gray(data):

@@ -159,8 +159,8 @@ class Variable:
             return
         # value as bin
         try:
-            to_unbin = value[2:] if value.startswith('0b') else value
-            self.value = unbinary(to_unbin)
+            #to_unbin = value[2:] if value.startswith('0b') else value
+            self.value = unbinary(value)
             #self.value = int_to_bytes(int(value, 16))
             self.preferred_form = self.as_raw
             return
@@ -176,7 +176,8 @@ class Variable:
             pass
         # value as hex number/stream
         try:
-            to_unhex = value[2:] if value.startswith('0x') else value
+            #to_unhex = value[2:] if value.startswith('0x') else value
+            to_unhex = value
             if len(to_unhex) % 2 == 1:
                 to_unhex = '0' + to_unhex
             self.value = unhexadecimal(to_unhex)
@@ -192,6 +193,11 @@ class Variable:
             return
             
         log.err('Not parsed!', value)
+
+    @staticmethod
+    def get_reversed(v, chunk_size=8):
+        return Variable('0b' + ''.join(chunks(v.as_binary(), chunk_size)[::-1]))
+
 
     def analyze(self, output_offset=0, interactive=False): # Variable analysis
         output = []

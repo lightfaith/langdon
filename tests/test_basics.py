@@ -7,11 +7,15 @@ def test_binary():
     assert binary(b'A\xff') == b'0100000111111111'
     assert unbinary(b'0100000111111111') == b'A\xff'
     assert unbinary(b'100000111111111') == b'A\xff'
+    assert unbinary(b'0b100000111111111') == b'A\xff'
+    assert unbinary(b'0b100000111111111\n') == b'A\xff'
 
 
 def test_hexadecimal():
     assert hexadecimal(b'A\xff') == b'41ff'
     assert unhexadecimal(b'41ff') == b'A\xff'
+    assert unhexadecimal(b'0x41ff') == b'A\xff'
+    assert unhexadecimal(b'0x41ff\n') == b'A\xff'
 
 
 def test_gray():
@@ -21,6 +25,14 @@ def test_gray():
     assert ungray(b'\x01\x80') == b'\x01\x00'
     assert ungray(b'\x07\xa5') == b'\x059'
     assert ungray(b'\x04\xf6+\x9f') == b'\x07[\xcd\x15'
+
+
+def test_rev():
+    v = Variable(b'A\xff')
+    assert Variable.get_reversed(v).value == Variable(b'\xffA').value
+    assert Variable.get_reversed(v, 8).value == Variable(b'\xffA').value
+    assert Variable.get_reversed(v, 1).value == Variable(
+        '1111111110000010').value
 
 
 def test_statistics():
