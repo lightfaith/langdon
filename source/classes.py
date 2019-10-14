@@ -314,7 +314,10 @@ class Variable:
     def __str__(self):
         preferred = self.preferred_form()
         if type(preferred) == bytes:
-            return preferred.decode()
+            try:
+                return preferred.decode()
+            except:
+                return self.as_escaped()
         if type(preferred) == int:
             return str(preferred)
         return preferred

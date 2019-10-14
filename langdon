@@ -120,7 +120,7 @@ def main():
                           (10, 5),
                           ['#005073', '#107dac', '#189ad3', '#71c7ec'],)
             plt.show()
-
+        
         elif sys.argv[1] in ('random', '--random'):
             count = int(sys.argv[2])
             prynt(b''.join(int_to_bytes(random.randint(0, 255)) for _ in range(count)))
@@ -360,6 +360,7 @@ def main():
 
     You can use some of these common functions:
         {command}len/length a{color} - get length of data
+        {command}rev a [8]{color} - get value with reversed chunks of given size
         {command}concat a b{color} - concatenate multiple variables
         {command}substring <variable> <start> <length>{color} - get a substring
         {command}hexdump a{color} - show hexdump of data
@@ -773,22 +774,21 @@ def main():
                         #traceback.print_exc()
                         pass # probably not Variable
 
-        elif cmd.startswith('gray'):
-            v = cmd[5:].strip()
+        elif cmd.startswith(('hex', 'unhex', 'gray', 'ungray', 'bin', 'unbin', 'base64', 'unbase64')):
+            f = {
+                'hex': hexadecimal,
+                'unhex': unhexadecimal,
+                'gray': gray,
+                'ungray': ungray,
+                'bin': binary,
+                'unbin': unbinary,
+                'base64': lambda x: base64.b64encode(x),
+                'unbase64': lambda x: base64.b64decode(x),
+            }
             try:
-                result = gray(all_variables[v].as_raw())
-                if variable_name:
-                    update_variable(variable_name, result)
-                else:
-                    output.append(Variable(result))
-            except:
-                traceback.print_exc()
-                log.err('You must specify a variable.')
+                c, v = cmd.split()
 
-        elif cmd.startswith('ungray'):
-            v = cmd[7:].strip()
-            try:
-                result = ungray(all_variables[v].as_raw())
+                result = f[c](all_variables[v].as_raw())
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
@@ -951,6 +951,23 @@ def main():
             except:
                 traceback.print_exc()
                 log.err('You must specify oracle and payload.')
+
+        elif cmd.startswith('rev '):
+            parts = cmd.split()
+            try:
+                v = all_variables[parts[1]]
+                try:
+                    chunk_size = int(parts[2])
+                except:
+                    chunk_size = 8
+                result = Variable.get_reversed(v, chunk_size)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+            except:
+                traceback.print_exc()
+                log.err('Variable must be specified.')
 
         elif cmd.startswith('debruijn '):
             try:
