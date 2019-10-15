@@ -204,8 +204,10 @@ class Variable:
         # get basic statistics 
         ent = entropy(self.value)
         his = histogram(self.value)
+        ioc = coincidence(self.value)
         ubc = len(set(self.value)) # unique byte count
         entropy_hint = ''
+        coincidence_hint = '' # TODO
         if ent > 0.998:
             entropy_hint = '(probably encrypted)'
         if ent > 0.95:
@@ -226,9 +228,11 @@ class Variable:
         output.append(log.info('Length (B):       ', len(self.as_raw()), offset=output_offset, stdout=False))
         output.append(log.info('Unique byte count:', ubc, ubc_hints.get(ubc) or '', offset=output_offset, stdout=False))
         output.append(log.info('Entropy:          ', ent, entropy_hint, offset=output_offset, stdout=False))
+        output.append(log.info('IOC:              ', ioc,
+                               coincidence_hint, offset=output_offset, stdout=False))
         # short key XOR detection
         repeating_lengths = {}
-        for size in range(2, 17):
+        for size in range(2, 17): # TODO too long on big data
             #print('size', size)
             for pattern in find_repeating_patterns(self.value, min_size=size):
                 #print(' found new pattern:', pattern)

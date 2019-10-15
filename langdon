@@ -261,13 +261,14 @@ def main():
                 else:
                     length = len(v.as_raw())
                     if length < 256:
-                        output.append('Bin:    ' + v.as_binary())
+                        output.append('%sBin:%s    %s' % (log.COLOR_DARK_CYAN, log.COLOR_NONE, v.as_binary()))
                     if length < 4096:
-                        output.append('Int:    ' + str(v.as_int()))
+                        output.append('%sInt:%s    %s' % (log.COLOR_DARK_CYAN, log.COLOR_NONE, str(v.as_int())))
                     if length < 4096:
-                        output.append('Hex:    ' + v.as_hex())
-                    output.append('Raw:    ' + str(v.as_raw()))
-                    output.append('Base64: ' + v.as_base64())
+                        output.append('%sHex:%s    %s' % (log.COLOR_DARK_CYAN, log.COLOR_NONE, v.as_hex()))
+                    output.append('%sRaw:%s    %s' % (log.COLOR_DARK_CYAN, log.COLOR_NONE, str(v.as_raw())))
+                    output.append('%sBase64:%s %s' % (
+                        log.COLOR_DARK_CYAN, log.COLOR_NONE, v.as_base64()))
             continue
         elif cmd in variables.keys(): # only Algorithms are left
             v = variables[cmd]
@@ -293,6 +294,12 @@ def main():
             #        print(x, y, debruijn(190, params=(x, y))[-10:])
             #print(Hash.__subclasses__())
             #Hash.get_algorithm_from_digest_info(b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x11')
+            
+            try:
+                for line in hexdump(all_variables['a'].as_raw(), 8):
+                    output.append(line)
+            except:
+                log.err('You must specify a variable.')
             print('Test complete.')
     
         """
@@ -363,7 +370,7 @@ def main():
         {command}rev a [8]{color} - get value with reversed chunks of given size
         {command}concat a b{color} - concatenate multiple variables
         {command}substring <variable> <start> <length>{color} - get a substring
-        {command}hexdump a{color} - show hexdump of data
+        {command}hd/hexdump a [<columns>]{color} - show hexdump of data
         {command}gray a{color} - convert data into 8b Gray code
         {command}ungray a{color} - convert data from 8b Gray code
         {command}timestamp [<datetime>]{color} - get timestamp of current/specified datetime
@@ -474,6 +481,10 @@ def main():
 
     Hamming distance (number of different bits) of 2 given variables is computed 
     with {command}hamming a b{color}.
+
+    Use {command}ioc/coincidence a{color} to get Index of Coincidence - probability of 2 random characters to be identical.
+    Higher value indicates language structure. IC for english text is arount 0.066 and transposition ciphers and
+    monoalphabetic substitution ciphers keep the value intact.
 
     You can subject your variables and algorithms to analysis to pinpoint potential
     problems. Use {command}analyze a{color} to analyze specific variable/algorithm or 
@@ -774,6 +785,31 @@ def main():
                         #traceback.print_exc()
                         pass # probably not Variable
 
+        elif cmd.startswith(('ioc', 'coincidence')):
+            parts = cmd.split()
+            if len(parts) > 1:
+                interesting_keys = parts[1:]
+            else:
+                interesting_keys = all_variables.keys()
+
+            variable_max_length = max([0] + [len(k) for k in interesting_keys])
+            for k, v in all_variables.items():
+                # skip those we are not interested in
+                if k not in interesting_keys:
+                    continue
+                # skip non-Variable data (e.g. AES mode)
+                if not isinstance(v, Variable):
+                    continue
+                ioc = coincidence(v.as_raw())
+                comment = ''
+                #if ioc > 0.998:
+                #    comment = ' (probably encrypted)'
+                #elif ioc > 0.95:
+                #    comment = ' (probably compressed)'
+                log.info('  %*s  %0.5f%s' %
+                         (variable_max_length, k, ioc, comment))
+
+
         elif cmd.startswith(('hex', 'unhex', 'gray', 'ungray', 'bin', 'unbin', 'base64', 'unbase64')):
             f = {
                 'hex': hexadecimal,
@@ -861,9 +897,14 @@ def main():
                 log.err('You must provide asymmetrical algorithm object (with public key and plaintext included) and signature to verify.')
 
         elif cmd.startswith(('hexdump ', 'hd ')):
-            v = cmd.partition(' ')[2].strip()
+            parts = cmd.split()
+            v = parts[1]
             try:
-                for line in hexdump(all_variables[v].as_raw()):
+                columns = int(parts[2])
+            except:
+                columns = 16
+            try:
+                for line in hexdump(all_variables[v].as_raw(), columns):
                     output.append(line)
             except:
                 log.err('You must specify a variable.')

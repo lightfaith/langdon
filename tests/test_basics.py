@@ -37,6 +37,9 @@ def test_rev():
 
 def test_statistics():
     assert entropy(b'Hello World!') == 0.37775690110927507
+    assert coincidence(b'ABAaA') == 0.6
+    assert int(coincidence(
+        b'To be, or not to be, that is the question') * 1000) == 96
 
 
 def test_bitwise():
