@@ -13,6 +13,7 @@ import time
 import traceback
 
 from Crypto.Cipher import AES as AESCipher
+from PIL import Image
 
 from source.lib import *
 from source.functions import *
@@ -147,6 +148,24 @@ class Variable:
                     log.err('Cannot decode \'%s\' as Base64.' % value)
                     self.value = b''
 
+            # starts with 'image:' - load pixel values
+            # grayscale is expected now...
+            # TODO recognize BW and use as bin
+            # TODO how to deal with colors
+            if value.startswith('image:'):
+                try:
+                    image = Image.open(value[6:])
+                    width, height = image.size
+                    debug('Loaded image; width = %d, height = %d' % image.size)
+                    
+                    p = image.load()
+                    self.value = bytes([p[x, y] for x in range(width) for y in range(height)])
+                    self.preferred_form = self.as_escaped
+                except:
+                    log.err('Cannot decode \'%s\' as image.' % value)
+                    self.value = b''
+                return
+
         # as bytearray - convert to bytes
         if isinstance(value, bytearray):
             value = bytes(value)
@@ -159,8 +178,8 @@ class Variable:
             return
         # value as bin
         try:
-            to_unbin = value[2:] if value.startswith('0b') else value
-            self.value = unbinary(to_unbin)
+            #to_unbin = value[2:] if value.startswith('0b') else value
+            self.value = unbinary(value)
             #self.value = int_to_bytes(int(value, 16))
             self.preferred_form = self.as_raw
             return
@@ -176,13 +195,19 @@ class Variable:
             pass
         # value as hex number/stream
         try:
-            to_unhex = value[2:] if value.startswith('0x') else value
+            #to_unhex = value[2:] if value.startswith('0x') else value
+            to_unhex = value
             if len(to_unhex) % 2 == 1:
                 to_unhex = '0' + to_unhex
             self.value = unhexadecimal(to_unhex)
             #self.value = int_to_bytes(int(value, 16))
             self.preferred_form = self.as_hex
             return
+        except:
+            pass
+        # try to unescape
+        try:
+            value = value.encode().decode('unicode_escape')
         except:
             pass
         # finally, use as string
@@ -193,13 +218,20 @@ class Variable:
             
         log.err('Not parsed!', value)
 
+    @staticmethod
+    def get_reversed(v, chunk_size=8):
+        return Variable('0b' + ''.join(chunks(v.as_binary(), chunk_size)[::-1]))
+
+
     def analyze(self, output_offset=0, interactive=False): # Variable analysis
         output = []
         # get basic statistics 
         ent = entropy(self.value)
         his = histogram(self.value)
+        ioc = coincidence(self.value)
         ubc = len(set(self.value)) # unique byte count
         entropy_hint = ''
+        coincidence_hint = '' # TODO
         if ent > 0.998:
             entropy_hint = '(probably encrypted)'
         if ent > 0.95:
@@ -220,9 +252,11 @@ class Variable:
         output.append(log.info('Length (B):       ', len(self.as_raw()), offset=output_offset, stdout=False))
         output.append(log.info('Unique byte count:', ubc, ubc_hints.get(ubc) or '', offset=output_offset, stdout=False))
         output.append(log.info('Entropy:          ', ent, entropy_hint, offset=output_offset, stdout=False))
+        output.append(log.info('IOC:              ', ioc,
+                               coincidence_hint, offset=output_offset, stdout=False))
         # short key XOR detection
         repeating_lengths = {}
-        for size in range(2, 17):
+        for size in range(2, 17): # TODO too long on big data
             #print('size', size)
             for pattern in find_repeating_patterns(self.value, min_size=size):
                 #print(' found new pattern:', pattern)
@@ -308,7 +342,10 @@ class Variable:
     def __str__(self):
         preferred = self.preferred_form()
         if type(preferred) == bytes:
-            return preferred.decode()
+            try:
+                return preferred.decode()
+            except:
+                return self.as_escaped()
         if type(preferred) == int:
             return str(preferred)
         return preferred

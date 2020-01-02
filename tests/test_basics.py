@@ -7,11 +7,15 @@ def test_binary():
     assert binary(b'A\xff') == b'0100000111111111'
     assert unbinary(b'0100000111111111') == b'A\xff'
     assert unbinary(b'100000111111111') == b'A\xff'
+    assert unbinary(b'0b100000111111111') == b'A\xff'
+    assert unbinary(b'0b100000111111111\n') == b'A\xff'
 
 
 def test_hexadecimal():
     assert hexadecimal(b'A\xff') == b'41ff'
     assert unhexadecimal(b'41ff') == b'A\xff'
+    assert unhexadecimal(b'0x41ff') == b'A\xff'
+    assert unhexadecimal(b'0x41ff\n') == b'A\xff'
 
 
 def test_gray():
@@ -23,8 +27,19 @@ def test_gray():
     assert ungray(b'\x04\xf6+\x9f') == b'\x07[\xcd\x15'
 
 
+def test_rev():
+    v = Variable(b'A\xff')
+    assert Variable.get_reversed(v).value == Variable(b'\xffA').value
+    assert Variable.get_reversed(v, 8).value == Variable(b'\xffA').value
+    assert Variable.get_reversed(v, 1).value == Variable(
+        '1111111110000010').value
+
+
 def test_statistics():
     assert entropy(b'Hello World!') == 0.37775690110927507
+    assert coincidence(b'ABAaA') == 0.6
+    assert int(coincidence(
+        b'To be, or not to be, that is the question') * 1000) == 96
 
 
 def test_bitwise():
@@ -59,6 +74,8 @@ def test_variable():
                     constant=True).as_raw() == b'YELLOW SUBMARINE'
     assert Variable('"YELLOW SUBMARINE"',
                     constant=True).as_raw() == b'YELLOW SUBMARINE'
+    assert Variable('YELLOW SUBM\x41RINE',
+                    constant=True).as_raw() == b'YELLOW SUBMARINE'
     assert Variable('base64:WUVMTE9XIFNVQk1BUklORQ==',
                     constant=True).as_raw() == b'YELLOW SUBMARINE'
     assert Variable(
@@ -75,6 +92,7 @@ def test_variable():
     ) == b'YELLOW SUBMARINE'
     assert Variable('0b01011001010001010100110001001100010011110101011100100000010100110101010101000010010011010100000101010010010010010100111001000101').as_raw(
     ) == b'YELLOW SUBMARINE'
+    # TODO 'image:'
 
 
 def test_hamming():

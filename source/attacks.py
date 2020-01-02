@@ -739,7 +739,7 @@ def compression_leak(oracle, prepended, alphabet):
     considered complete.
     """
     secret = b''
-    #debug('Timing leak alphabet:', alphabet)
+    #debug('Compression leak alphabet:', alphabet)
     while True:
         debug('Actual secret:', secret)
         # try each byte

@@ -23,15 +23,18 @@ from source import log
 Constants
 """
 
-character_frequencies = {
+languages = {
     'english': {
-        'a': .08167, 'b': .01492, 'c': .02782, 'd': .04253,
-        'e': .12702, 'f': .02228, 'g': .02015, 'h': .06094,
-        'i': .06094, 'j': .00153, 'k': .00772, 'l': .04025,
-        'm': .02406, 'n': .06749, 'o': .07507, 'p': .01929,
-        'q': .00095, 'r': .05987, 's': .06327, 't': .09056,
-        'u': .02758, 'v': .00978, 'w': .02360, 'x': .00150,
-        'y': .01974, 'z': .00074, ' ': .13000
+        'character_frequencies': {
+            'a': .08167, 'b': .01492, 'c': .02782, 'd': .04253,
+            'e': .12702, 'f': .02228, 'g': .02015, 'h': .06094,
+            'i': .06094, 'j': .00153, 'k': .00772, 'l': .04025,
+            'm': .02406, 'n': .06749, 'o': .07507, 'p': .01929,
+            'q': .00095, 'r': .05987, 's': .06327, 't': .09056,
+            'u': .02758, 'v': .00978, 'w': .02360, 'x': .00150,
+            'y': .01974, 'z': .00074, ' ': .13000
+        },
+        'coincidence': 0.0665,  # without space
     }
 }
 
@@ -140,12 +143,14 @@ def size_human(value, integer=False):
     return '{0} B'.format(value)
 
 
-def chunks(data, chunksize):
+def chunks(data, chunksize, transpose=False):
     """
     Split data in sequential chunks.
     """
-    # TODO option for alternating chunks
-    return [data[i:i+chunksize] for i in range(0, len(data), chunksize)]
+    sequential = [data[i:i+chunksize] for i in range(0, len(data), chunksize)]
+    return ([bytes(z) for z in zip(*sequential)]
+            if transpose
+            else sequential)
 
 
 def rotate_left(value, shift, bits=32):
@@ -203,25 +208,25 @@ def get_colored_printable_hex(b):
     return color + '%02x' % b + log.COLOR_NONE
 
 
-def hexdump(data):
+def hexdump(data, columns=16):
     """
     Prints data as with `hexdump -C` command.
     """
     result = []
     line_count = 0
-    for chunk in chunks(data, 16):
+    for chunk in chunks(data, columns):
         hexa = ' '.join(''.join(get_colored_printable_hex(b) for b in byte)
                         for byte in [chunk[start:start+2]
-                                     for start in range(0, 16, 2)])
+                                     for start in range(0, columns, 2)])
 
         """add none with coloring - for layout"""
         if len(hexa) < 199:
-            hexa += (log.COLOR_NONE+'  '+log.COLOR_NONE)*(16-len(chunk))
+            hexa += (log.COLOR_NONE+'  '+log.COLOR_NONE)*(columns-len(chunk))
 
         result.append(log.COLOR_DARK_GREEN
-                      + '%08x' % (line_count*16)
+                      + '%08x' % (line_count*columns)
                       + log.COLOR_NONE
-                      + '  %-160s' % (hexa)
+                      + '  %-*s' % (columns*10, hexa)
                       + ' |'
                       + ''.join(get_colored_printable(b) for b in chunk) + '|')
         line_count += 1

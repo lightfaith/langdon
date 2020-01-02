@@ -3,11 +3,13 @@
 General functions used by main script, classes and attacks.
 """
 import re
+import string
 import math
 import random
 import traceback
 import time
 from struct import pack, unpack
+from collections import Counter
 
 from Crypto.Util import number
 
@@ -26,6 +28,9 @@ def binary(data):
 def unbinary(data):
     if isinstance(data, str):
         data = data.encode()
+    data = data.strip()
+    if data.startswith(b'0b'):
+        data = data[2:]
     padding_length = ((8 - len(data) % 8) % 8)
     data = b'0' * padding_length + data
     return bytes([int(c, 2) for c in chunks(data, 8)])
@@ -35,9 +40,14 @@ def hexadecimal(data):
     return b''.join(b'%02x' % c for c in data)
 
 
-def unhexadecimal(stream):
-    return b''.join(b'%c' % int(stream[i:i+2], 16)
-                    for i in range(0, len(stream), 2))
+def unhexadecimal(data):
+    if isinstance(data, str):
+        data = data.encode()
+    data = data.strip()
+    if data.startswith(b'0x'):
+        data = data[2:]
+    return b''.join(b'%c' % int(data[i:i+2], 16)
+                    for i in range(0, len(data), 2))
 
 
 def gray(data):
@@ -85,7 +95,7 @@ def entropy_chunks(data, chunksize):
 
 def get_frequency_error(data, language):
     try:
-        fs = character_frequencies[language]
+        fs = languages[language]['character_frequencies']
     except:
         traceback.print_exc()
         return 0
@@ -156,6 +166,17 @@ def hamming(data1, data2):
         xored = c1 ^ c2
         for bit in range(8):
             result += (xored >> bit) & 0x1
+    return result
+
+
+def coincidence(data, case_sensitive=False):
+    if not case_sensitive:
+        data = data.lower()
+    #data = [d for d in data.lower() if d in string.ascii_lowercase.encode()]
+    denom = len(data) * (len(data) - 1)
+    if not denom:
+        return 0.0
+    result = sum(c * (c-1) for _, c in Counter(data).items()) / denom
     return result
 
 

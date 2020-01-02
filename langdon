@@ -120,7 +120,7 @@ def main():
                           (10, 5),
                           ['#005073', '#107dac', '#189ad3', '#71c7ec'],)
             plt.show()
-
+        
         elif sys.argv[1] in ('random', '--random'):
             count = int(sys.argv[2])
             prynt(b''.join(int_to_bytes(random.randint(0, 255)) for _ in range(count)))
@@ -261,13 +261,14 @@ def main():
                 else:
                     length = len(v.as_raw())
                     if length < 256:
-                        output.append('Bin:    ' + v.as_binary())
+                        output.append('%sBin:%s    %s' % (log.COLOR_DARK_CYAN, log.COLOR_NONE, v.as_binary()))
                     if length < 4096:
-                        output.append('Int:    ' + str(v.as_int()))
+                        output.append('%sInt:%s    %s' % (log.COLOR_DARK_CYAN, log.COLOR_NONE, str(v.as_int())))
                     if length < 4096:
-                        output.append('Hex:    ' + v.as_hex())
-                    output.append('Raw:    ' + str(v.as_raw()))
-                    output.append('Base64: ' + v.as_base64())
+                        output.append('%sHex:%s    %s' % (log.COLOR_DARK_CYAN, log.COLOR_NONE, v.as_hex()))
+                    output.append('%sRaw:%s    %s' % (log.COLOR_DARK_CYAN, log.COLOR_NONE, str(v.as_raw())))
+                    output.append('%sBase64:%s %s' % (
+                        log.COLOR_DARK_CYAN, log.COLOR_NONE, v.as_base64()))
             continue
         elif cmd in variables.keys(): # only Algorithms are left
             v = variables[cmd]
@@ -293,6 +294,14 @@ def main():
             #        print(x, y, debruijn(190, params=(x, y))[-10:])
             #print(Hash.__subclasses__())
             #Hash.get_algorithm_from_digest_info(b'\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x11')
+            
+
+            # DATA TO IMAGE; TODO add this as valid export type
+            data = all_variables['a'].as_raw()
+            size = (720, 749)
+            a = Image.frombytes("L", size, data)
+            a.show()
+
             print('Test complete.')
     
         """
@@ -360,9 +369,10 @@ def main():
 
     You can use some of these common functions:
         {command}len/length a{color} - get length of data
+        {command}rev a [8]{color} - get value with reversed chunks of given size
         {command}concat a b{color} - concatenate multiple variables
         {command}substring <variable> <start> <length>{color} - get a substring
-        {command}hexdump a{color} - show hexdump of data
+        {command}hd/hexdump a [<columns>]{color} - show hexdump of data
         {command}gray a{color} - convert data into 8b Gray code
         {command}ungray a{color} - convert data from 8b Gray code
         {command}timestamp [<datetime>]{color} - get timestamp of current/specified datetime
@@ -473,6 +483,10 @@ def main():
 
     Hamming distance (number of different bits) of 2 given variables is computed 
     with {command}hamming a b{color}.
+
+    Use {command}ioc/coincidence a{color} to get Index of Coincidence - probability of 2 random characters to be identical.
+    Higher value indicates language structure. IC for english text is arount 0.066 and transposition ciphers and
+    monoalphabetic substitution ciphers keep the value intact.
 
     You can subject your variables and algorithms to analysis to pinpoint potential
     problems. Use {command}analyze a{color} to analyze specific variable/algorithm or 
@@ -773,22 +787,46 @@ def main():
                         #traceback.print_exc()
                         pass # probably not Variable
 
-        elif cmd.startswith('gray'):
-            v = cmd[5:].strip()
-            try:
-                result = gray(all_variables[v].as_raw())
-                if variable_name:
-                    update_variable(variable_name, result)
-                else:
-                    output.append(Variable(result))
-            except:
-                traceback.print_exc()
-                log.err('You must specify a variable.')
+        elif cmd.startswith(('ioc', 'coincidence')):
+            parts = cmd.split()
+            if len(parts) > 1:
+                interesting_keys = parts[1:]
+            else:
+                interesting_keys = all_variables.keys()
 
-        elif cmd.startswith('ungray'):
-            v = cmd[7:].strip()
+            variable_max_length = max([0] + [len(k) for k in interesting_keys])
+            for k, v in all_variables.items():
+                # skip those we are not interested in
+                if k not in interesting_keys:
+                    continue
+                # skip non-Variable data (e.g. AES mode)
+                if not isinstance(v, Variable):
+                    continue
+                ioc = coincidence(v.as_raw())
+                comment = ''
+                #if ioc > 0.998:
+                #    comment = ' (probably encrypted)'
+                #elif ioc > 0.95:
+                #    comment = ' (probably compressed)'
+                log.info('  %*s  %0.5f%s' %
+                         (variable_max_length, k, ioc, comment))
+
+
+        elif cmd.startswith(('hex ', 'unhex ', 'gray ', 'ungray ', 'bin ', 'unbin ', 'base64 ', 'unbase64 ')):
+            f = {
+                'hex': hexadecimal,
+                'unhex': unhexadecimal,
+                'gray': gray,
+                'ungray': ungray,
+                'bin': binary,
+                'unbin': unbinary,
+                'base64': lambda x: base64.b64encode(x),
+                'unbase64': lambda x: base64.b64decode(x),
+            }
             try:
-                result = ungray(all_variables[v].as_raw())
+                c, v = cmd.split()
+
+                result = f[c](all_variables[v].as_raw())
                 if variable_name:
                     update_variable(variable_name, result)
                 else:
@@ -861,9 +899,14 @@ def main():
                 log.err('You must provide asymmetrical algorithm object (with public key and plaintext included) and signature to verify.')
 
         elif cmd.startswith(('hexdump ', 'hd ')):
-            v = cmd.partition(' ')[2].strip()
+            parts = cmd.split()
+            v = parts[1]
             try:
-                for line in hexdump(all_variables[v].as_raw()):
+                columns = int(parts[2])
+            except:
+                columns = 16
+            try:
+                for line in hexdump(all_variables[v].as_raw(), columns):
                     output.append(line)
             except:
                 log.err('You must specify a variable.')
@@ -951,6 +994,23 @@ def main():
             except:
                 traceback.print_exc()
                 log.err('You must specify oracle and payload.')
+
+        elif cmd.startswith('rev '):
+            parts = cmd.split()
+            try:
+                v = all_variables[parts[1]]
+                try:
+                    chunk_size = int(parts[2])
+                except:
+                    chunk_size = 8
+                result = Variable.get_reversed(v, chunk_size)
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(result)
+            except:
+                traceback.print_exc()
+                log.err('Variable must be specified.')
 
         elif cmd.startswith('debruijn '):
             try:
@@ -1105,7 +1165,7 @@ def main():
                 log.err('You must provide variable, start and optional length.')
 
         
-        elif cmd.startswith('prime'):
+        elif cmd.startswith('prime '):
             parts = cmd.split()
             bits = parse_int(parts[1], all_variables) if len(parts) == 2 else None
             result = prime(bits) if bits else prime()
@@ -1114,7 +1174,21 @@ def main():
             else:
                 output.append(Variable(result))
                 
-        
+        elif cmd.startswith('transpose '):
+            parts = cmd.split()
+            try:
+                variable = all_variables[parts[1]]
+                chunk_size = parse_int(parts[2], all_variables)
+                a = chunks(variable.as_raw(), chunk_size, transpose=True)
+                result = b''.join(chunks(variable.as_raw(), chunk_size, transpose=True))
+                if variable_name:
+                    update_variable(variable_name, result)
+                else:
+                    output.append(Variable(result))
+            except:
+                traceback.print_exc()
+                log.err('You must provide variable and original row size.')
+
         ######################################
         # bitwise
         ######################################
@@ -1191,6 +1265,20 @@ def main():
                     variables[v2] = Variable(xor(source.as_raw(), b'%c' % b))
             else:
                 log.err('No such variable.')
+
+
+        elif cmd.startswith('sliding-xor '):
+            parts = cmd.split()
+            try:
+                v1 = all_variables[parts[1]].as_raw()
+                v2 = all_variables[parts[2]].as_raw()
+                longer = v1 if len(v1) > len(v2) else v2
+                shorter = v1 if len(v1) < len(v2) else v2
+                for i in range(abs(len(v1) - len(v2))+1):
+                    debug(i, xor(shorter, longer[i:i+len(shorter)]))
+            except:
+                log.err('You must provide two variables.')
+            
 
         elif cmd.startswith('break-xor '):
             try:
