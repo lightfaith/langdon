@@ -1015,11 +1015,11 @@ def main():
         elif cmd.startswith('debruijn '):
             try:
                 length = int(cmd[9:].strip())
-                result = debruijn(length)
+                result = '"%s"' % debruijn(length)
                 if variable_name:
                     update_variable(variable_name, Variable(result, constant=True))
                 else:
-                    output.append(Variable(result))
+                    output.append(Variable(result, constant=True))
             except:
                 traceback.print_exc()
                 log.err('Length must be specified.')
