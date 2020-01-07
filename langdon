@@ -297,10 +297,12 @@ def main():
             
 
             # DATA TO IMAGE; TODO add this as valid export type
-            data = all_variables['a'].as_raw()
-            size = (720, 749)
-            a = Image.frombytes("L", size, data)
-            a.show()
+            #data = all_variables['a'].as_raw()
+            #size = (720, 749)
+            #a = Image.frombytes("L", size, data)
+            #a.show()
+
+            
 
             print('Test complete.')
     
@@ -384,7 +386,7 @@ def main():
         {command}invmod/modinv a b{color} - compute modular inverse
 
     Langdon supports many crypto-related functions. These are currently supported:
-        {command}not a{color} - binwise not
+        {command}not a{color} - bitwise not
         {command}xor a b{color} - xor 2 variables
         {command}or a b{color} - bitwise or 2 variables
         {command}and a b{color} - bitwise and 2 variables
@@ -479,7 +481,8 @@ def main():
 
     Get entropy with {command}entropy a{color} command (in interval <0; 1>). This can 
     help you decide how (badly) the data are compressed or encrypted. 
-    Typical plaintexts have around 0.5 entropy.
+    Typical plaintexts have around 0.5 entropy. Also you can use {command}chunk-entropy a [5]{color} 
+    to see average entropy of data if it were chunked (by optionally given length) and transpose-entropy a [5] for the same but with transposed chunks. 
 
     Hamming distance (number of different bits) of 2 given variables is computed 
     with {command}hamming a b{color}.
@@ -723,8 +726,31 @@ def main():
                     comment = ' (probably encrypted)'
                 elif ent > 0.95:
                     comment = ' (probably compressed)'
-                log.info('  %*s  %0.5f%s' % (variable_max_length, k, ent, comment))
+                output.append('  %*s  %0.5f%s' % (variable_max_length, k, ent, comment))
         
+        elif cmd.startswith('chunk-entropy '):
+            parts = cmd.split()
+            data = all_variables[parts[1]].as_raw()
+            try:
+                chunk_size = int(parts[2])
+            except:
+                chunk_size = None
+            entropies = chunk_entropy(data, chunk_size, transpose=False)
+            for k, v in entropies.items():
+                output.append('%-4d  %f' % (k, v))
+
+
+        elif cmd.startswith('transpose-entropy '):
+            parts = cmd.split()
+            data = all_variables[parts[1]].as_raw()
+            try:
+                chunk_size = int(parts[2])
+            except:
+                chunk_size = None
+            entropies = chunk_entropy(data, chunk_size, transpose=True)
+            for k, v in entropies.items():
+                output.append('%-4d  %f' % (k, v))
+
         elif cmd.startswith('histogram'):
             try:
                 data = all_variables[cmd.split()[1]]
@@ -770,8 +796,8 @@ def main():
             # print
             if len(pairs) == 1:
                 try:
-                    log.info(hamming(all_variables[pairs[0][0]].as_raw(), 
-                                     all_variables[pairs[0][1]].as_raw()))
+                    output.append(str(hamming(all_variables[pairs[0][0]].as_raw(), 
+                                     all_variables[pairs[0][1]].as_raw())))
                 except: 
                     #traceback.print_exc()
                     pass # probably not Variable
@@ -782,7 +808,8 @@ def main():
                 for (a, b), name in zip(pairs, pair_names):
                     try:
                         distance = hamming(all_variables[a].as_raw(), all_variables[b].as_raw())
-                        log.info('%*s:  %d' % (max_pair_name_length, name, distance))
+                        output.append('%*s:  %d' %
+                                      (max_pair_name_length, name, distance))
                     except:
                         #traceback.print_exc()
                         pass # probably not Variable
@@ -808,7 +835,7 @@ def main():
                 #    comment = ' (probably encrypted)'
                 #elif ioc > 0.95:
                 #    comment = ' (probably compressed)'
-                log.info('  %*s  %0.5f%s' %
+                output.append('  %*s  %0.5f%s' %
                          (variable_max_length, k, ioc, comment))
 
 
@@ -950,6 +977,16 @@ def main():
                 traceback.print_exc()
                 log.err('No such variable.')
         
+        
+        elif cmd.startswith('checksum'):
+            keys = cmd.split()[1:]
+            if not keys:
+                keys = all_variables.keys()
+            for k, v in all_variables.items():
+                if k in keys:
+                    output.append('%-10s  %s' % (k, checksum(v.as_raw())))
+
+
         elif cmd.startswith('concat '):
             parts = cmd.split()[1:]
             result = b''

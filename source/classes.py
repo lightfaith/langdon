@@ -126,8 +126,11 @@ class Variable:
             if value.startswith('file:'):
                 try:
                     with open(value[5:], 'r') as f:
-                        self.value = f.read().encode()
-                        self.preferred_form = self.as_raw
+                        loaded = f.read()
+                        if len(x for x in loaded if x in string.printable) != len(loaded):
+                            raise UnicodeDecodeError
+                        #self.value = f.read().encode()
+                        #self.preferred_form = self.as_raw
                 except:
                     try:
                         with open(value[5:], 'rb') as f:

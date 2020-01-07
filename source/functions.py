@@ -2,6 +2,7 @@
 """
 General functions used by main script, classes and attacks.
 """
+import hashlib
 import re
 import string
 import math
@@ -138,7 +139,15 @@ def bruteforce(data, keys, f):
         yield f(data, key)
 
 
+def checksum(data):
+    # MD5 checksum
+    m = hashlib.md5()
+    m.update(data)
+    return m.hexdigest()
+
 # TODO or different constants?
+
+
 def dict_success(sample, wordlist=None, min_word_match=1, min_word_len=1):
     """
     Return how many of given words are actually in wordlist (as fraction).
@@ -166,6 +175,20 @@ def hamming(data1, data2):
         xored = c1 ^ c2
         for bit in range(8):
             result += (xored >> bit) & 0x1
+    return result
+
+
+def chunk_entropy(data, chunk_size, transpose=False):
+    # computes average entropy of different-length chunks
+    result = {}
+    if not chunk_size:
+        chunk_sizes = range(2, min(len(data), 100))
+    else:
+        chunk_sizes = [chunk_size]
+
+    for chunk_size in chunk_sizes:
+        cs = chunks(data, chunk_size, transpose=transpose)
+        result[chunk_size] = sum(entropy(c) for c in cs) / len(cs)
     return result
 
 

@@ -44,7 +44,7 @@ def break_xor(data, language, keysize=None):
     result = None
     # get normalized hamming for keysizes, smallest should be correct
     distances = {}
-    keysizes = [keysize] if keysize else range(2, min(40, len(data)))
+    keysizes = [keysize] if keysize else range(2, min(60, len(data)))
     for keysize in keysizes:
         tmp_distance = 0
         sample_count = 0
@@ -58,6 +58,12 @@ def break_xor(data, language, keysize=None):
     #for k,v in distances.items():
     #    print(k, v)
     best = sorted(distances.items(), key=lambda x: x[1])
+    # entropy can also be used - smallest non-zero should be correct (but 2*keysize might have smaller entropy...)
+    #for keylen in range(2, 40):
+    #    cs = chunks(data, keylen, transpose=True)
+    #    print('Keylen: %2d, avg entropy: %f' %
+    #            (keylen, sum(entropy(c) for c in cs)/len(cs)))
+
 
     # use 2 best distances and try to get characters based on best frequency
     #for keysize, distance in best[:2]:
