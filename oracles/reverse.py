@@ -1,12 +1,6 @@
 #!/usr/bin/python3
 """
-Encryption Oracle for Cryptopals 2.13 - ECB cut&paste attack
 
-The oracle returns AES ECB ciphertext of 'email=...&uid=10&role=user' where
-email value is controlled by user. The value is sanitized, 
-so no &s, ;s or =s are allowed.
-
-Langdon is able to use ECB cut&paste attack to change the role to admin.
 """
 from threading import Thread
 from source.classes import *
@@ -24,6 +18,13 @@ class Oracle():
         self.filename = filename
         self.threads = []
         self.matching = []
+        """
+        specify global args here that should be same for all runs
+        even when the oracle is reset
+        """
+        self.immortal_args = {
+        }
+        """"""
 
     def reset(self, **kwargs):
         self.threads = []
@@ -40,6 +41,9 @@ class Oracle():
         # separate payloads
         payloads = [list(enumerate(args))[i::thread_count]
                     for i in range(thread_count)]
+        # add immortal args
+        for k, v in self.immortal_args.items():
+            kwargs[k] = v
         # run threads
         self.threads = [OracleThread(payloads[i], condition=condition, break_on_success=break_on_success,
                                      peers=self.threads, **kwargs) for i in range(thread_count)]
@@ -82,11 +86,9 @@ class OracleThread(Thread):
 
         """
         here belongs code for first run only
+        this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['message'] = Variable(
-            'email=%s&uid=10&role=user', constant=True)
-        self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
         """"""
 
     def run(self):
@@ -94,23 +96,19 @@ class OracleThread(Thread):
         for payload_id, payload in self.payloads:
             if self.terminate:
                 break
+            start = time.time()
             """
             here belongs code for every single iteration
             'output' variable should be set somehow
             """
-            sanitized = Variable(payload).as_raw().replace(
-                b'&', b'X').replace(b'=', b'X')
-            payload = Variable(
-                self.params['message'].as_raw() % sanitized)
-
-            key = self.params['key']
-            aes = AES(mode='ecb', plaintext=payload, key=key)
-            aes.encrypt()
-            output = aes.params['ciphertext'].as_raw()
+            payload = Variable(payload)
+            output = payload.as_raw()[::-1]
             """"""
+            end = time.time()
             # use result if condition matches
             if self.condition(payload_id, output, self.kwargs):
-                self.matching.append(OracleResult(payload_id, output))
+                self.matching.append(OracleResult(
+                    payload_id, output, end - start))
                 # decide whether to stop
                 if self.break_on_success:
                     # signal other oracles to terminate

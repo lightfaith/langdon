@@ -200,8 +200,8 @@ class Variable:
         try:
             #to_unhex = value[2:] if value.startswith('0x') else value
             to_unhex = value
-            if len(to_unhex) % 2 == 1:
-                to_unhex = '0' + to_unhex
+            #if len(to_unhex) % 2 == 1:
+            #    to_unhex = '0' + to_unhex
             self.value = unhexadecimal(to_unhex)
             #self.value = int_to_bytes(int(value, 16))
             self.preferred_form = self.as_hex
