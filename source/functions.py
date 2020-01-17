@@ -47,6 +47,8 @@ def unhexadecimal(data):
     data = data.strip()
     if data.startswith(b'0x'):
         data = data[2:]
+    if len(data) % 2 == 1:
+        data = b'0' + data
     return b''.join(b'%c' % int(data[i:i+2], 16)
                     for i in range(0, len(data), 2))
 

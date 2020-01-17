@@ -692,11 +692,11 @@ def main():
                 keys = variables.keys() # algorithms will run analysis on its params...
                 variable_source = variables
             else:
-                keys = [parts[1]] if variables.get(parts[1]) else [] # standard Variable or Algorithms
+                keys = [part for part in parts[1:] if variables.get(part)] # standard Variable or Algorithms
                 if keys: 
                     variable_source = variables
                 else:
-                    keys = [parts[1]] if all_variables.get(parts[1]) else [] # so Algorithm param?
+                    keys = [part for part in parts[1:] if all_variables.get(part)] # so Algorithm param?
                     variable_source = all_variables
 
             for k in keys:
@@ -983,8 +983,8 @@ def main():
             if not keys:
                 keys = all_variables.keys()
             for k, v in all_variables.items():
-                if k in keys:
-                    output.append('%-10s  %s' % (k, checksum(v.as_raw())))
+                if k in keys and isinstance(v, Variable):
+                    output.append('%-10s  %s' % (k, checksum(v.as_raw()))) # TODO max key length for format
 
 
         elif cmd.startswith('concat '):

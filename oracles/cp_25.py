@@ -92,8 +92,10 @@ class OracleThread(Thread):
         this is rerun after oracle reset()
         constant Variables should be created here
         """
-        self.params['key'] = Variable('file:/tmp/key', constant=True)
-        self.params['nonce'] = Variable('file:/tmp/nonce', constant=True)
+        #self.params['key'] = Variable('file:/tmp/key', constant=True)
+        #self.params['nonce'] = Variable('file:/tmp/nonce', constant=True)
+        self.params['key'] = Variable('YELLOW SUBMARINE', constant=True)
+        self.params['nonce'] = Variable(0, constant=True)
         """"""
 
     def run(self):

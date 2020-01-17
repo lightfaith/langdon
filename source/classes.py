@@ -116,9 +116,14 @@ class Variable:
             self.preferred_form = self.as_algorithm
             return
 
+        if isinstance(value, int):
+            self.value = int_to_bytes(value)
+            self.preferred_form = self.as_int
+            return
+
         if constant:
             # value in quotes - as string
-            if value[0] in ('\'', '"') and value[-1] in ('\'', '"'):
+            if value and value[0] in ('\'', '"') and value[-1] in ('\'', '"'):
                 self.value = value[1:-1].encode()
                 self.preferred_form = self.as_raw
                 return
@@ -200,8 +205,8 @@ class Variable:
         try:
             #to_unhex = value[2:] if value.startswith('0x') else value
             to_unhex = value
-            if len(to_unhex) % 2 == 1:
-                to_unhex = '0' + to_unhex
+            #if len(to_unhex) % 2 == 1:
+            #    to_unhex = '0' + to_unhex
             self.value = unhexadecimal(to_unhex)
             #self.value = int_to_bytes(int(value, 16))
             self.preferred_form = self.as_hex
