@@ -563,7 +563,7 @@ def main():
                 variable = parts[0]
                 filename = parts[1]
                 format_f = lambda x: x.as_raw()
-            elif len(parts) == 3:
+            elif len(parts) == 3: # type
                 variable = parts[0]
                 filename = parts[1]
                 formats = {
@@ -575,6 +575,29 @@ def main():
                     'base64': lambda x: x.as_base64(),
                 }
                 format_f = formats.get(parts[2])
+            elif len(parts) == 4:  
+                if parts[2] == 'grayscale':  # as grayscale image (0-255), e.g. 'export a /tmp/a image 1024x'
+                    variable = parts[0]
+                    filename = parts[1]
+                    dim_x, _, dim_y = parts[3].partition('x')
+                    if not (dim_x or dim_y):
+                        log.err('You must specify at least one dimension.')
+                    else:
+                        data = all_variables[variable].as_raw()
+                        dim_x = int(dim_x)
+                        dim_y = int(dim_y)
+                        if not dim_x:
+                            dim_x = math.ceil(len(data) // dim_y)
+                        if not dim_y:
+                            dim_y = math.ceil(len(data) // dim_x)
+                    from PIL import Image
+                    import numpy as np
+                    padded = np.frombuffer(data + b'\0' * (dim_x * dim_y - len(data)), dtype=np.int8)
+                    img = Image.fromarray(np.reshape(padded, (dim_y, dim_x)), 'P')
+                    img.save(filename, format='bmp')
+                        
+                else:
+                    log.err('Invalid arguments.')        
             else:
                 log.err('Invalid arguments.')
 
@@ -597,6 +620,7 @@ def main():
                 else:
                     log.err('No such variable.')
                 
+
         elif cmd.startswith('edit '):
             # algorithm param editation
             # TODO even for normal variables?

@@ -643,6 +643,7 @@ def ctr_bitflipping(e_oracle, d_oracle, offset, desired):
 
     fake = encrypted[:offset] + fake_block + encrypted[offset + len(fake_block):]
     #decrypted = Oracle.once(fake, d_oracle_path)
+    debug('Bitflipping...')
     decrypted = d_oracle.oneshot(fake)
     return decrypted
 
