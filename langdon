@@ -15,7 +15,7 @@ from collections import OrderedDict
 from datetime import datetime
 
 import dateutil.parser
-import gnureadline
+import readline
 
 from source import lib
 from source import log
