@@ -103,7 +103,9 @@ class Variable:
     """
     def __init__(self, value, constant=False):
         self.preferred_form = self.as_escaped
-        #pdb.set_trace()
+        if value is None:
+            value = b''
+
         # instance of variable
         if isinstance(value, Variable):
             self.value = value.value

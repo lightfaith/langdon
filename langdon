@@ -53,7 +53,7 @@ commands = ['help',
 def completer(text, state):
     try:
         var_keys = list(variables.keys())
-        algo_args = [x for _,v in variables.items() if isinstance(v, Algorithm) for x in v.params.keys()]
+        algo_args = [k+'.'+x for k,v in variables.items() if isinstance(v, Algorithm) for x in v.params.keys()]
         options = [i for i in commands+var_keys+algo_args if i.startswith(text)]
     #print('\noptions:', options)
         return options[state] + ' '
@@ -297,7 +297,11 @@ def main():
                 if variable_name:
                     update_variable(variable_name, v)
                 else:
-                    length = len(v.as_raw())
+                    try:
+                        length = len(v.as_raw())
+                    except: # if somebody attempts to see internal nonVariable stuff
+                        v = Variable(v, constant=True)
+                        length = len(v.as_raw())
                     if length < 256:
                         output.append('%sBin:%s    %s' % (log.COLOR_DARK_CYAN, log.COLOR_NONE, v.as_binary()))
                     if length < 4096:
