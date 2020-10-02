@@ -53,7 +53,7 @@ commands = ['help',
 def completer(text, state):
     try:
         var_keys = list(variables.keys())
-        algo_args = [*[list(v.params.keys()) for _,v in variables.items() if isinstance(v, Algorithm)]]
+        algo_args = [x for _,v in variables.items() if isinstance(v, Algorithm) for x in v.params.keys()]
         options = [i for i in commands+var_keys+algo_args if i.startswith(text)]
     #print('\noptions:', options)
         return options[state] + ' '
@@ -1362,6 +1362,7 @@ def main():
                 for b in range(256):
                     v2 = '%s_%02x' % (v, b)
                     variables[v2] = Variable(xor(source.as_raw(), b'%c' % b))
+                log.info('Variables generated.')
             else:
                 log.err('No such variable.')
 
@@ -2103,7 +2104,7 @@ def main():
                 update_variable(variable_name, v)
                 log.info(variable_name, '=', v.short())
             else:
-                log.warn('Unknown command.')
+                log.warn('Unknown command or missing parameters.')
                 log.err(cmd)
     ############
 
@@ -2113,3 +2114,4 @@ if __name__ == '__main__':
         main()
     except SystemExit:
         pass
+
