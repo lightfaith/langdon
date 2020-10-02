@@ -26,6 +26,44 @@ from source.functions import *
 
 variables = OrderedDict()
 
+# list of commands for tab completion
+commands = ['help', 
+            'var', 'vars', 'variables',
+            'export', 'edit', 'multiline',
+            'wordlist', 'analyze', 'entropy', 'chunk-entropy', 'transpose-entropy',
+            'histogram', 'hamming', 'ioc', 'coincidence', 'hex', 'unhex', 'gray', 
+            'ungray', 'bin', 'unbin', 'base64', 'unbase64', 'encrypt', 'decrypt',
+            'sign', 'verify', 'hexdump', 'hd', 'random', 'count', 'checksum', 'concat',
+            'oracle', 'run', 'rev', 'debruijn', 'zeros', 'timestamp', 'sleep',
+            'timing-leak', 'compression-leak', 'modexp', 'gcd', 'lcm', 'totient', 'invmod',
+            'modinv', 'substring', 'prime', 'transpose', 'and', 'or', 'xor', 'not',
+            'brute-single-xor', 'sliding-xor', 'break-xor', 'XOR', 'AES', 
+            'ecb-chosen-plaintext', 'ecb-cut-paste', 'cbc-bitflipping', 'cbc-padding',
+            'ctr-fixed-nonce', 'ctr-bitflipping', 'cbc-chosen-ciphertext', 
+            'Mersenne32', 'Mersenne64', 'rng', 'brute-timestamp-seed', 'clone-rng',
+            'brute-rng-xor', 'SHA1', 'MD4', 'hash', 'mac', 'hmac', 'hash-extension',
+            'DH', 'dh-shared-key', 'SRPClient', 'SRPServer', 'srp-register', 
+            'srp-session-keys', 'srp-auth', 'RSA', 'rsa-e3-broadcast', 
+            'rsa-unpadded-recovery', 'rsa-e3-forge-signature', 'DSA', 
+            'dsa-private-from-nonce', 'dsa-nonce-recovery', 'dsa-magic-signature',
+            'rsa-parity', 'rsa-padding', 'cbc-mac-length-extension', 
+            'cp-42', 'cp-43', 'tc19']
+
+# enable completion
+def completer(text, state):
+    try:
+        var_keys = list(variables.keys())
+        algo_args = [*[list(v.params.keys()) for _,v in variables.items() if isinstance(v, Algorithm)]]
+        options = [i for i in commands+var_keys+algo_args if i.startswith(text)]
+    #print('\noptions:', options)
+        return options[state] + ' '
+    except IndexError:
+        return None
+    except:
+        traceback.print_exc()
+readline.parse_and_bind('tab: complete')
+readline.set_completer(completer)
+readline.set_completer_delims(' ')
 
 def update_variable(name, value):
     """
